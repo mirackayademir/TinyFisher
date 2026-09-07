@@ -1,11 +1,14 @@
 extends Area2D
 
-@export var hook_speed: float = 180.0
+const BASE_DEPTH_PIXELS: float = 1700.0
+const DEPTH_PER_LEVEL: float = 350.0
+
+@export var hook_speed: float = 220.0
 @export var reel_speed: float = 240.0
 @export var reel_speed_per_level: float = 40.0
-@export var max_depth: float = 736.0
+@export var max_depth: float = BASE_DEPTH_PIXELS
 @export var camera_surface_y: float = 0.0
-@export var camera_deep_y: float = 520.0
+@export var camera_deep_y: float = 1420.0
 @export var camera_follow_speed: float = 4.0
 
 var start_position: Vector2
@@ -21,6 +24,11 @@ var hooked_fish: Area2D = null
 
 func _ready() -> void:
 	start_position = position
+
+	# Scene'deki eski değer daha kısa olsa bile yeni başlangıç oltası yaklaşık 50 m'lik alanı tarar.
+	max_depth = maxf(max_depth, BASE_DEPTH_PIXELS)
+	camera_deep_y = maxf(camera_deep_y, 1420.0)
+
 	collision_layer = 0
 	collision_mask = 2
 	area_entered.connect(_on_hook_area_entered)
@@ -65,7 +73,6 @@ func _physics_process(delta: float) -> void:
 			for area in get_overlapping_areas():
 				_on_hook_area_entered(area)
 
-	# Misina tekne merkezinden değil, animasyonlu kamışın ucundan çıkar.
 	hook_line.set_point_position(0, boat.get_line_origin_local())
 	hook_line.set_point_position(1, position)
 	update_camera(delta)
@@ -77,6 +84,11 @@ func is_reeling() -> bool:
 
 func set_reel_speed_level(level: int) -> void:
 	reel_speed = 240.0 + (float(level) * reel_speed_per_level)
+
+
+func set_depth_level(level: int) -> void:
+	# Sonraki geliştirme sisteminde doğrudan kullanılmak üzere hazır.
+	max_depth = BASE_DEPTH_PIXELS + (float(level) * DEPTH_PER_LEVEL)
 
 
 func land_catch() -> void:
