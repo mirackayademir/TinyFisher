@@ -9,6 +9,12 @@ extends CharacterBody2D
 @export var rod_cast_back_rotation: float = 0.22
 @export var rod_cast_forward_rotation: float = -0.32
 
+@export var harbor_camera_threshold: float = 1300.0
+@export var harbor_camera_x: float = -100.0
+@export var sea_camera_x: float = 350.0
+@export var harbor_zoom: float = 0.78
+@export var sea_zoom: float = 1.0
+
 var can_move: bool = true
 var _cast_animating: bool = false
 var _rod_tween: Tween
@@ -22,6 +28,7 @@ var _rod_base_position: Vector2
 @onready var boat_visual: Sprite2D = $BoatVisual
 @onready var wake_particles: CPUParticles2D = $WakeParticles
 @onready var wake_trail: CPUParticles2D = $WakeTrail
+@onready var camera: Camera2D = $Camera2D
 
 
 func _ready() -> void:
@@ -31,19 +38,19 @@ func _ready() -> void:
 	_boat_visual_base_position = boat_visual.position
 	_rod_base_position = rod_pivot.position
 
-	# Köpük artık dünya üzerinde geride kalmaz; kıçın hemen altında tekneyle birlikte akar.
+	# Köpük tekneyle birlikte hareket eder ve çok kısa iz bırakır.
 	wake_particles.local_coords = true
 	wake_trail.local_coords = true
-	wake_particles.lifetime = 0.34
-	wake_trail.lifetime = 0.52
-	wake_particles.amount = 22
-	wake_trail.amount = 16
-	wake_particles.initial_velocity_min = 18.0
-	wake_particles.initial_velocity_max = 42.0
-	wake_trail.initial_velocity_min = 8.0
-	wake_trail.initial_velocity_max = 22.0
-	wake_particles.gravity = Vector2(0.0, 8.0)
-	wake_trail.gravity = Vector2(0.0, 3.0)
+	wake_particles.lifetime = 0.24
+	wake_trail.lifetime = 0.38
+	wake_particles.amount = 18
+	wake_trail.amount = 12
+	wake_particles.initial_velocity_min = 12.0
+	wake_particles.initial_velocity_max = 28.0
+	wake_trail.initial_velocity_min = 5.0
+	wake_trail.initial_velocity_max = 14.0
+	wake_particles.gravity = Vector2(0.0, 6.0)
+	wake_trail.gravity = Vector2(0.0, 2.0)
 	wake_particles.emitting = false
 	wake_trail.emitting = false
 
@@ -64,6 +71,7 @@ func _physics_process(delta: float) -> void:
 			velocity.x = 0.0
 
 	_update_surface_motion(delta)
+	_update_camera_framing(delta)
 	_update_wake()
 	_update_rod_pose(delta)
 
@@ -83,6 +91,18 @@ func _update_surface_motion(delta: float) -> void:
 	rod_pivot.position.y = _rod_base_position.y + bob * 0.88
 
 
+func _update_camera_framing(delta: float) -> void:
+	# Limana yaklaşınca kamera sola kayar ve uzaklaşır; büyük limanın neredeyse tamamı görünür.
+	# Denize açılınca tekrar normal oyun kadrajına döner.
+	var near_harbor := global_position.x <= harbor_camera_threshold
+	var target_x := harbor_camera_x if near_harbor else sea_camera_x
+	var target_zoom_value := harbor_zoom if near_harbor else sea_zoom
+	var blend := clampf(delta * 3.2, 0.0, 1.0)
+
+	camera.position.x = lerpf(camera.position.x, target_x, blend)
+	camera.zoom = camera.zoom.lerp(Vector2(target_zoom_value, target_zoom_value), blend)
+
+
 func _update_wake() -> void:
 	var moving := can_move and absf(velocity.x) > 20.0
 	wake_particles.emitting = moving
@@ -97,16 +117,16 @@ func _update_wake() -> void:
 
 	wake_particles.direction = Vector2(-movement_sign, 0.02)
 	wake_trail.direction = Vector2(-movement_sign, 0.015)
-	wake_particles.speed_scale = lerpf(0.75, 1.05, speed_ratio)
-	wake_trail.speed_scale = lerpf(0.70, 0.95, speed_ratio)
+	wake_particles.speed_scale = lerpf(0.72, 0.98, speed_ratio)
+	wake_trail.speed_scale = lerpf(0.68, 0.90, speed_ratio)
 
-	# Köpük doğrudan kıçın altından başlar; uzun boşluk oluşmaz.
+	# Görseldeki motor/kıç hizasına yaklaştırıldı; köpük artık teknenin çok gerisinde doğmaz.
 	if movement_sign > 0.0:
-		wake_particles.position = Vector2(76.0, foam_y)
-		wake_trail.position = Vector2(94.0, foam_y + 2.0)
+		wake_particles.position = Vector2(305.0, foam_y)
+		wake_trail.position = Vector2(322.0, foam_y + 2.0)
 	else:
-		wake_particles.position = Vector2(904.0, foam_y)
-		wake_trail.position = Vector2(886.0, foam_y + 2.0)
+		wake_particles.position = Vector2(675.0, foam_y)
+		wake_trail.position = Vector2(658.0, foam_y + 2.0)
 
 
 func _update_rod_pose(delta: float) -> void:
