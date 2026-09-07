@@ -2,6 +2,7 @@ extends Node2D
 
 const MAX_UPGRADE_LEVEL: int = 5
 const UPGRADE_COSTS: Array[int] = [50, 100, 175, 275, 400]
+const WATER_SURFACE_Y: float = 360.0
 
 @onready var dock_prompt: Label = $DockPrompt
 @onready var dock_menu: Panel = $DockMenu
@@ -29,12 +30,17 @@ var rod_speed_level: int = 0
 var capacity_level: int = 0
 var fight_ease_level: int = 0
 
+var _sea_time: float = 0.0
+var _surface_shadow: Line2D
+var _surface_foam: Line2D
+
 
 func _ready() -> void:
 	dock_prompt.visible = false
 	dock_menu.visible = false
 	upgrade_menu.visible = false
 	_setup_harbor()
+	_setup_surface_waves()
 	_setup_money_hud()
 	_apply_upgrades()
 	update_money_label()
@@ -42,26 +48,70 @@ func _ready() -> void:
 
 
 func _setup_harbor() -> void:
-	# Limanı daha okunaklı büyüt; teknenin gireceği alan sadece sağdaki yanaşma noktası.
-	dock_sprite.scale = Vector2(3.45, 3.45)
-	dock_sprite.position = Vector2(95.0, 270.0)
-	boat.min_world_x = 220.0
+	# Limanı kullanıcının işaretlediği alanı dolduracak kadar büyüt.
+	dock_sprite.scale = Vector2(4.35, 4.35)
+	dock_sprite.position = Vector2(165.0, 255.0)
 
-	dock_collision.position = Vector2(710.0, 335.0)
+	# Tekne limanın görselinin içinden geçmez; iskelenin sağında durur.
+	boat.min_world_x = 470.0
+
+	# Yanaşma / geliştirme alanı büyüyen iskeleye göre genişletildi.
+	dock_collision.position = Vector2(650.0, 335.0)
 	var dock_shape := dock_collision.shape as RectangleShape2D
 	if dock_shape != null:
-		dock_shape.size = Vector2(190.0, 170.0)
+		dock_shape.size = Vector2(360.0, 190.0)
 
-	dock_prompt.position = Vector2(610.0, 155.0)
-	dock_prompt.size = Vector2(210.0, 30.0)
+	dock_prompt.position = Vector2(555.0, 150.0)
+	dock_prompt.size = Vector2(245.0, 34.0)
 
-	# Büyük limanla çakışmaması için geliştirme penceresine biraz daha alan ver.
-	upgrade_menu.position = Vector2(285.0, 55.0)
-	upgrade_menu.size = Vector2(520.0, 390.0)
+	upgrade_menu.position = Vector2(265.0, 48.0)
+	upgrade_menu.size = Vector2(560.0, 405.0)
+
+
+func _setup_surface_waves() -> void:
+	_surface_shadow = Line2D.new()
+	_surface_shadow.name = "SurfaceWaveShadow"
+	_surface_shadow.z_index = 0
+	_surface_shadow.width = 8.0
+	_surface_shadow.default_color = Color(0.02, 0.26, 0.42, 0.72)
+	_surface_shadow.antialiased = false
+	add_child(_surface_shadow)
+
+	_surface_foam = Line2D.new()
+	_surface_foam.name = "SurfaceWaveFoam"
+	_surface_foam.z_index = 0
+	_surface_foam.width = 3.0
+	_surface_foam.default_color = Color(0.80, 0.95, 0.98, 0.88)
+	_surface_foam.antialiased = false
+	add_child(_surface_foam)
+
+	_update_surface_waves()
+
+
+func _surface_height_at(x: float) -> float:
+	return WATER_SURFACE_Y \
+		+ sin(x * 0.018 + _sea_time * 1.72) * 5.2 \
+		+ sin(x * 0.043 - _sea_time * 1.08 + 0.8) * 2.2
+
+
+func _update_surface_waves() -> void:
+	if _surface_shadow == null or _surface_foam == null:
+		return
+
+	var shadow_points := PackedVector2Array()
+	var foam_points := PackedVector2Array()
+
+	for x in range(-1000, 11001, 28):
+		var wave_y := _surface_height_at(float(x))
+		shadow_points.append(Vector2(float(x), wave_y + 3.0))
+		foam_points.append(Vector2(float(x), wave_y))
+
+	_surface_shadow.points = shadow_points
+	_surface_foam.points = foam_points
 
 
 func _setup_money_hud() -> void:
-	# Para artık dünya node'u değil; CanvasLayer altında her derinlikte ekranın sağ üstünde kalır.
+	# Para CanvasLayer altında kalır; kanca derine inse bile sağ üstten ayrılmaz.
 	money_panel = Panel.new()
 	money_panel.name = "MoneyPanel"
 	money_panel.z_index = 90
@@ -98,7 +148,10 @@ func _setup_money_hud() -> void:
 	money_label.add_theme_constant_override("shadow_offset_y", 2)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_sea_time += delta
+	_update_surface_waves()
+
 	if boat_in_dock_area and Input.is_action_just_pressed("dock") and not docked and not hook.deployed:
 		docked = true
 		boat.set_movement_enabled(false)
