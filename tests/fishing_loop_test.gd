@@ -56,16 +56,24 @@ func run() -> void:
 	Input.action_release("move_right")
 	check(boat.position.x > boat_start.x and boat.position.y == boat_start.y, "A/D horizontal movement")
 	boat.position = boat_start
+
 	mouse(MOUSE_BUTTON_RIGHT, true)
 	await frames(2)
 	mouse(MOUSE_BUTTON_RIGHT, false)
 	check(hook.deployed and hook.position.y > hook.start_position.y, "Right click deploys and automatically sinks")
-	check(not boat.can_move, "Boat locked while line is deployed")
-	check(is_equal_approx(hook.position.x, hook.start_position.x), "Line stays vertical")
+	check(boat.can_move, "Boat remains movable while line is deployed")
+
+	var deployed_boat_x: float = boat.position.x
+	Input.action_press("move_right")
+	await frames(4)
+	Input.action_release("move_right")
+	check(boat.position.x > deployed_boat_x, "Boat moves horizontally while line is deployed")
+	check(is_equal_approx(hook.position.x, hook.start_position.x), "Line stays vertical while boat moves")
+
 	mouse(MOUSE_BUTTON_LEFT, true)
 	await frames(15)
 	mouse(MOUSE_BUTTON_LEFT, false)
-	check(not hook.deployed and boat.can_move, "Mouse reels empty hook and unlocks boat")
+	check(not hook.deployed and boat.can_move, "Mouse reels empty hook and boat stays movable")
 
 	hook.deploy()
 	hook.position.y = hook.start_position.y + hook.max_depth - 1.0
@@ -77,7 +85,7 @@ func run() -> void:
 	fish.global_position = hook.global_position
 	await frames(4)
 	check(hook.hooked_fish == fish and fish.is_hooked, "Real Area2D overlap hooks fish")
-	check(hud.fight_active, "Hooking starts existing fight")
+	check(hud.fight_active and hud.fight_panel.visible, "Hooking opens active fight bar")
 	var depth: float = hook.position.y
 	mouse(MOUSE_BUTTON_LEFT, true)
 	await frames(4)
