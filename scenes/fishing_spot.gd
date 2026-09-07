@@ -26,8 +26,13 @@ func _ready() -> void:
 		if shape != null:
 			shape.size = Vector2(4400.0, 1750.0)
 
-	var missing_fish: int = max_fish - get_fish_count()
-	for i in range(missing_fish):
+	# Scene içine elle bırakılmış eski örnek balığı kaldır; bütün balıklar yeni derinlik kurallarına göre doğsun.
+	for child in get_children():
+		if child.has_method("hook_to"):
+			remove_child(child)
+			child.queue_free()
+
+	for i in range(max_fish):
 		spawn_one_fish()
 
 
