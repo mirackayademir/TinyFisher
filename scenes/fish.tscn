@@ -9,7 +9,7 @@ size = Vector2(64.5, 28)
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_fish"]
 shader = ExtResource("3_fish_shader")
-shader_parameter/tail_strength = 2.4
+shader_parameter/tail_strength = 32.0
 shader_parameter/tail_speed = 6.0
 
 [node name="Fish" type="Area2D" unique_id=1429060153]
