@@ -2,29 +2,55 @@
 
 [ext_resource type="Script" uid="uid://daqjimp3wh021" path="res://scenes/boat.gd" id="1_0063d"]
 [ext_resource type="Script" uid="uid://lygsaqh6m70w" path="res://scenes/hook.gd" id="2_qyrje"]
+[ext_resource type="Texture2D" path="res://assets/boat_approved.png" id="3_boat_texture"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_5ivpy"]
-size = Vector2(319, 123)
+size = Vector2(300, 92)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_82fyb"]
+size = Vector2(18, 22)
 
 [node name="Boat" type="CharacterBody2D" unique_id=1129358676]
 script = ExtResource("1_0063d")
 
-[node name="BoatVisual" type="Polygon2D" parent="." unique_id=81027790]
-position = Vector2(249.985, -418.9)
-color = Color(0.27078065, 0.06251948, 0.0055980757, 1)
-polygon = PackedVector2Array(46, 340, 94, 455, 382, 453, 440, 327, 222, 357)
+[node name="BoatVisual" type="Sprite2D" parent="." unique_id=81027790]
+position = Vector2(490, -83)
+texture = ExtResource("3_boat_texture")
+texture_filter = 1
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1674171951]
-position = Vector2(489, -21)
+position = Vector2(490, -8)
 shape = SubResource("RectangleShape2D_5ivpy")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1755523253]
 position = Vector2(350, 220)
 
+[node name="RodPivot" type="Node2D" parent="."]
+position = Vector2(410, -57)
+
+[node name="RodVisual" type="Line2D" parent="RodPivot"]
+z_index = 4
+width = 6.0
+default_color = Color(0.105882, 0.129412, 0.168627, 1)
+points = PackedVector2Array(0, 0, -24, -55, -55, -118)
+
+[node name="RodHighlight" type="Line2D" parent="RodPivot"]
+z_index = 5
+width = 2.0
+default_color = Color(0.384314, 0.447059, 0.513726, 1)
+points = PackedVector2Array(-3, -4, -26, -56, -56, -118)
+
+[node name="Reel" type="Polygon2D" parent="RodPivot"]
+z_index = 5
+position = Vector2(-7, -8)
+color = Color(0.788235, 0.615686, 0.278431, 1)
+polygon = PackedVector2Array(-8, 0, -5, -6, 1, -9, 7, -6, 10, 0, 7, 6, 1, 9, -5, 6)
+
+[node name="RodTip" type="Marker2D" parent="RodPivot"]
+position = Vector2(-55, -118)
+
 [node name="Hook" type="Area2D" parent="." unique_id=786582749]
-position = Vector2(489.975, 42.6)
+position = Vector2(355, 42.6)
 script = ExtResource("2_qyrje")
 max_depth = 736.265
 
@@ -33,8 +59,10 @@ position = Vector2(0, 8)
 shape = SubResource("RectangleShape2D_82fyb")
 
 [node name="Polygon2D" type="Polygon2D" parent="Hook" unique_id=372325786]
-position = Vector2(-132, -166)
-color = Color(0.99999994, 0.35334328, 0.045329593, 1)
-polygon = PackedVector2Array(124, 170, 124, 182, 140, 182, 138, 162)
+position = Vector2(-8, -8)
+color = Color(0.92, 0.93, 0.95, 1)
+polygon = PackedVector2Array(7, 0, 7, 12, 12, 16, 17, 12, 14, 10, 11, 12, 10, 0)
 
 [node name="HookLine" type="Line2D" parent="." unique_id=1026712407]
+z_index = 3
+width = 2.0

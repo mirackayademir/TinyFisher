@@ -14,6 +14,7 @@ extends CanvasLayer
 
 var fight_active: bool = false
 var fight_won: bool = false
+var fight_ease_level: int = 0
 
 var fish_target_x: float = 0.0
 var fish_move_speed: float = 120.0
@@ -38,7 +39,6 @@ func _ready() -> void:
 	for control in find_children("*", "Control", true, false):
 		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# FightPanel sadece taşıyıcı olsun; sol üstte gereksiz küçük panel görünmesin.
 	fight_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	fight_bar.min_value = 0.0
 	fight_bar.max_value = 100.0
@@ -71,7 +71,6 @@ func layout_fight_bar() -> void:
 
 
 func move_catch_zone() -> void:
-	# A/D artık sadece tekneyi yönetiyor. Mücadele alanı yalnızca fareyi takip ediyor.
 	var mouse_x: float = fight_bar.get_local_mouse_position().x
 	var max_x: float = maxf(fight_bar.size.x - catch_zone.size.x, 0.0)
 
@@ -172,6 +171,14 @@ func show_fight_bar(fish_type: String) -> void:
 			fight_loss_speed = 18.0
 			zone_width = 70.0
 
+	# Mücadele Desteği yükseldikçe balık biraz sakinleşir,
+	# yeşil alan genişler ve ilerleme daha affedici olur.
+	var ease_multiplier := maxf(0.58, 1.0 - float(fight_ease_level) * 0.08)
+	fish_move_speed *= ease_multiplier
+	fight_gain_speed += float(fight_ease_level) * 2.0
+	fight_loss_speed = maxf(8.0, fight_loss_speed - float(fight_ease_level) * 2.0)
+	zone_width += float(fight_ease_level) * 8.0
+
 	fish_marker.size = Vector2(24.0, fight_bar.size.y)
 	catch_zone.size = Vector2(zone_width, fight_bar.size.y)
 
@@ -181,6 +188,14 @@ func show_fight_bar(fish_type: String) -> void:
 		0.0,
 		maxf(fight_bar.size.x - catch_zone.size.x, 0.0)
 	)
+
+
+func set_capacity_level(level: int) -> void:
+	max_fish_capacity = 8 + (level * 2)
+
+
+func set_fight_ease_level(level: int) -> void:
+	fight_ease_level = level
 
 
 func is_fight_won() -> bool:

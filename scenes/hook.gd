@@ -2,6 +2,7 @@ extends Area2D
 
 @export var hook_speed: float = 180.0
 @export var reel_speed: float = 240.0
+@export var reel_speed_per_level: float = 40.0
 @export var max_depth: float = 736.0
 @export var camera_surface_y: float = 0.0
 @export var camera_deep_y: float = 520.0
@@ -23,7 +24,8 @@ func _ready() -> void:
 	collision_layer = 0
 	collision_mask = 2
 	area_entered.connect(_on_hook_area_entered)
-	hook_line.width = 3.0
+	hook_line.width = 2.0
+	hook_line.default_color = Color(0.88, 0.92, 0.95, 0.95)
 	hook_line.points = PackedVector2Array([start_position, start_position])
 	camera.position = Vector2(350.0, camera_surface_y)
 
@@ -39,9 +41,8 @@ func deploy() -> void:
 		return
 
 	deployed = true
-	# Cat Goes Fishing hissi: olta sudayken de tekne A/D ile hareket edebilir.
-	# Kanca Boat'un child'i olduğu için yatayda tekneyle beraber taşınır ve ip dik kalır.
 	boat.set_movement_enabled(true)
+	boat.play_cast_animation()
 
 
 func _physics_process(delta: float) -> void:
@@ -53,27 +54,29 @@ func _physics_process(delta: float) -> void:
 			if hud.is_fight_won() and is_reeling():
 				position.y -= reel_speed * delta
 		else:
-			# Boş olta otomatik batar; sarma her zaman önceliklidir.
 			position.y += (-reel_speed if is_reeling() else hook_speed) * delta
 
 		position.y = clampf(position.y, start_position.y, start_position.y + max_depth)
-		# X yerel koordinatta sabit kalır. Boat hareket edince kanca dünya uzayında onunla gider.
 		position.x = start_position.x
 
 		if position.y <= start_position.y:
 			land_catch()
 		elif not is_instance_valid(hooked_fish):
-			# Yeni atışta halihazırda üst üste gelen balığı da yakala.
 			for area in get_overlapping_areas():
 				_on_hook_area_entered(area)
 
-	hook_line.set_point_position(0, start_position)
+	# Misina tekne merkezinden değil, animasyonlu kamışın ucundan çıkar.
+	hook_line.set_point_position(0, boat.get_line_origin_local())
 	hook_line.set_point_position(1, position)
 	update_camera(delta)
 
 
 func is_reeling() -> bool:
 	return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_physical_key_pressed(KEY_W)
+
+
+func set_reel_speed_level(level: int) -> void:
+	reel_speed = 240.0 + (float(level) * reel_speed_per_level)
 
 
 func land_catch() -> void:

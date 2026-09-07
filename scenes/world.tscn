@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://c6cy1qb6bjk2m" path="res://scenes/fishing_spot.gd" id="3_71j4m"]
 [ext_resource type="Script" uid="uid://cj43jjxv1jhcf" path="res://scenes/hud.gd" id="4_k0juu"]
 [ext_resource type="PackedScene" uid="uid://b20m3xbbwtxhf" path="res://scenes/fish.tscn" id="4_qfnet"]
+[ext_resource type="Texture2D" path="res://assets/harbor_pixel.svg" id="5_harbor"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_5ivpy"]
 size = Vector2(195, 204)
@@ -33,13 +34,14 @@ color = Color(4.235506e-06, 0.37335896, 0.74916744, 1)
 
 [node name="Boat" parent="." unique_id=1129358676 instance=ExtResource("1_nnsk1")]
 position = Vector2(432.56, 350)
+z_index = 2
 
-[node name="Dock" type="ColorRect" parent="." unique_id=1677001902]
-mouse_filter = 2
-offset_left = -157.0
-offset_top = 232.0
-offset_right = 242.0
-offset_bottom = 430.0
+[node name="Dock" type="Sprite2D" parent="." unique_id=1677001902]
+position = Vector2(155, 282)
+z_index = 1
+texture = ExtResource("5_harbor")
+scale = Vector2(0.62, 0.62)
+texture_filter = 1
 
 [node name="DockArea" type="Area2D" parent="." unique_id=518462342]
 
@@ -48,6 +50,7 @@ position = Vector2(340, 335)
 shape = SubResource("RectangleShape2D_5ivpy")
 
 [node name="DockPrompt" type="Label" parent="." unique_id=2011597763]
+z_index = 10
 offset_left = 150.18
 offset_top = 132.21
 offset_right = 281.18018
@@ -56,6 +59,7 @@ text = "[E] Limana Yanaş"
 
 [node name="DockMenu" type="Panel" parent="." unique_id=2115008133]
 visible = false
+z_index = 20
 offset_left = 259.0
 offset_top = 14.0
 offset_right = 559.0
@@ -80,7 +84,76 @@ text = "Geliştirmeler"
 layout_mode = 2
 text = "Denize Açıl"
 
+[node name="UpgradeMenu" type="Panel" parent="."]
+visible = false
+z_index = 25
+offset_left = 300.0
+offset_top = 70.0
+offset_right = 760.0
+offset_bottom = 430.0
+
+[node name="TitleLabel" type="Label" parent="UpgradeMenu"]
+offset_left = 22.0
+offset_top = 18.0
+offset_right = 438.0
+offset_bottom = 48.0
+theme_override_font_sizes/font_size = 22
+text = "Liman Geliştirmeleri"
+horizontal_alignment = 1
+
+[node name="MoneyHintLabel" type="Label" parent="UpgradeMenu"]
+offset_left = 24.0
+offset_top = 58.0
+offset_right = 436.0
+offset_bottom = 82.0
+text = "Geliştirmeler balık satışından kazanılan para ile alınır."
+horizontal_alignment = 1
+
+[node name="BoatSpeedButton" type="Button" parent="UpgradeMenu"]
+offset_left = 42.0
+offset_top = 100.0
+offset_right = 418.0
+offset_bottom = 142.0
+text = "Motor Gücü"
+
+[node name="RodSpeedButton" type="Button" parent="UpgradeMenu"]
+offset_left = 42.0
+offset_top = 150.0
+offset_right = 418.0
+offset_bottom = 192.0
+text = "Makara Hızı"
+
+[node name="CapacityButton" type="Button" parent="UpgradeMenu"]
+offset_left = 42.0
+offset_top = 200.0
+offset_right = 418.0
+offset_bottom = 242.0
+text = "Tekne Ambarı"
+
+[node name="FightEaseButton" type="Button" parent="UpgradeMenu"]
+offset_left = 42.0
+offset_top = 250.0
+offset_right = 418.0
+offset_bottom = 292.0
+text = "Mücadele Desteği"
+
+[node name="InfoLabel" type="Label" parent="UpgradeMenu"]
+offset_left = 28.0
+offset_top = 300.0
+offset_right = 432.0
+offset_bottom = 326.0
+text = "Her geliştirme 5 seviyedir."
+horizontal_alignment = 1
+
+[node name="BackButton" type="Button" parent="UpgradeMenu"]
+offset_left = 150.0
+offset_top = 326.0
+offset_right = 310.0
+offset_bottom = 354.0
+text = "Geri"
+
 [node name="MoneyLabel" type="Label" parent="." unique_id=1688949435]
+z_index = 30
 offset_left = 562.0
 offset_top = 13.0
 offset_right = 605.5901
@@ -111,9 +184,7 @@ offset_bottom = 708.0
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
-text = "A/D: Tekne | Sağ tık / S: Oltayı bırak | Sol tuş basılı / W: Sar | E: Liman
-Mücadele: Fareyle yeşil alanı balık işaretinde tut ve sar. Çubuk dolunca balığı yukarı çek.
-Olta sudayken tekne durur. Envanter: 8 balık; dolunca limanda sat."
+text = "A/D: Tekne | Sağ tık / S: Oltayı bırak | Sol tuş basılı / W: Sar | E: Liman\nMücadele: Fareyle yeşil alanı balık işaretinde tut ve sar. Çubuk dolunca balığı yukarı çek.\nOlta sudayken tekne hareket edebilir. Limanda balık sat ve geliştirmeleri satın al."
 
 [node name="InventoryPanel" type="Panel" parent="HUD" unique_id=1002202826]
 offset_right = 40.0
@@ -252,4 +323,10 @@ offset_bottom = 40.0
 [connection signal="body_entered" from="DockArea" to="." method="_on_dock_area_body_entered"]
 [connection signal="body_exited" from="DockArea" to="." method="_on_dock_area_body_exited"]
 [connection signal="pressed" from="DockMenu/VBoxContainer/SellButton" to="." method="_on_sell_button_pressed"]
+[connection signal="pressed" from="DockMenu/VBoxContainer/UpgradeButton" to="." method="_on_upgrade_button_pressed"]
 [connection signal="pressed" from="DockMenu/VBoxContainer/LeaveButton" to="." method="_on_leave_button_pressed"]
+[connection signal="pressed" from="UpgradeMenu/BoatSpeedButton" to="." method="_on_boat_speed_button_pressed"]
+[connection signal="pressed" from="UpgradeMenu/RodSpeedButton" to="." method="_on_rod_speed_button_pressed"]
+[connection signal="pressed" from="UpgradeMenu/CapacityButton" to="." method="_on_capacity_button_pressed"]
+[connection signal="pressed" from="UpgradeMenu/FightEaseButton" to="." method="_on_fight_ease_button_pressed"]
+[connection signal="pressed" from="UpgradeMenu/BackButton" to="." method="_on_upgrade_back_button_pressed"]
