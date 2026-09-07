@@ -1,51 +1,82 @@
-# Tiny Fisher — dikey olta döngüsü
+# TinyFisher — Checkpoint 2026-09-08
 
-## Kaynak
+## Aktif branch
 
-Kanonik depo: https://github.com/mirackayademir/TinyFisher
+`eski`
 
-7 Eylül 2026 kontrolünde GitHub API, deponun boş olduğunu bildirdi; mevcut bir commit veya dal içeriği yoktu. Bu çalışma, önceki konuşmaya eklenen `tiny-fisherv-2.rar` arşivindeki gerçek Godot projesinden devam eder. Yerel çalışma klasörünün `origin` adresi yukarıdaki depodur. GitHub'a gönderim yapılmadı.
+Büyük bir değişiklik gerekmedikçe yeni branch açılmayacak. Yeni branch gerekirse önce Miraç'a sorulacak.
 
-## Açılış ve kontroller
+## Projenin mevcut yönü
 
-Godot 4.7.2 ile `project.godot` dosyasını açıp F6 yerine F5 ile projeyi çalıştırın.
+TinyFisher artık **Cat Goes Fishing tarzı yatay tekne + dikey olta** yapısında ilerliyor.
 
-- A / D: tekneyi yatay hareket ettirir.
-- Sağ tık veya S: oltayı bırakır; kurşun otomatik olarak dikey batar.
-- Sol fare tuşunu basılı tutmak veya W: oltayı sarar.
-- Balık temas ettiğinde mevcut mücadele çubuğu açılır. Fareyle yeşil alanı turuncu balık işaretinin üzerine getirin ve sol tuşu basılı tutun. A / D ile alanı hareket ettirmek de mümkündür.
-- Mücadele çubuğu dolduğunda sararak balığı tekneye alın. Balık ancak tekneye ulaştığında envantere eklenir.
-- Olta aşağıdayken tekne sabittir. Boş oltayı da tamamen topladığınızda hareket tekrar açılır.
-- Envanter kapasitesi 8 balıktır. Dolu envanterle yeni atış yapılamaz.
-- Soldaki limana yaklaşın, E ile yanaşın; Balıkları Sat / Denize Açıl düğmelerini kullanın.
+Ana döngü:
 
-## Gerçek proje yapısı
+- Tekne A / D ile yatay hareket eder.
+- Sağ tık veya S ile olta dikey olarak denize bırakılır.
+- Sol tık basılı veya W ile olta sarılır.
+- Balık kancaya geldiğinde mücadele sistemi devreye girer.
+- Balık tekneye kadar çekildiğinde envantere alınır.
+- Limanda balık satılır ve geliştirmeler satın alınır.
 
-- `scenes/world.tscn` / `world.gd`: deniz, soldaki liman, satış, Boat, FishingSpot, HUD.
-- `scenes/boat.tscn` / `boat.gd`: CharacterBody2D tekne, Hook, HookLine, Camera2D. Tekne hareket scripti korunmuştur.
-- `scenes/hook.gd`: dikey bırakma/sarma, tek balık kilidi, mücadele sonrası teslim ve kamera takibi.
-- `scenes/fish.tscn` / `fish.gd`: mevcut dört balık türü, yüzme, kancaya bağlanma.
-- `scenes/fishing_spot.gd`: dört balığın korunması ve yeniden doğma.
-- `scenes/hud.gd`: mevcut mücadele ve 8 balıklık envanter.
+## Çalışan sistemler
 
-Kanca ve balık görsel/çarpışma koordinatları kök düğümleriyle hizalandı. Balıkların sahnedeki başlangıç konumu korundu. Balık yeniden doğarken devriye merkezi artık doğru konumdan kaydedilir. İp koordinatları teknenin yerel uzayında tutulur. Limandan çıkış sinyali bağlandı; olta aşağıdayken yanaşma engellendi. Arayüz dekorları olta tıklamalarını yutmaz. Yeni görsel varlık üretilmedi.
+- Tekne hareketi
+- Dikey olta bırakma ve sarma
+- Kamera / derinlik takibi
+- Balık spawn ve yeniden doğma
+- Balığın kancaya bağlanması
+- Balık mücadele sistemi
+- Envanter ve kapasite
+- Limana yanaşma
+- Balık satışı / para
+- Liman geliştirme menüsü
 
-## Doğrulama
+### Liman geliştirmeleri
 
-Godot 4.7.2 headless açılışı tamamlandı; aşağıdaki testte 20 kontrol geçti:
+- Motor Gücü — tekne hızı
+- Makara Hızı — olta sarma hızı
+- Tekne Ambarı — envanter kapasitesi
+- Mücadele Desteği — balık mücadelesini kolaylaştırma
 
-```text
-godot --headless --path . --fixed-fps 60 --script res://tests/fishing_loop_test.gd
-```
+Her geliştirme 5 seviyelidir.
 
-Kontroller: liman giriş/çıkışı, yatay hareket, sağ tık atışı, dikey düşüş, tekne kilidi, boş sarma, derinlik sınırı/kamera, gerçek Area2D teması, mücadele kilidi/kazanma, tek seferlik envanter teslimi, kapasite, satış, limanda atış engeli ve yeniden doğma merkezi.
+## Görsel yön — KANONİK KARAR
 
-Ortam kaynaklı kök sertifika deposu uyarısı çıktı; testler 0 hata ile tamamlandı. Görsel oynanış ve fare hissi elle doğrulanmadı.
+Bundan sonra oyun görselleri **birebir pixel-art tarzında** kullanılacak.
 
-## Sonraki elle kontrol
+Yaklaşık SVG taklitleri, geçici sade çizimler veya görsele benzeyen yeniden çizimler final asset olarak kullanılmayacak. Onaylanan görsel neyse mümkün olduğunca **aynı görsel dosyası** oyuna aktarılacak.
 
-1. A/D ile açılın; sağ tıkla bırakın. İpin dik kaldığını ve kancanın kameradan çıkmadığını kontrol edin.
-2. Boş oltayı sol tuşla toplayın; teknenin yeniden hareket ettiğini kontrol edin.
-3. Balık takılınca fareyle mücadeleyi kazanın, yukarı çekin; envanter yalnızca bir artsın.
-4. 8 balıkta yeni atışın engellendiğini kontrol edin; soldaki limanda E → satış → denize açıl akışını deneyin.
-5. Farklı balık türlerinde mücadele hızını ve fare hassasiyetini değerlendirin.
+Onaylanan iki ana görsel:
+
+1. Turkuaz / krem renkli pixel-art balıkçı teknesi
+2. Turkuaz çatılı pixel-art liman / iskele
+
+Bu iki görsel GitHub üzerinden projeye aktarılmaya başlandı ve `git pull` sonrasında proje tarafında dosyalar görünür hale geldi.
+
+### Görsel entegrasyonda sıradaki iş
+
+- Onaylanan tekne görselini mevcut geçici `boat_approved.svg` yerine gerçek oyun görseli olarak bağlamak.
+- Onaylanan liman görselini mevcut geçici `harbor_pixel.svg` yerine bağlamak.
+- Tekne / liman ölçek ve konumlarını sahnede düzgün oturtmak.
+- Mevcut oynanış sistemlerini bozmamak.
+- Tekne üzerindeki olta ile gerçek atış animasyonunu eşleştirmek.
+- Daha sonra UI / geliştirme ekranlarını da aynı pixel-art görsel diline geçirmek.
+
+## Önemli çalışma kuralı
+
+KISS uygulanacak. Gereksiz araştırma, gereksiz dosya üretimi ve işi uzatan ara adımlar yapılmayacak.
+
+Bir görev tamamlandığında kısa rapor verilecek:
+
+- Ne yapıldı
+- GitHub'a işlendi mi
+- Bir sonraki net adım ne
+
+Kullanıcı müdahalesi gerçekten gerekmedikçe iş kullanıcıya geri görev olarak verilmeyecek.
+
+## Yarın devam noktası
+
+**İlk iş:** Tekne ve limanın onaylanan birebir pixel-art görsellerini sahnede aktif hale getirip eski geçici SVG görselleri devreden çıkarmak.
+
+Ardından olta atma animasyonu ve pixel-art UI düzenlemesine devam edilecek.
