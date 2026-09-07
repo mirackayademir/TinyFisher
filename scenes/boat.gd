@@ -2,7 +2,7 @@ extends CharacterBody2D
 
 @export var speed: float = 220.0
 @export var speed_per_level: float = 35.0
-@export var min_world_x: float = -145.0
+@export var min_world_x: float = 220.0
 
 @export var rod_rest_rotation: float = 0.0
 @export var rod_reel_rotation: float = -0.16
@@ -21,12 +21,14 @@ var _rod_base_position: Vector2
 @onready var rod_tip: Marker2D = $RodPivot/RodTip
 @onready var boat_visual: Sprite2D = $BoatVisual
 @onready var wake_particles: CPUParticles2D = $WakeParticles
+@onready var wake_trail: CPUParticles2D = $WakeTrail
 
 
 func _ready() -> void:
 	_boat_visual_base_position = boat_visual.position
 	_rod_base_position = rod_pivot.position
 	wake_particles.emitting = false
+	wake_trail.emitting = false
 
 
 func _physics_process(delta: float) -> void:
@@ -38,7 +40,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0.0
 		move_and_slide()
 
-	# Limanın görselinin içine geçme. Sol sınır, yanaşma/yükseltme alanını açık bırakır.
+	# Limanın içine girme; sağ taraftaki yanaşma/geliştirme noktasında dur.
 	if global_position.x < min_world_x:
 		global_position.x = min_world_x
 		if velocity.x < 0.0:
@@ -62,18 +64,27 @@ func _update_surface_motion(delta: float) -> void:
 func _update_wake() -> void:
 	var moving := can_move and absf(velocity.x) > 20.0
 	wake_particles.emitting = moving
+	wake_trail.emitting = moving
 
 	if not moving:
 		return
 
 	var movement_sign := signf(velocity.x)
-	wake_particles.direction = Vector2(-movement_sign, 0.10)
+	var speed_ratio := clampf(absf(velocity.x) / maxf(speed, 1.0), 0.35, 1.0)
+	var foam_y := 40.0 + sin(_sea_time * 2.2) * 1.5
 
-	# Köpük her zaman hareket yönünün arkasından çıkar.
+	wake_particles.direction = Vector2(-movement_sign, 0.04)
+	wake_trail.direction = Vector2(-movement_sign, 0.02)
+	wake_particles.speed_scale = lerpf(0.72, 1.08, speed_ratio)
+	wake_trail.speed_scale = lerpf(0.65, 1.0, speed_ratio)
+
+	# Kaynak teknenin kıçına yakın. Parçacıklar artık teknenin çok gerisinden başlamaz.
 	if movement_sign > 0.0:
-		wake_particles.position = Vector2(78.0, 38.0)
+		wake_particles.position = Vector2(168.0, foam_y)
+		wake_trail.position = Vector2(184.0, foam_y + 3.0)
 	else:
-		wake_particles.position = Vector2(900.0, 38.0)
+		wake_particles.position = Vector2(812.0, foam_y)
+		wake_trail.position = Vector2(795.0, foam_y + 3.0)
 
 
 func _update_rod_pose(delta: float) -> void:
@@ -123,6 +134,7 @@ func set_movement_enabled(enabled: bool) -> void:
 	if not enabled:
 		velocity = Vector2.ZERO
 		wake_particles.emitting = false
+		wake_trail.emitting = false
 
 
 func _on_hook_area_entered(area: Area2D) -> void:
