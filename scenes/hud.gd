@@ -7,6 +7,16 @@ const LEVREK_TEXTURE = preload("res://assets/levrek2.png")
 const USKUMRU_TEXTURE = preload("res://assets/uskumru.png")
 const TON_BALIGI_TEXTURE = preload("res://assets/tonbaligi.png")
 
+@onready var inventory_panel: Panel = $InventoryPanel
+@onready var inventory_slots: HBoxContainer = $InventoryPanel/InventorySlots
+@onready var slot_1: Panel = $InventoryPanel/InventorySlots/Slot1
+@onready var slot_2: Panel = $InventoryPanel/InventorySlots/Slot2
+@onready var slot_3: Panel = $InventoryPanel/InventorySlots/Slot3
+@onready var slot_4: Panel = $InventoryPanel/InventorySlots/Slot4
+@onready var fish_icon_1: TextureRect = $InventoryPanel/InventorySlots/Slot1/FishIcon
+@onready var fish_icon_2: TextureRect = $InventoryPanel/InventorySlots/Slot2/FishIcon
+@onready var fish_icon_3: TextureRect = $InventoryPanel/InventorySlots/Slot3/FishIcon
+@onready var fish_icon_4: TextureRect = $InventoryPanel/InventorySlots/Slot4/FishIcon
 @onready var count_label_1: Label = $InventoryPanel/InventorySlots/Slot1/CountLabel
 @onready var count_label_2: Label = $InventoryPanel/InventorySlots/Slot2/CountLabel
 @onready var count_label_3: Label = $InventoryPanel/InventorySlots/Slot3/CountLabel
@@ -51,6 +61,7 @@ var inventory: Dictionary = {
 
 
 func _ready() -> void:
+	_setup_inventory_visuals()
 	update_inventory()
 
 	for control in find_children("*", "Control", true, false):
@@ -64,6 +75,64 @@ func _ready() -> void:
 	catch_popup.visible = false
 
 
+func _setup_inventory_visuals() -> void:
+	inventory_panel.position = Vector2(14.0, 14.0)
+	inventory_panel.size = Vector2(310.0, 78.0)
+	inventory_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.018, 0.055, 0.09, 0.90)
+	panel_style.border_color = Color(0.18, 0.48, 0.62, 0.92)
+	panel_style.border_width_left = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_bottom = 2
+	panel_style.corner_radius_top_left = 7
+	panel_style.corner_radius_top_right = 7
+	panel_style.corner_radius_bottom_left = 7
+	panel_style.corner_radius_bottom_right = 7
+	inventory_panel.add_theme_stylebox_override("panel", panel_style)
+
+	inventory_slots.position = Vector2(7.0, 7.0)
+	inventory_slots.add_theme_constant_override("separation", 6)
+
+	var slots: Array[Panel] = [slot_1, slot_2, slot_3, slot_4]
+	var icons: Array[TextureRect] = [fish_icon_1, fish_icon_2, fish_icon_3, fish_icon_4]
+	var labels: Array[Label] = [count_label_1, count_label_2, count_label_3, count_label_4]
+	var textures: Array[Texture2D] = [SARDALYA_TEXTURE, LEVREK_TEXTURE, USKUMRU_TEXTURE, TON_BALIGI_TEXTURE]
+
+	for i in range(4):
+		var slot := slots[i]
+		var icon := icons[i]
+		var label := labels[i]
+
+		slot.custom_minimum_size = Vector2(68.0, 64.0)
+		var slot_style := StyleBoxFlat.new()
+		slot_style.bg_color = Color(0.025, 0.09, 0.14, 0.92)
+		slot_style.border_color = Color(0.16, 0.34, 0.43, 0.95)
+		slot_style.border_width_left = 2
+		slot_style.border_width_top = 2
+		slot_style.border_width_right = 2
+		slot_style.border_width_bottom = 2
+		slot_style.corner_radius_top_left = 5
+		slot_style.corner_radius_top_right = 5
+		slot_style.corner_radius_bottom_left = 5
+		slot_style.corner_radius_bottom_right = 5
+		slot.add_theme_stylebox_override("panel", slot_style)
+
+		icon.texture = textures[i]
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.modulate = Color(1.08, 1.08, 1.08, 1.0)
+
+		label.add_theme_font_size_override("font_size", 18)
+		label.add_theme_color_override("font_color", Color.WHITE)
+		label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
+		label.add_theme_constant_override("shadow_offset_x", 2)
+		label.add_theme_constant_override("shadow_offset_y", 2)
+
+
 func _process(delta: float) -> void:
 	_fight_time += delta
 
@@ -74,7 +143,6 @@ func _process(delta: float) -> void:
 	move_fish_marker(delta)
 	update_fight_progress(delta)
 
-	# Sabit kutular yerine canlı bir hedef hissi.
 	fish_marker.modulate.a = 0.78 + sin(_fight_time * 8.0) * 0.18
 	catch_zone.modulate.a = 0.70 + sin(_fight_time * 5.0 + 0.8) * 0.14
 
