@@ -3,6 +3,7 @@ extends CharacterBody2D
 @export var speed: float = 220.0
 @export var speed_per_level: float = 35.0
 @export var min_world_x: float = 470.0
+@export var harbor_dock_approach: float = 270.0
 
 @export var rod_rest_rotation: float = 0.0
 @export var rod_reel_rotation: float = -0.16
@@ -64,9 +65,11 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0.0
 		move_and_slide()
 
-	# Limanın içine girme; sadece sağdaki yanaşma/geliştirme noktasına kadar yaklaş.
-	if global_position.x < min_world_x:
-		global_position.x = min_world_x
+	# World liman ölçeğine dokunmadan, teknenin görünmez duvarını iskeleye kadar yaklaştır.
+	# world.gd min_world_x değerini yanaşma bölgesi için korur; burada görsel tekne ofsetini telafi ediyoruz.
+	var effective_min_world_x := min_world_x - harbor_dock_approach
+	if global_position.x < effective_min_world_x:
+		global_position.x = effective_min_world_x
 		if velocity.x < 0.0:
 			velocity.x = 0.0
 
