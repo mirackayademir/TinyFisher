@@ -2,7 +2,7 @@ extends CharacterBody2D
 
 @export var speed: float = 220.0
 @export var speed_per_level: float = 35.0
-@export var min_world_x: float = 220.0
+@export var min_world_x: float = 470.0
 
 @export var rod_rest_rotation: float = 0.0
 @export var rod_reel_rotation: float = -0.16
@@ -25,8 +25,25 @@ var _rod_base_position: Vector2
 
 
 func _ready() -> void:
+	# Tekneyi su çizgisine biraz daha oturt.
+	boat_visual.position.y += 11.0
+	rod_pivot.position.y += 11.0
 	_boat_visual_base_position = boat_visual.position
 	_rod_base_position = rod_pivot.position
+
+	# Köpük artık dünya üzerinde geride kalmaz; kıçın hemen altında tekneyle birlikte akar.
+	wake_particles.local_coords = true
+	wake_trail.local_coords = true
+	wake_particles.lifetime = 0.34
+	wake_trail.lifetime = 0.52
+	wake_particles.amount = 22
+	wake_trail.amount = 16
+	wake_particles.initial_velocity_min = 18.0
+	wake_particles.initial_velocity_max = 42.0
+	wake_trail.initial_velocity_min = 8.0
+	wake_trail.initial_velocity_max = 22.0
+	wake_particles.gravity = Vector2(0.0, 8.0)
+	wake_trail.gravity = Vector2(0.0, 3.0)
 	wake_particles.emitting = false
 	wake_trail.emitting = false
 
@@ -40,7 +57,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0.0
 		move_and_slide()
 
-	# Limanın içine girme; sağ taraftaki yanaşma/geliştirme noktasında dur.
+	# Limanın içine girme; sadece sağdaki yanaşma/geliştirme noktasına kadar yaklaş.
 	if global_position.x < min_world_x:
 		global_position.x = min_world_x
 		if velocity.x < 0.0:
@@ -53,12 +70,17 @@ func _physics_process(delta: float) -> void:
 
 func _update_surface_motion(delta: float) -> void:
 	_sea_time += delta
-	var bob := sin(_sea_time * 2.15) * 3.2 + sin(_sea_time * 1.12 + 0.7) * 1.4
-	var tilt := sin(_sea_time * 1.65) * 0.008
+
+	# İki farklı dalga tekneyi yukarı-aşağı taşır; yatay hareket ederken faz da değişir.
+	var wave_a := sin(_sea_time * 1.72 + global_position.x * 0.018) * 5.2
+	var wave_b := sin(_sea_time * 1.08 + global_position.x * 0.043 + 0.8) * 2.2
+	var bob := wave_a + wave_b
+	var tilt := cos(_sea_time * 1.72 + global_position.x * 0.018) * 0.014
+	var speed_tilt := clampf(velocity.x / maxf(speed, 1.0), -1.0, 1.0) * 0.006
 
 	boat_visual.position = _boat_visual_base_position + Vector2(0.0, bob)
-	boat_visual.rotation = tilt
-	rod_pivot.position.y = _rod_base_position.y + bob * 0.85
+	boat_visual.rotation = tilt + speed_tilt
+	rod_pivot.position.y = _rod_base_position.y + bob * 0.88
 
 
 func _update_wake() -> void:
@@ -70,21 +92,21 @@ func _update_wake() -> void:
 		return
 
 	var movement_sign := signf(velocity.x)
-	var speed_ratio := clampf(absf(velocity.x) / maxf(speed, 1.0), 0.35, 1.0)
-	var foam_y := 40.0 + sin(_sea_time * 2.2) * 1.5
+	var speed_ratio := clampf(absf(velocity.x) / maxf(speed, 1.0), 0.30, 1.0)
+	var foam_y := 49.0 + sin(_sea_time * 3.0) * 1.2
 
-	wake_particles.direction = Vector2(-movement_sign, 0.04)
-	wake_trail.direction = Vector2(-movement_sign, 0.02)
-	wake_particles.speed_scale = lerpf(0.72, 1.08, speed_ratio)
-	wake_trail.speed_scale = lerpf(0.65, 1.0, speed_ratio)
+	wake_particles.direction = Vector2(-movement_sign, 0.02)
+	wake_trail.direction = Vector2(-movement_sign, 0.015)
+	wake_particles.speed_scale = lerpf(0.75, 1.05, speed_ratio)
+	wake_trail.speed_scale = lerpf(0.70, 0.95, speed_ratio)
 
-	# Kaynak teknenin kıçına yakın. Parçacıklar artık teknenin çok gerisinden başlamaz.
+	# Köpük doğrudan kıçın altından başlar; uzun boşluk oluşmaz.
 	if movement_sign > 0.0:
-		wake_particles.position = Vector2(168.0, foam_y)
-		wake_trail.position = Vector2(184.0, foam_y + 3.0)
+		wake_particles.position = Vector2(76.0, foam_y)
+		wake_trail.position = Vector2(94.0, foam_y + 2.0)
 	else:
-		wake_particles.position = Vector2(812.0, foam_y)
-		wake_trail.position = Vector2(795.0, foam_y + 3.0)
+		wake_particles.position = Vector2(904.0, foam_y)
+		wake_trail.position = Vector2(886.0, foam_y + 2.0)
 
 
 func _update_rod_pose(delta: float) -> void:
