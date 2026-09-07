@@ -5,7 +5,7 @@
 [ext_resource type="Script" uid="uid://c6cy1qb6bjk2m" path="res://scenes/fishing_spot.gd" id="3_71j4m"]
 [ext_resource type="Script" uid="uid://cj43jjxv1jhcf" path="res://scenes/hud.gd" id="4_k0juu"]
 [ext_resource type="PackedScene" uid="uid://b20m3xbbwtxhf" path="res://scenes/fish.tscn" id="4_qfnet"]
-[ext_resource type="Texture2D" path="res://assets/harbor_pixel.svg" id="5_harbor"]
+[ext_resource type="Texture2D" path="res://assets/harbor_exact.webp" id="5_harbor"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_5ivpy"]
 size = Vector2(195, 204)
@@ -40,7 +40,7 @@ z_index = 2
 position = Vector2(155, 282)
 z_index = 1
 texture = ExtResource("5_harbor")
-scale = Vector2(0.62, 0.62)
+scale = Vector2(2.75, 2.75)
 texture_filter = 1
 
 [node name="DockArea" type="Area2D" parent="." unique_id=518462342]

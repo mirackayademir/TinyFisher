@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://daqjimp3wh021" path="res://scenes/boat.gd" id="1_0063d"]
 [ext_resource type="Script" uid="uid://lygsaqh6m70w" path="res://scenes/hook.gd" id="2_qyrje"]
-[ext_resource type="Texture2D" path="res://assets/boat_approved.svg" id="3_boat_texture"]
+[ext_resource type="Texture2D" path="res://assets/boat_exact.webp" id="3_boat_texture"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_5ivpy"]
 size = Vector2(300, 92)
@@ -15,6 +15,7 @@ script = ExtResource("1_0063d")
 
 [node name="BoatVisual" type="Sprite2D" parent="." unique_id=81027790]
 position = Vector2(490, -83)
+scale = Vector2(2.5, 2.5)
 texture = ExtResource("3_boat_texture")
 texture_filter = 1
 
