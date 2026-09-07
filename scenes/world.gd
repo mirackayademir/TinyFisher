@@ -14,6 +14,11 @@ const WATER_SURFACE_Y: float = 360.0
 @onready var money_label: Label = $MoneyLabel
 @onready var hud = $HUD
 
+@onready var fish_icon_1: TextureRect = $HUD/InventoryPanel/InventorySlots/Slot1/FishIcon
+@onready var fish_icon_2: TextureRect = $HUD/InventoryPanel/InventorySlots/Slot2/FishIcon
+@onready var fish_icon_3: TextureRect = $HUD/InventoryPanel/InventorySlots/Slot3/FishIcon
+@onready var fish_icon_4: TextureRect = $HUD/InventoryPanel/InventorySlots/Slot4/FishIcon
+
 @onready var boat_speed_button: Button = $UpgradeMenu/BoatSpeedButton
 @onready var rod_speed_button: Button = $UpgradeMenu/RodSpeedButton
 @onready var capacity_button: Button = $UpgradeMenu/CapacityButton
@@ -34,6 +39,14 @@ var _sea_time: float = 0.0
 var _surface_shadow: Line2D
 var _surface_foam: Line2D
 
+# Balık türleri başlangıçta anonimdir. Oyuncu o türü ilk kez yakalayınca ikonu kalıcı olarak açılır.
+var discovered_fish: Dictionary = {
+	"Sardalya": false,
+	"Levrek": false,
+	"Uskumru": false,
+	"Ton Balığı": false
+}
+
 
 func _ready() -> void:
 	dock_prompt.visible = false
@@ -42,13 +55,14 @@ func _ready() -> void:
 	_setup_harbor()
 	_setup_surface_waves()
 	_setup_money_hud()
+	_setup_inventory_discovery()
 	_apply_upgrades()
 	update_money_label()
 	_refresh_upgrade_menu()
 
 
 func _setup_harbor() -> void:
-	# Limanı kullanıcının işaretlediği alanı dolduracak kadar büyüt.
+	# Liman büyük kalır; limana yaklaşınca Boat kamerası sola kayıp uzaklaşarak tamamına yakınını gösterir.
 	dock_sprite.scale = Vector2(4.35, 4.35)
 	dock_sprite.position = Vector2(165.0, 255.0)
 
@@ -66,6 +80,30 @@ func _setup_harbor() -> void:
 
 	upgrade_menu.position = Vector2(265.0, 48.0)
 	upgrade_menu.size = Vector2(560.0, 405.0)
+
+
+func _setup_inventory_discovery() -> void:
+	# Dört slot başta boş/anonim görünür. İlk yakalamada ilgili görsel açılır.
+	fish_icon_1.visible = false
+	fish_icon_2.visible = false
+	fish_icon_3.visible = false
+	fish_icon_4.visible = false
+
+
+func _update_inventory_discovery() -> void:
+	if hud.inventory.get("Sardalya", 0) > 0:
+		discovered_fish["Sardalya"] = true
+	if hud.inventory.get("Levrek", 0) > 0:
+		discovered_fish["Levrek"] = true
+	if hud.inventory.get("Uskumru", 0) > 0:
+		discovered_fish["Uskumru"] = true
+	if hud.inventory.get("Ton Balığı", 0) > 0:
+		discovered_fish["Ton Balığı"] = true
+
+	fish_icon_1.visible = discovered_fish["Sardalya"]
+	fish_icon_2.visible = discovered_fish["Levrek"]
+	fish_icon_3.visible = discovered_fish["Uskumru"]
+	fish_icon_4.visible = discovered_fish["Ton Balığı"]
 
 
 func _setup_surface_waves() -> void:
@@ -153,6 +191,7 @@ func _setup_money_hud() -> void:
 func _process(delta: float) -> void:
 	_sea_time += delta
 	_update_surface_waves()
+	_update_inventory_discovery()
 
 	if boat_in_dock_area and Input.is_action_just_pressed("dock") and not docked and not hook.deployed:
 		docked = true
