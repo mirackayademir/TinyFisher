@@ -19,6 +19,7 @@ const TON_BALIGI_TEXTURE = preload("res://assets/tonbaligi.png")
 
 @onready var catch_popup: Control = $CatchPopup
 @onready var catch_card: Panel = $CatchPopup/Card
+@onready var catch_title_label: Label = $CatchPopup/Title
 @onready var catch_fish_icon: TextureRect = $CatchPopup/FishIcon
 @onready var catch_name_label: Label = $CatchPopup/Name
 @onready var catch_glow: ColorRect = $CatchPopup/Glow
@@ -31,10 +32,15 @@ var fish_target_x: float = 0.0
 var fish_move_speed: float = 120.0
 var fish_change_interval: float = 0.8
 var fish_change_timer: float = 0.0
-
 var fight_gain_speed: float = 30.0
 var fight_loss_speed: float = 18.0
+
 var _catch_tween: Tween
+var _fight_time: float = 0.0
+var _fight_title: Label
+var _fight_hint: Label
+var _catch_status: Label
+var _catch_sparks: Array = []
 
 var inventory: Dictionary = {
 	"Sardalya": 0,
@@ -47,28 +53,11 @@ var inventory: Dictionary = {
 func _ready() -> void:
 	update_inventory()
 
-	# HUD elemanları balık tutma tıklamalarını yutmasın.
 	for control in find_children("*", "Control", true, false):
 		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	fight_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-	fight_bar.min_value = 0.0
-	fight_bar.max_value = 100.0
-	fight_bar.show_percentage = false
-
-	var catch_style := StyleBoxFlat.new()
-	catch_style.bg_color = Color(0.025, 0.07, 0.12, 0.94)
-	catch_style.border_color = Color(0.92, 0.61, 0.20, 1.0)
-	catch_style.border_width_left = 4
-	catch_style.border_width_top = 4
-	catch_style.border_width_right = 4
-	catch_style.border_width_bottom = 4
-	catch_style.corner_radius_top_left = 8
-	catch_style.corner_radius_top_right = 8
-	catch_style.corner_radius_bottom_left = 8
-	catch_style.corner_radius_bottom_right = 8
-	catch_card.add_theme_stylebox_override("panel", catch_style)
-
+	_setup_fight_visuals()
+	_setup_catch_visuals()
 	layout_fight_bar()
 	layout_catch_popup()
 	reset_fight()
@@ -76,6 +65,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_fight_time += delta
+
 	if not fight_active:
 		return
 
@@ -83,39 +74,158 @@ func _process(delta: float) -> void:
 	move_fish_marker(delta)
 	update_fight_progress(delta)
 
+	# Sabit kutular yerine canlı bir hedef hissi.
+	fish_marker.modulate.a = 0.78 + sin(_fight_time * 8.0) * 0.18
+	catch_zone.modulate.a = 0.70 + sin(_fight_time * 5.0 + 0.8) * 0.14
+
+
+func _setup_fight_visuals() -> void:
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.018, 0.055, 0.095, 0.94)
+	panel_style.border_color = Color(0.19, 0.63, 0.78, 0.95)
+	panel_style.border_width_left = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_bottom = 3
+	panel_style.corner_radius_top_left = 10
+	panel_style.corner_radius_top_right = 10
+	panel_style.corner_radius_bottom_left = 10
+	panel_style.corner_radius_bottom_right = 10
+	fight_panel.add_theme_stylebox_override("panel", panel_style)
+
+	var bar_bg := StyleBoxFlat.new()
+	bar_bg.bg_color = Color(0.025, 0.09, 0.14, 1.0)
+	bar_bg.border_color = Color(0.10, 0.28, 0.36, 1.0)
+	bar_bg.border_width_left = 2
+	bar_bg.border_width_top = 2
+	bar_bg.border_width_right = 2
+	bar_bg.border_width_bottom = 2
+	bar_bg.corner_radius_top_left = 6
+	bar_bg.corner_radius_top_right = 6
+	bar_bg.corner_radius_bottom_left = 6
+	bar_bg.corner_radius_bottom_right = 6
+	fight_bar.add_theme_stylebox_override("background", bar_bg)
+
+	var bar_fill := StyleBoxFlat.new()
+	bar_fill.bg_color = Color(0.16, 0.68, 0.79, 0.92)
+	bar_fill.corner_radius_top_left = 5
+	bar_fill.corner_radius_top_right = 5
+	bar_fill.corner_radius_bottom_left = 5
+	bar_fill.corner_radius_bottom_right = 5
+	fight_bar.add_theme_stylebox_override("fill", bar_fill)
+	fight_bar.min_value = 0.0
+	fight_bar.max_value = 100.0
+	fight_bar.show_percentage = false
+
+	fish_marker.color = Color(1.0, 0.57, 0.16, 0.95)
+	catch_zone.color = Color(0.18, 0.95, 0.55, 0.60)
+
+	_fight_title = fight_panel.get_node_or_null("FightTitle") as Label
+	if _fight_title == null:
+		_fight_title = Label.new()
+		_fight_title.name = "FightTitle"
+		fight_panel.add_child(_fight_title)
+	_fight_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fight_title.add_theme_font_size_override("font_size", 22)
+	_fight_title.add_theme_color_override("font_color", Color(1.0, 0.82, 0.40, 1.0))
+	_fight_title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_fight_title.add_theme_constant_override("shadow_offset_x", 2)
+	_fight_title.add_theme_constant_override("shadow_offset_y", 2)
+	_fight_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	_fight_hint = fight_panel.get_node_or_null("FightHint") as Label
+	if _fight_hint == null:
+		_fight_hint = Label.new()
+		_fight_hint.name = "FightHint"
+		fight_panel.add_child(_fight_hint)
+	_fight_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fight_hint.text = "Yeşil alanı balığın üstünde tut ve SAR"
+	_fight_hint.add_theme_font_size_override("font_size", 13)
+	_fight_hint.add_theme_color_override("font_color", Color(0.78, 0.92, 0.96, 0.9))
+	_fight_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+func _setup_catch_visuals() -> void:
+	var catch_style := StyleBoxFlat.new()
+	catch_style.bg_color = Color(0.018, 0.052, 0.09, 0.96)
+	catch_style.border_color = Color(1.0, 0.64, 0.18, 1.0)
+	catch_style.border_width_left = 5
+	catch_style.border_width_top = 5
+	catch_style.border_width_right = 5
+	catch_style.border_width_bottom = 5
+	catch_style.corner_radius_top_left = 12
+	catch_style.corner_radius_top_right = 12
+	catch_style.corner_radius_bottom_left = 12
+	catch_style.corner_radius_bottom_right = 12
+	catch_card.add_theme_stylebox_override("panel", catch_style)
+
+	catch_title_label.add_theme_font_size_override("font_size", 42)
+	catch_name_label.add_theme_font_size_override("font_size", 28)
+	catch_fish_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
+	_catch_status = catch_popup.get_node_or_null("CatchStatus") as Label
+	if _catch_status == null:
+		_catch_status = Label.new()
+		_catch_status.name = "CatchStatus"
+		catch_popup.add_child(_catch_status)
+	_catch_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_catch_status.text = "ENVANTERE EKLENDİ"
+	_catch_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_catch_status.add_theme_font_size_override("font_size", 15)
+	_catch_status.add_theme_color_override("font_color", Color(0.55, 0.92, 0.78, 0.95))
+
+	_catch_sparks.clear()
+	for spark in catch_popup.find_children("Spark*", "ColorRect", false, false):
+		spark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		spark.pivot_offset = spark.size * 0.5
+		_catch_sparks.append(spark)
+
 
 func layout_fight_bar() -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	fight_bar.position = Vector2(
-		maxf((viewport_size.x - fight_bar.size.x) * 0.5, 0.0),
-		70.0
-	)
+	var panel_size := Vector2(540.0, 138.0)
+	fight_panel.position = Vector2(maxf((viewport_size.x - panel_size.x) * 0.5, 0.0), 34.0)
+	fight_panel.size = panel_size
 
-	fish_marker.position.y = 0.0
-	fish_marker.size.y = fight_bar.size.y
-	catch_zone.position.y = 0.0
-	catch_zone.size.y = fight_bar.size.y
+	_fight_title.position = Vector2(24.0, 12.0)
+	_fight_title.size = Vector2(panel_size.x - 48.0, 30.0)
+	_fight_hint.position = Vector2(24.0, 105.0)
+	_fight_hint.size = Vector2(panel_size.x - 48.0, 22.0)
+
+	fight_bar.position = Vector2(42.0, 58.0)
+	fight_bar.size = Vector2(456.0, 36.0)
+	fish_marker.position.y = 2.0
+	fish_marker.size.y = 32.0
+	catch_zone.position.y = 2.0
+	catch_zone.size.y = 32.0
 
 
 func layout_catch_popup() -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	catch_popup.size = Vector2(560.0, 340.0)
 	catch_popup.position = Vector2(
 		maxf((viewport_size.x - catch_popup.size.x) * 0.5, 0.0),
 		maxf((viewport_size.y - catch_popup.size.y) * 0.43, 0.0)
 	)
 	catch_popup.pivot_offset = catch_popup.size * 0.5
+
+	catch_title_label.position = Vector2(20.0, 18.0)
+	catch_title_label.size = Vector2(520.0, 54.0)
+	catch_glow.position = Vector2(126.0, 78.0)
+	catch_glow.size = Vector2(308.0, 174.0)
+	catch_fish_icon.position = Vector2(142.0, 82.0)
+	catch_fish_icon.size = Vector2(276.0, 164.0)
 	catch_fish_icon.pivot_offset = catch_fish_icon.size * 0.5
+	catch_name_label.position = Vector2(20.0, 248.0)
+	catch_name_label.size = Vector2(520.0, 40.0)
+	_catch_status.position = Vector2(20.0, 292.0)
+	_catch_status.size = Vector2(520.0, 24.0)
 
 
 func move_catch_zone() -> void:
 	var mouse_x: float = fight_bar.get_local_mouse_position().x
 	var max_x: float = maxf(fight_bar.size.x - catch_zone.size.x, 0.0)
-
-	catch_zone.position.x = clampf(
-		mouse_x - catch_zone.size.x * 0.5,
-		0.0,
-		max_x
-	)
+	catch_zone.position.x = clampf(mouse_x - catch_zone.size.x * 0.5, 0.0, max_x)
 
 
 func move_fish_marker(delta: float) -> void:
@@ -126,11 +236,7 @@ func move_fish_marker(delta: float) -> void:
 		fish_target_x = randf_range(0.0, max_x)
 		fish_change_timer = fish_change_interval
 
-	fish_marker.position.x = move_toward(
-		fish_marker.position.x,
-		fish_target_x,
-		fish_move_speed * delta
-	)
+	fish_marker.position.x = move_toward(fish_marker.position.x, fish_target_x, fish_move_speed * delta)
 
 
 func update_fight_progress(delta: float) -> void:
@@ -141,12 +247,8 @@ func update_fight_progress(delta: float) -> void:
 	var fish_right: float = fish_marker.position.x + fish_marker.size.x
 	var zone_left: float = catch_zone.position.x
 	var zone_right: float = catch_zone.position.x + catch_zone.size.x
-
 	var fish_inside_zone: bool = fish_right >= zone_left and fish_left <= zone_right
-	var reeling: bool = (
-		Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
-		or Input.is_physical_key_pressed(KEY_W)
-	)
+	var reeling: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_physical_key_pressed(KEY_W)
 
 	if fish_inside_zone and reeling:
 		fight_bar.value += fight_gain_speed * delta
@@ -169,56 +271,54 @@ func show_fight_bar(fish_type: String) -> void:
 	fight_won = false
 	fight_bar.value = 10.0
 	fish_change_timer = 0.0
+	_fight_title.text = fish_type.to_upper() + "  •  MÜCADELE"
 
-	var zone_width: float = 70.0
+	var zone_width: float = 88.0
 
 	match fish_type:
 		"Sardalya":
-			fish_move_speed = 90.0
+			fish_move_speed = 95.0
 			fish_change_interval = 1.0
-			fight_gain_speed = 35.0
-			fight_loss_speed = 12.0
-			zone_width = 85.0
+			fight_gain_speed = 36.0
+			fight_loss_speed = 11.0
+			zone_width = 112.0
 
 		"Levrek":
-			fish_move_speed = 140.0
+			fish_move_speed = 145.0
 			fish_change_interval = 0.70
-			fight_gain_speed = 30.0
-			fight_loss_speed = 18.0
-			zone_width = 70.0
+			fight_gain_speed = 31.0
+			fight_loss_speed = 17.0
+			zone_width = 92.0
 
 		"Uskumru":
-			fish_move_speed = 200.0
-			fish_change_interval = 0.45
-			fight_gain_speed = 25.0
-			fight_loss_speed = 24.0
-			zone_width = 60.0
+			fish_move_speed = 205.0
+			fish_change_interval = 0.46
+			fight_gain_speed = 26.0
+			fight_loss_speed = 23.0
+			zone_width = 76.0
 
 		"Ton Balığı":
-			fish_move_speed = 260.0
-			fish_change_interval = 0.30
-			fight_gain_speed = 21.0
-			fight_loss_speed = 30.0
-			zone_width = 50.0
+			fish_move_speed = 265.0
+			fish_change_interval = 0.32
+			fight_gain_speed = 22.0
+			fight_loss_speed = 29.0
+			zone_width = 64.0
 
 		_:
-			fish_move_speed = 120.0
+			fish_move_speed = 125.0
 			fish_change_interval = 0.8
 			fight_gain_speed = 30.0
 			fight_loss_speed = 18.0
-			zone_width = 70.0
+			zone_width = 88.0
 
-	# Mücadele Desteği yükseldikçe balık biraz sakinleşir,
-	# yeşil alan genişler ve ilerleme daha affedici olur.
 	var ease_multiplier := maxf(0.58, 1.0 - float(fight_ease_level) * 0.08)
 	fish_move_speed *= ease_multiplier
 	fight_gain_speed += float(fight_ease_level) * 2.0
 	fight_loss_speed = maxf(8.0, fight_loss_speed - float(fight_ease_level) * 2.0)
-	zone_width += float(fight_ease_level) * 8.0
+	zone_width += float(fight_ease_level) * 10.0
 
-	fish_marker.size = Vector2(24.0, fight_bar.size.y)
-	catch_zone.size = Vector2(zone_width, fight_bar.size.y)
-
+	fish_marker.size = Vector2(28.0, 32.0)
+	catch_zone.size = Vector2(zone_width, 32.0)
 	fish_marker.position.x = 20.0
 	catch_zone.position.x = clampf(
 		fight_bar.size.x * 0.5 - catch_zone.size.x * 0.5,
@@ -248,10 +348,8 @@ func reset_fight() -> void:
 
 func get_total_fish() -> int:
 	var total: int = 0
-
 	for amount in inventory.values():
 		total += amount
-
 	return total
 
 
@@ -281,22 +379,37 @@ func show_catch_effect(fish_type: String) -> void:
 	catch_fish_icon.texture = _get_fish_texture(fish_type)
 	catch_popup.visible = true
 	catch_popup.modulate = Color.WHITE
-	catch_popup.scale = Vector2(0.72, 0.72)
-	catch_fish_icon.rotation = 0.0
-	catch_fish_icon.modulate = Color(1.55, 1.38, 0.72, 1.0)
-	catch_glow.color = Color(1.0, 0.72, 0.20, 0.12)
+	catch_popup.scale = Vector2(0.58, 0.58)
+	catch_popup.rotation = deg_to_rad(-1.8)
+	catch_fish_icon.rotation = deg_to_rad(-5.0)
+	catch_fish_icon.scale = Vector2(0.78, 0.78)
+	catch_fish_icon.modulate = Color(1.7, 1.48, 0.76, 1.0)
+	catch_glow.color = Color(1.0, 0.67, 0.12, 0.06)
+
+	for spark in _catch_sparks:
+		spark.scale = Vector2(0.15, 0.15)
+		spark.modulate.a = 0.0
 
 	_catch_tween = create_tween()
 	_catch_tween.set_trans(Tween.TRANS_BACK)
 	_catch_tween.set_ease(Tween.EASE_OUT)
-	_catch_tween.tween_property(catch_popup, "scale", Vector2.ONE, 0.20)
-	_catch_tween.parallel().tween_property(catch_fish_icon, "modulate", Color.WHITE, 0.38)
-	_catch_tween.parallel().tween_property(catch_glow, "color", Color(1.0, 0.78, 0.25, 0.36), 0.22)
-	_catch_tween.tween_property(catch_fish_icon, "rotation", deg_to_rad(5.0), 0.07)
-	_catch_tween.tween_property(catch_fish_icon, "rotation", deg_to_rad(-5.0), 0.07)
-	_catch_tween.tween_property(catch_fish_icon, "rotation", 0.0, 0.08)
-	_catch_tween.tween_interval(0.85)
-	_catch_tween.tween_property(catch_popup, "modulate", Color(1, 1, 1, 0), 0.32)
+	_catch_tween.tween_property(catch_popup, "scale", Vector2.ONE, 0.24)
+	_catch_tween.parallel().tween_property(catch_popup, "rotation", 0.0, 0.24)
+	_catch_tween.parallel().tween_property(catch_fish_icon, "scale", Vector2.ONE, 0.28)
+	_catch_tween.parallel().tween_property(catch_fish_icon, "modulate", Color.WHITE, 0.42)
+	_catch_tween.parallel().tween_property(catch_glow, "color", Color(1.0, 0.77, 0.18, 0.34), 0.24)
+
+	for i in range(_catch_sparks.size()):
+		var spark = _catch_sparks[i]
+		_catch_tween.parallel().tween_property(spark, "modulate:a", 1.0, 0.10).set_delay(0.03 * i)
+		_catch_tween.parallel().tween_property(spark, "scale", Vector2(1.65, 1.65), 0.18).set_delay(0.03 * i)
+
+	_catch_tween.tween_property(catch_fish_icon, "rotation", deg_to_rad(4.0), 0.08)
+	_catch_tween.tween_property(catch_fish_icon, "rotation", deg_to_rad(-4.0), 0.08)
+	_catch_tween.tween_property(catch_fish_icon, "rotation", 0.0, 0.09)
+	_catch_tween.tween_interval(1.05)
+	_catch_tween.tween_property(catch_popup, "scale", Vector2(1.05, 1.05), 0.08)
+	_catch_tween.tween_property(catch_popup, "modulate", Color(1, 1, 1, 0), 0.30)
 	_catch_tween.finished.connect(_hide_catch_popup)
 
 
@@ -304,6 +417,7 @@ func _hide_catch_popup() -> void:
 	catch_popup.visible = false
 	catch_popup.modulate = Color.WHITE
 	catch_popup.scale = Vector2.ONE
+	catch_popup.rotation = 0.0
 
 
 func _get_fish_texture(fish_type: String) -> Texture2D:
@@ -331,12 +445,9 @@ func update_inventory() -> void:
 
 	if sardalya_count > 0:
 		count_label_1.text = str(sardalya_count)
-
 	if levrek_count > 0:
 		count_label_2.text = str(levrek_count)
-
 	if uskumru_count > 0:
 		count_label_3.text = str(uskumru_count)
-
 	if ton_baligi_count > 0:
 		count_label_4.text = str(ton_baligi_count)
