@@ -6,6 +6,8 @@ const UPGRADE_COSTS: Array[int] = [50, 100, 175, 275, 400]
 @onready var dock_prompt: Label = $DockPrompt
 @onready var dock_menu: Panel = $DockMenu
 @onready var upgrade_menu: Panel = $UpgradeMenu
+@onready var dock_sprite: Sprite2D = $Dock
+@onready var dock_collision: CollisionShape2D = $DockArea/CollisionShape2D
 @onready var boat: CharacterBody2D = $Boat
 @onready var hook = $Boat/Hook
 @onready var money_label: Label = $MoneyLabel
@@ -19,8 +21,8 @@ const UPGRADE_COSTS: Array[int] = [50, 100, 175, 275, 400]
 
 var boat_in_dock_area: bool = false
 var docked: bool = false
-
 var money: int = 0
+var money_panel: Panel
 
 var boat_speed_level: int = 0
 var rod_speed_level: int = 0
@@ -32,28 +34,84 @@ func _ready() -> void:
 	dock_prompt.visible = false
 	dock_menu.visible = false
 	upgrade_menu.visible = false
+	_setup_harbor()
+	_setup_money_hud()
 	_apply_upgrades()
 	update_money_label()
 	_refresh_upgrade_menu()
+
+
+func _setup_harbor() -> void:
+	# Limanı daha okunaklı büyüt; teknenin gireceği alan sadece sağdaki yanaşma noktası.
+	dock_sprite.scale = Vector2(3.45, 3.45)
+	dock_sprite.position = Vector2(95.0, 270.0)
+	boat.min_world_x = 220.0
+
+	dock_collision.position = Vector2(710.0, 335.0)
+	var dock_shape := dock_collision.shape as RectangleShape2D
+	if dock_shape != null:
+		dock_shape.size = Vector2(190.0, 170.0)
+
+	dock_prompt.position = Vector2(610.0, 155.0)
+	dock_prompt.size = Vector2(210.0, 30.0)
+
+	# Büyük limanla çakışmaması için geliştirme penceresine biraz daha alan ver.
+	upgrade_menu.position = Vector2(285.0, 55.0)
+	upgrade_menu.size = Vector2(520.0, 390.0)
+
+
+func _setup_money_hud() -> void:
+	# Para artık dünya node'u değil; CanvasLayer altında her derinlikte ekranın sağ üstünde kalır.
+	money_panel = Panel.new()
+	money_panel.name = "MoneyPanel"
+	money_panel.z_index = 90
+	money_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(money_panel)
+
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.02, 0.055, 0.095, 0.92)
+	panel_style.border_color = Color(0.95, 0.66, 0.24, 0.95)
+	panel_style.border_width_left = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_bottom = 3
+	panel_style.corner_radius_top_left = 8
+	panel_style.corner_radius_top_right = 8
+	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_bottom_right = 8
+	money_panel.add_theme_stylebox_override("panel", panel_style)
+
+	var viewport_size := get_viewport().get_visible_rect().size
+	money_panel.size = Vector2(154.0, 50.0)
+	money_panel.position = Vector2(viewport_size.x - money_panel.size.x - 18.0, 16.0)
+
+	money_label.reparent(money_panel, false)
+	money_label.position = Vector2(12.0, 7.0)
+	money_label.size = Vector2(130.0, 36.0)
+	money_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	money_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	money_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	money_label.add_theme_font_size_override("font_size", 24)
+	money_label.add_theme_color_override("font_color", Color(1.0, 0.84, 0.36, 1.0))
+	money_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	money_label.add_theme_constant_override("shadow_offset_x", 2)
+	money_label.add_theme_constant_override("shadow_offset_y", 2)
 
 
 func _process(_delta: float) -> void:
 	if boat_in_dock_area and Input.is_action_just_pressed("dock") and not docked and not hook.deployed:
 		docked = true
 		boat.set_movement_enabled(false)
-
 		dock_prompt.visible = false
 		dock_menu.visible = true
 		upgrade_menu.visible = false
 		$Boat/Camera2D.position.y = hook.camera_surface_y
-
 		print("LIMANA YANASTIN")
 
 
 func _on_dock_area_body_entered(body: Node2D) -> void:
 	if body.name == "Boat":
 		boat_in_dock_area = true
-
 		if not docked:
 			dock_prompt.visible = true
 			dock_prompt.text = "[E] Limana Yanaş"
@@ -82,42 +140,31 @@ func _on_sell_button_pressed() -> void:
 	var uskumru_count: int = hud.inventory.get("Uskumru", 0)
 	var ton_baligi_count: int = hud.inventory.get("Ton Balığı", 0)
 
-	var total_fish: int = (
-		sardalya_count
-		+ levrek_count
-		+ uskumru_count
-		+ ton_baligi_count
-	)
-
+	var total_fish: int = sardalya_count + levrek_count + uskumru_count + ton_baligi_count
 	if total_fish == 0:
 		print("SATILACAK BALIK YOK!")
 		return
 
 	var total_value: int = 0
-
 	total_value += sardalya_count * 10
 	total_value += levrek_count * 25
 	total_value += uskumru_count * 40
 	total_value += ton_baligi_count * 75
-
 	money += total_value
 
 	hud.inventory["Sardalya"] = 0
 	hud.inventory["Levrek"] = 0
 	hud.inventory["Uskumru"] = 0
 	hud.inventory["Ton Balığı"] = 0
-
 	hud.update_inventory()
 	update_money_label()
 	_refresh_upgrade_menu()
-
 	print("BALIKLAR SATILDI! +$", total_value)
 
 
 func _on_upgrade_button_pressed() -> void:
 	if not docked:
 		return
-
 	dock_menu.visible = false
 	upgrade_menu.visible = true
 	_refresh_upgrade_menu()
@@ -125,7 +172,6 @@ func _on_upgrade_button_pressed() -> void:
 
 func _on_upgrade_back_button_pressed() -> void:
 	upgrade_menu.visible = false
-
 	if docked:
 		dock_menu.visible = true
 
@@ -209,21 +255,18 @@ func _refresh_upgrade_menu() -> void:
 	rod_speed_button.disabled = not _can_afford_level(rod_speed_level)
 	capacity_button.disabled = not _can_afford_level(capacity_level)
 	fight_ease_button.disabled = not _can_afford_level(fight_ease_level)
-
 	upgrade_info_label.text = "Her geliştirme 5 seviyedir. Balık satıp para kazan."
 
 
 func _upgrade_button_text(title: String, level: int) -> String:
 	if level >= MAX_UPGRADE_LEVEL:
 		return title + "  |  Seviye " + str(level) + "/5  |  MAX"
-
 	return title + "  |  Seviye " + str(level) + "/5  |  $" + str(UPGRADE_COSTS[level])
 
 
 func _can_afford_level(level: int) -> bool:
 	if level >= MAX_UPGRADE_LEVEL:
 		return false
-
 	return money >= UPGRADE_COSTS[level]
 
 
