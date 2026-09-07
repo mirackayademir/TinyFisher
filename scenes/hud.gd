@@ -2,6 +2,11 @@ extends CanvasLayer
 
 @export var max_fish_capacity: int = 8
 
+const SARDALYA_TEXTURE = preload("res://assets/sardalya.png")
+const LEVREK_TEXTURE = preload("res://assets/levrek2.png")
+const USKUMRU_TEXTURE = preload("res://assets/uskumru.png")
+const TON_BALIGI_TEXTURE = preload("res://assets/tonbaligi.png")
+
 @onready var count_label_1: Label = $InventoryPanel/InventorySlots/Slot1/CountLabel
 @onready var count_label_2: Label = $InventoryPanel/InventorySlots/Slot2/CountLabel
 @onready var count_label_3: Label = $InventoryPanel/InventorySlots/Slot3/CountLabel
@@ -11,6 +16,12 @@ extends CanvasLayer
 @onready var fight_bar: ProgressBar = $FightPanel/FightBar
 @onready var fish_marker: ColorRect = $FightPanel/FightBar/FishMarker
 @onready var catch_zone: ColorRect = $FightPanel/FightBar/CatchZone
+
+@onready var catch_popup: Control = $CatchPopup
+@onready var catch_card: Panel = $CatchPopup/Card
+@onready var catch_fish_icon: TextureRect = $CatchPopup/FishIcon
+@onready var catch_name_label: Label = $CatchPopup/Name
+@onready var catch_glow: ColorRect = $CatchPopup/Glow
 
 var fight_active: bool = false
 var fight_won: bool = false
@@ -23,6 +34,7 @@ var fish_change_timer: float = 0.0
 
 var fight_gain_speed: float = 30.0
 var fight_loss_speed: float = 18.0
+var _catch_tween: Tween
 
 var inventory: Dictionary = {
 	"Sardalya": 0,
@@ -44,8 +56,23 @@ func _ready() -> void:
 	fight_bar.max_value = 100.0
 	fight_bar.show_percentage = false
 
+	var catch_style := StyleBoxFlat.new()
+	catch_style.bg_color = Color(0.025, 0.07, 0.12, 0.94)
+	catch_style.border_color = Color(0.92, 0.61, 0.20, 1.0)
+	catch_style.border_width_left = 4
+	catch_style.border_width_top = 4
+	catch_style.border_width_right = 4
+	catch_style.border_width_bottom = 4
+	catch_style.corner_radius_top_left = 8
+	catch_style.corner_radius_top_right = 8
+	catch_style.corner_radius_bottom_left = 8
+	catch_style.corner_radius_bottom_right = 8
+	catch_card.add_theme_stylebox_override("panel", catch_style)
+
 	layout_fight_bar()
+	layout_catch_popup()
 	reset_fight()
+	catch_popup.visible = false
 
 
 func _process(delta: float) -> void:
@@ -68,6 +95,16 @@ func layout_fight_bar() -> void:
 	fish_marker.size.y = fight_bar.size.y
 	catch_zone.position.y = 0.0
 	catch_zone.size.y = fight_bar.size.y
+
+
+func layout_catch_popup() -> void:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	catch_popup.position = Vector2(
+		maxf((viewport_size.x - catch_popup.size.x) * 0.5, 0.0),
+		maxf((viewport_size.y - catch_popup.size.y) * 0.43, 0.0)
+	)
+	catch_popup.pivot_offset = catch_popup.size * 0.5
+	catch_fish_icon.pivot_offset = catch_fish_icon.size * 0.5
 
 
 func move_catch_zone() -> void:
@@ -231,7 +268,54 @@ func add_fish(fish_type: String) -> bool:
 
 	inventory[fish_type] += 1
 	update_inventory()
+	show_catch_effect(fish_type)
 	return true
+
+
+func show_catch_effect(fish_type: String) -> void:
+	if is_instance_valid(_catch_tween):
+		_catch_tween.kill()
+
+	layout_catch_popup()
+	catch_name_label.text = fish_type
+	catch_fish_icon.texture = _get_fish_texture(fish_type)
+	catch_popup.visible = true
+	catch_popup.modulate = Color.WHITE
+	catch_popup.scale = Vector2(0.72, 0.72)
+	catch_fish_icon.rotation = 0.0
+	catch_fish_icon.modulate = Color(1.55, 1.38, 0.72, 1.0)
+	catch_glow.color = Color(1.0, 0.72, 0.20, 0.12)
+
+	_catch_tween = create_tween()
+	_catch_tween.set_trans(Tween.TRANS_BACK)
+	_catch_tween.set_ease(Tween.EASE_OUT)
+	_catch_tween.tween_property(catch_popup, "scale", Vector2.ONE, 0.20)
+	_catch_tween.parallel().tween_property(catch_fish_icon, "modulate", Color.WHITE, 0.38)
+	_catch_tween.parallel().tween_property(catch_glow, "color", Color(1.0, 0.78, 0.25, 0.36), 0.22)
+	_catch_tween.tween_property(catch_fish_icon, "rotation", deg_to_rad(5.0), 0.07)
+	_catch_tween.tween_property(catch_fish_icon, "rotation", deg_to_rad(-5.0), 0.07)
+	_catch_tween.tween_property(catch_fish_icon, "rotation", 0.0, 0.08)
+	_catch_tween.tween_interval(0.85)
+	_catch_tween.tween_property(catch_popup, "modulate", Color(1, 1, 1, 0), 0.32)
+	_catch_tween.finished.connect(_hide_catch_popup)
+
+
+func _hide_catch_popup() -> void:
+	catch_popup.visible = false
+	catch_popup.modulate = Color.WHITE
+	catch_popup.scale = Vector2.ONE
+
+
+func _get_fish_texture(fish_type: String) -> Texture2D:
+	match fish_type:
+		"Levrek":
+			return LEVREK_TEXTURE
+		"Uskumru":
+			return USKUMRU_TEXTURE
+		"Ton Balığı":
+			return TON_BALIGI_TEXTURE
+		_:
+			return SARDALYA_TEXTURE
 
 
 func update_inventory() -> void:
