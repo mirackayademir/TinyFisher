@@ -3,13 +3,20 @@ extends Node2D
 const MAX_UPGRADE_LEVEL: int = 5
 const UPGRADE_COSTS: Array[int] = [50, 100, 175, 275, 400]
 const WATER_SURFACE_Y: float = 360.0
+const CAMERA_NORMAL_X: float = 350.0
+const CAMERA_HARBOR_X: float = -160.0
 
 @onready var dock_prompt: Label = $DockPrompt
 @onready var dock_menu: Panel = $DockMenu
+@onready var dock_menu_vbox: VBoxContainer = $DockMenu/VBoxContainer
+@onready var dock_sell_button: Button = $DockMenu/VBoxContainer/SellButton
+@onready var dock_upgrade_button: Button = $DockMenu/VBoxContainer/UpgradeButton
+@onready var dock_leave_button: Button = $DockMenu/VBoxContainer/LeaveButton
 @onready var upgrade_menu: Panel = $UpgradeMenu
 @onready var dock_sprite: Sprite2D = $Dock
 @onready var dock_collision: CollisionShape2D = $DockArea/CollisionShape2D
 @onready var boat: CharacterBody2D = $Boat
+@onready var boat_camera: Camera2D = $Boat/Camera2D
 @onready var hook = $Boat/Hook
 @onready var money_label: Label = $MoneyLabel
 @onready var hud = $HUD
@@ -38,6 +45,7 @@ var fight_ease_level: int = 0
 var _sea_time: float = 0.0
 var _surface_shadow: Line2D
 var _surface_foam: Line2D
+var _camera_tween: Tween
 
 # Balık türleri başlangıçta anonimdir. Oyuncu o türü ilk kez yakalayınca ikonu kalıcı olarak açılır.
 var discovered_fish: Dictionary = {
@@ -53,6 +61,7 @@ func _ready() -> void:
 	dock_menu.visible = false
 	upgrade_menu.visible = false
 	_setup_harbor()
+	_setup_dock_menu()
 	_setup_surface_waves()
 	_setup_money_hud()
 	_setup_inventory_discovery()
@@ -62,24 +71,65 @@ func _ready() -> void:
 
 
 func _setup_harbor() -> void:
-	# Liman büyük kalır; limana yaklaşınca Boat kamerası sola kayıp uzaklaşarak tamamına yakınını gösterir.
-	dock_sprite.scale = Vector2(4.35, 4.35)
-	dock_sprite.position = Vector2(165.0, 255.0)
+	# Limanı küçük bir dekor değil, ekranın sol tarafını dolduran ana üs olarak göster.
+	# Kullanıcının işaretlediği yaklaşık alanı kaplayacak şekilde öncekinin belirgin biçimde üstüne çıkarıldı.
+	dock_sprite.scale = Vector2(7.8, 7.8)
+	dock_sprite.position = Vector2(310.0, 250.0)
 
-	# Tekne limanın görselinin içinden geçmez; iskelenin sağında durur.
-	boat.min_world_x = 470.0
+	# Büyüyen limanın iskelesinin içine tekne giremez; yalnızca sağdaki yanaşma bölgesine kadar gelir.
+	boat.min_world_x = 790.0
 
-	# Yanaşma / geliştirme alanı büyüyen iskeleye göre genişletildi.
-	dock_collision.position = Vector2(650.0, 335.0)
+	# Yanaşma / geliştirme alanı yeni liman boyutuna göre sağ tarafa taşındı ve genişletildi.
+	dock_collision.position = Vector2(900.0, 335.0)
 	var dock_shape := dock_collision.shape as RectangleShape2D
 	if dock_shape != null:
-		dock_shape.size = Vector2(360.0, 190.0)
+		dock_shape.size = Vector2(440.0, 220.0)
 
-	dock_prompt.position = Vector2(555.0, 150.0)
-	dock_prompt.size = Vector2(245.0, 34.0)
+	dock_prompt.position = Vector2(770.0, 145.0)
+	dock_prompt.size = Vector2(270.0, 38.0)
+	dock_prompt.add_theme_font_size_override("font_size", 18)
 
-	upgrade_menu.position = Vector2(265.0, 48.0)
-	upgrade_menu.size = Vector2(560.0, 405.0)
+	# Büyük limanla birlikte geliştirme ekranı da daha rahat okunacak ölçüde büyütüldü.
+	upgrade_menu.position = Vector2(330.0, 42.0)
+	upgrade_menu.size = Vector2(620.0, 430.0)
+
+
+func _setup_dock_menu() -> void:
+	# Limana yanaşınca açılan satış / geliştirme HUD'u daha büyük ve okunaklı.
+	dock_menu.position = Vector2(360.0, 62.0)
+	dock_menu.size = Vector2(410.0, 300.0)
+
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.06, 0.055, 0.09, 0.95)
+	panel_style.border_color = Color(0.58, 0.38, 0.24, 0.95)
+	panel_style.border_width_left = 4
+	panel_style.border_width_top = 4
+	panel_style.border_width_right = 4
+	panel_style.border_width_bottom = 4
+	panel_style.corner_radius_top_left = 10
+	panel_style.corner_radius_top_right = 10
+	panel_style.corner_radius_bottom_left = 10
+	panel_style.corner_radius_bottom_right = 10
+	dock_menu.add_theme_stylebox_override("panel", panel_style)
+
+	dock_menu_vbox.position = Vector2(55.0, 54.0)
+	dock_menu_vbox.size = Vector2(300.0, 205.0)
+	dock_menu_vbox.add_theme_constant_override("separation", 10)
+
+	for button in [dock_sell_button, dock_upgrade_button, dock_leave_button]:
+		button.custom_minimum_size = Vector2(300.0, 54.0)
+		button.add_theme_font_size_override("font_size", 18)
+
+
+func _set_harbor_camera(active: bool) -> void:
+	if is_instance_valid(_camera_tween):
+		_camera_tween.kill()
+
+	var target_x := CAMERA_HARBOR_X if active else CAMERA_NORMAL_X
+	_camera_tween = create_tween()
+	_camera_tween.set_trans(Tween.TRANS_SINE)
+	_camera_tween.set_ease(Tween.EASE_IN_OUT)
+	_camera_tween.tween_property(boat_camera, "position:x", target_x, 0.32)
 
 
 func _setup_inventory_discovery() -> void:
@@ -199,13 +249,14 @@ func _process(delta: float) -> void:
 		dock_prompt.visible = false
 		dock_menu.visible = true
 		upgrade_menu.visible = false
-		$Boat/Camera2D.position.y = hook.camera_surface_y
+		boat_camera.position.y = hook.camera_surface_y
 		print("LIMANA YANASTIN")
 
 
 func _on_dock_area_body_entered(body: Node2D) -> void:
 	if body.name == "Boat":
 		boat_in_dock_area = true
+		_set_harbor_camera(true)
 		if not docked:
 			dock_prompt.visible = true
 			dock_prompt.text = "[E] Limana Yanaş"
@@ -215,6 +266,8 @@ func _on_dock_area_body_exited(body: Node2D) -> void:
 	if body.name == "Boat":
 		boat_in_dock_area = false
 		dock_prompt.visible = false
+		if not docked:
+			_set_harbor_camera(false)
 
 
 func _on_leave_button_pressed() -> void:
@@ -222,6 +275,7 @@ func _on_leave_button_pressed() -> void:
 	dock_menu.visible = false
 	upgrade_menu.visible = false
 	boat.set_movement_enabled(true)
+	_set_harbor_camera(false)
 
 	if boat_in_dock_area:
 		dock_prompt.visible = true
