@@ -1,7 +1,6 @@
 extends CanvasLayer
 
 @export var max_fish_capacity: int = 8
-@export var catch_zone_speed: float = 260.0
 
 @onready var count_label_1: Label = $InventoryPanel/InventorySlots/Slot1/CountLabel
 @onready var count_label_2: Label = $InventoryPanel/InventorySlots/Slot2/CountLabel
@@ -34,35 +33,50 @@ var inventory: Dictionary = {
 
 func _ready() -> void:
 	update_inventory()
-	# HUD overlays must not consume the fishing mouse buttons.
+
+	# HUD elemanları balık tutma tıklamalarını yutmasın.
 	for control in find_children("*", "Control", true, false):
 		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	fight_panel.visible = false
-	fight_active = false
-	fight_won = false
+	# FightPanel sadece taşıyıcı olsun; sol üstte gereksiz küçük panel görünmesin.
+	fight_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	fight_bar.min_value = 0.0
+	fight_bar.max_value = 100.0
+	fight_bar.show_percentage = false
+
+	layout_fight_bar()
+	reset_fight()
 
 
 func _process(delta: float) -> void:
 	if not fight_active:
 		return
 
-	move_catch_zone(delta)
+	move_catch_zone()
 	move_fish_marker(delta)
 	update_fight_progress(delta)
 
 
-func move_catch_zone(delta: float) -> void:
-	var direction: float = Input.get_axis("move_left", "move_right")
-	if not is_zero_approx(direction):
-		catch_zone.position.x += direction * catch_zone_speed * delta
-	else:
-		catch_zone.position.x = fight_bar.get_local_mouse_position().x - catch_zone.size.x * 0.5
+func layout_fight_bar() -> void:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	fight_bar.position = Vector2(
+		maxf((viewport_size.x - fight_bar.size.x) * 0.5, 0.0),
+		70.0
+	)
 
-	var max_x: float = fight_bar.size.x - catch_zone.size.x
+	fish_marker.position.y = 0.0
+	fish_marker.size.y = fight_bar.size.y
+	catch_zone.position.y = 0.0
+	catch_zone.size.y = fight_bar.size.y
 
-	catch_zone.position.x = clamp(
-		catch_zone.position.x,
+
+func move_catch_zone() -> void:
+	# A/D artık sadece tekneyi yönetiyor. Mücadele alanı yalnızca fareyi takip ediyor.
+	var mouse_x: float = fight_bar.get_local_mouse_position().x
+	var max_x: float = maxf(fight_bar.size.x - catch_zone.size.x, 0.0)
+
+	catch_zone.position.x = clampf(
+		mouse_x - catch_zone.size.x * 0.5,
 		0.0,
 		max_x
 	)
@@ -72,8 +86,7 @@ func move_fish_marker(delta: float) -> void:
 	fish_change_timer -= delta
 
 	if fish_change_timer <= 0.0:
-		var max_x: float = fight_bar.size.x - fish_marker.size.x
-
+		var max_x: float = maxf(fight_bar.size.x - fish_marker.size.x, 0.0)
 		fish_target_x = randf_range(0.0, max_x)
 		fish_change_timer = fish_change_interval
 
@@ -85,44 +98,43 @@ func move_fish_marker(delta: float) -> void:
 
 
 func update_fight_progress(delta: float) -> void:
+	if not fight_active:
+		return
+
 	var fish_left: float = fish_marker.position.x
 	var fish_right: float = fish_marker.position.x + fish_marker.size.x
-
 	var zone_left: float = catch_zone.position.x
 	var zone_right: float = catch_zone.position.x + catch_zone.size.x
 
-	var fish_inside_zone: bool = (
-		fish_right >= zone_left
-		and fish_left <= zone_right
+	var fish_inside_zone: bool = fish_right >= zone_left and fish_left <= zone_right
+	var reeling: bool = (
+		Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+		or Input.is_physical_key_pressed(KEY_W)
 	)
 
-	var reeling: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_physical_key_pressed(KEY_W)
 	if fish_inside_zone and reeling:
 		fight_bar.value += fight_gain_speed * delta
 	else:
 		fight_bar.value -= fight_loss_speed * delta
 
-	fight_bar.value = clamp(fight_bar.value, 0.0, 100.0)
+	fight_bar.value = clampf(fight_bar.value, 0.0, 100.0)
 
 	if fight_bar.value >= 100.0:
 		fight_won = true
 		fight_active = false
 		fight_panel.visible = false
-
 		print("MÜCADELE KAZANILDI!")
 
 
 func show_fight_bar(fish_type: String) -> void:
+	layout_fight_bar()
 	fight_panel.visible = true
 	fight_active = true
 	fight_won = false
-
-	fight_bar.value = 0.0
-
-	catch_zone.position.x = 100.0
-	fish_marker.position.x = 20.0
-
+	fight_bar.value = 10.0
 	fish_change_timer = 0.0
+
+	var zone_width: float = 70.0
 
 	match fish_type:
 		"Sardalya":
@@ -130,28 +142,45 @@ func show_fight_bar(fish_type: String) -> void:
 			fish_change_interval = 1.0
 			fight_gain_speed = 35.0
 			fight_loss_speed = 12.0
-			catch_zone.size.x = 85.0
+			zone_width = 85.0
 
 		"Levrek":
 			fish_move_speed = 140.0
 			fish_change_interval = 0.70
 			fight_gain_speed = 30.0
 			fight_loss_speed = 18.0
-			catch_zone.size.x = 70.0
+			zone_width = 70.0
 
 		"Uskumru":
 			fish_move_speed = 200.0
 			fish_change_interval = 0.45
 			fight_gain_speed = 25.0
 			fight_loss_speed = 24.0
-			catch_zone.size.x = 60.0
+			zone_width = 60.0
 
 		"Ton Balığı":
 			fish_move_speed = 260.0
 			fish_change_interval = 0.30
 			fight_gain_speed = 21.0
 			fight_loss_speed = 30.0
-			catch_zone.size.x = 50.0
+			zone_width = 50.0
+
+		_:
+			fish_move_speed = 120.0
+			fish_change_interval = 0.8
+			fight_gain_speed = 30.0
+			fight_loss_speed = 18.0
+			zone_width = 70.0
+
+	fish_marker.size = Vector2(24.0, fight_bar.size.y)
+	catch_zone.size = Vector2(zone_width, fight_bar.size.y)
+
+	fish_marker.position.x = 20.0
+	catch_zone.position.x = clampf(
+		fight_bar.size.x * 0.5 - catch_zone.size.x * 0.5,
+		0.0,
+		maxf(fight_bar.size.x - catch_zone.size.x, 0.0)
+	)
 
 
 func is_fight_won() -> bool:
@@ -162,6 +191,7 @@ func reset_fight() -> void:
 	fight_active = false
 	fight_won = false
 	fight_panel.visible = false
+	fight_bar.value = 0.0
 
 
 func get_total_fish() -> int:
@@ -186,7 +216,6 @@ func add_fish(fish_type: String) -> bool:
 
 	inventory[fish_type] += 1
 	update_inventory()
-
 	return true
 
 
