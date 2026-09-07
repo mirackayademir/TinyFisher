@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://daqjimp3wh021" path="res://scenes/boat.gd" id="1_0063d"]
 [ext_resource type="Script" uid="uid://lygsaqh6m70w" path="res://scenes/hook.gd" id="2_qyrje"]
 [ext_resource type="Texture2D" path="res://assets/boat_exact.webp" id="3_boat_texture"]
+[ext_resource type="Texture2D" path="res://assets/foam_particle.svg" id="4_foam"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_5ivpy"]
 size = Vector2(300, 92)
@@ -12,6 +13,24 @@ size = Vector2(18, 22)
 
 [node name="Boat" type="CharacterBody2D" unique_id=1129358676]
 script = ExtResource("1_0063d")
+
+[node name="WakeParticles" type="CPUParticles2D" parent="."]
+z_index = -1
+position = Vector2(80, 38)
+emitting = false
+amount = 34
+lifetime = 0.75
+randomness = 0.48
+local_coords = false
+texture = ExtResource("4_foam")
+direction = Vector2(-1, 0.12)
+spread = 24.0
+gravity = Vector2(0, 28)
+initial_velocity_min = 75.0
+initial_velocity_max = 135.0
+scale_amount_min = 0.55
+scale_amount_max = 1.35
+color = Color(0.88, 0.97, 1, 0.88)
 
 [node name="BoatVisual" type="Sprite2D" parent="." unique_id=81027790]
 position = Vector2(490, -83)
