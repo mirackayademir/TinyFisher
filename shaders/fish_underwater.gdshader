@@ -1,6 +1,6 @@
 shader_type canvas_item;
 
-uniform float tail_strength = 2.4;
+uniform float tail_strength = 32.0;
 uniform float tail_speed = 6.0;
 
 void vertex() {
