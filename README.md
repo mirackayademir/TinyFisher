@@ -8,7 +8,7 @@ Büyük bir değişiklik gerekmedikçe yeni branch açılmayacak. Yeni branch ge
 
 ## Projenin mevcut yönü
 
-TinyFisher artık **Cat Goes Fishing tarzı yatay tekne + dikey olta** yapısında ilerliyor.
+TinyFisher, **Cat Goes Fishing tarzı yatay tekne + dikey olta** yapısında ilerliyor.
 
 Ana döngü:
 
@@ -45,23 +45,35 @@ Her geliştirme 5 seviyelidir.
 
 Bundan sonra oyun görselleri **birebir pixel-art tarzında** kullanılacak.
 
-Yaklaşık SVG taklitleri, geçici sade çizimler veya görsele benzeyen yeniden çizimler final asset olarak kullanılmayacak. Onaylanan görsel neyse mümkün olduğunca **aynı görsel dosyası** oyuna aktarılacak.
+Onaylanan turkuaz/krem pixel-art tekne ve turkuaz çatılı pixel-art liman projeye bağlandı. Geçici SVG taklitleri final görsel olarak kullanılmayacak.
 
-Onaylanan iki ana görsel:
+## 2026-09-08 görsel/fizik güncellemesi
 
-1. Turkuaz / krem renkli pixel-art balıkçı teknesi
-2. Turkuaz çatılı pixel-art liman / iskele
+- Gökyüzü gün batımı paletine geçirildi; pixel-art renk bantları, güneş ve ufuk bulutları eklendi.
+- Deniz için animasyonlu shader eklendi: dalgalar, yüzey köpükleri, gün batımı yansıması ve su altı ışık kırılmaları hareket ediyor.
+- Balıkların su altında görünmesi için mavi/derinlik tonu ve hafif ışık parlaması eklendi.
+- Balık hareketi yenilendi: dikey yüzüş, daha küçük gövde salınımı, dönüş animasyonu ve shader ile kuyruk esnemesi var.
+- Tekne su üstünde hafif dalga hareketi yapıyor.
+- Tekne hareket ederken arkasından pixel köpük parçacıkları çıkıyor.
+- Teknenin limanın içine gereğinden fazla girmesi engellendi; sol hareket sınırı yanaşma/yükseltme alanını açık bırakıyor.
+- Liman görseli biraz büyütülüp konumu ayarlandı.
+- Balık tekneye alındığında ortada **YAKALADIN!** popup'ı açılıyor; yakalanan balık görseli parlayıp kısa animasyon oynatıyor.
 
-Bu iki görsel GitHub üzerinden projeye aktarılmaya başlandı ve `git pull` sonrasında proje tarafında dosyalar görünür hale geldi.
+Yeni dosyalar:
 
-### Görsel entegrasyonda sıradaki iş
+- `shaders/sunset_sky.gdshader`
+- `shaders/ocean.gdshader`
+- `shaders/fish_underwater.gdshader`
+- `assets/foam_particle.svg`
 
-- Onaylanan tekne görselini mevcut geçici `boat_approved.svg` yerine gerçek oyun görseli olarak bağlamak.
-- Onaylanan liman görselini mevcut geçici `harbor_pixel.svg` yerine bağlamak.
-- Tekne / liman ölçek ve konumlarını sahnede düzgün oturtmak.
-- Mevcut oynanış sistemlerini bozmamak.
-- Tekne üzerindeki olta ile gerçek atış animasyonunu eşleştirmek.
-- Daha sonra UI / geliştirme ekranlarını da aynı pixel-art görsel diline geçirmek.
+Ana değişen dosyalar:
+
+- `scenes/world.tscn`
+- `scenes/boat.tscn`
+- `scenes/boat.gd`
+- `scenes/fish.tscn`
+- `scenes/fish.gd`
+- `scenes/hud.gd`
 
 ## Önemli çalışma kuralı
 
@@ -75,8 +87,13 @@ Bir görev tamamlandığında kısa rapor verilecek:
 
 Kullanıcı müdahalesi gerçekten gerekmedikçe iş kullanıcıya geri görev olarak verilmeyecek.
 
-## Yarın devam noktası
+## Sonraki kontrol noktası
 
-**İlk iş:** Tekne ve limanın onaylanan birebir pixel-art görsellerini sahnede aktif hale getirip eski geçici SVG görselleri devreden çıkarmak.
+Oyunu çalıştırıp özellikle şu dört şeyi kontrol et:
 
-Ardından olta atma animasyonu ve pixel-art UI düzenlemesine devam edilecek.
+1. Tekne limanın içine geçiyor mu, yoksa yanaşma bölgesinde duruyor mu?
+2. Deniz dalgası / köpük / gün batımı görünümü sahnede düzgün mü?
+3. Balık kuyruk hareketi doğal mı?
+4. Balığı tekneye çekince `YAKALADIN!` efekti düzgün açılıyor mu?
+
+Bir hata görülürse doğrudan o hatadan devam edilecek.
