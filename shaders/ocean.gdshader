@@ -1,40 +1,50 @@
 shader_type canvas_item;
 
 void fragment() {
-	vec2 uv = SCREEN_UV;
+	vec2 suv = SCREEN_UV;
+	vec2 uv = UV;
 	float t = TIME;
 
-	float depth = clamp((uv.y - 0.34) / 0.66, 0.0, 1.0);
-	vec3 shallow = vec3(0.03, 0.42, 0.62);
-	vec3 deep = vec3(0.015, 0.10, 0.24);
-	vec3 water = mix(shallow, deep, depth);
+	// Daha canlı ama derinleştikçe sakinleşen deniz paleti.
+	float depth = clamp(uv.y * 1.18, 0.0, 1.0);
+	vec3 surface_color = vec3(0.025, 0.46, 0.66);
+	vec3 mid_color = vec3(0.018, 0.25, 0.43);
+	vec3 deep_color = vec3(0.008, 0.065, 0.16);
+	vec3 water = mix(surface_color, mid_color, smoothstep(0.0, 0.48, depth));
+	water = mix(water, deep_color, smoothstep(0.42, 1.0, depth));
 
-	// Hareketli dalga katmanları.
-	float wave1 = sin(uv.x * 48.0 + t * 2.4 + sin(uv.x * 13.0 - t) * 0.7);
-	float wave2 = sin(uv.x * 83.0 - t * 1.7 + uv.y * 19.0);
-	float wave3 = sin((uv.x + uv.y) * 36.0 + t * 1.25);
-	float wave_mix = wave1 * 0.55 + wave2 * 0.30 + wave3 * 0.15;
+	// Birbirinden farklı hızlarda akan dalga katmanları.
+	float long_wave = sin(suv.x * 34.0 + t * 1.55 + sin(suv.x * 8.0 - t * 0.55) * 1.1);
+	float medium_wave = sin(suv.x * 71.0 - t * 2.15 + suv.y * 17.0);
+	float short_wave = sin((suv.x * 1.35 + suv.y * 0.45) * 108.0 + t * 3.1);
+	float wave_mix = long_wave * 0.52 + medium_wave * 0.31 + short_wave * 0.17;
+	water += vec3(0.025, 0.095, 0.13) * wave_mix * (1.0 - depth * 0.72);
 
-	water += vec3(0.025, 0.085, 0.11) * wave_mix * (1.0 - depth * 0.55);
+	// Gün batımının kırık, titreşen sıcak yansıması.
+	float reflection_lane = 1.0 - smoothstep(0.035, 0.22, abs(suv.x - 0.76));
+	float reflection_noise = sin(suv.x * 143.0 + t * 2.4) + sin(suv.y * 89.0 - t * 1.9);
+	float reflection_bits = smoothstep(0.45, 1.25, reflection_noise);
+	water += vec3(0.34, 0.13, 0.035) * reflection_lane * reflection_bits * (1.0 - depth) * 0.78;
 
-	// Gün batımının denizdeki sıcak yansıması.
-	float reflection_lane = 1.0 - smoothstep(0.04, 0.23, abs(uv.x - 0.78));
-	float reflection_flicker = step(0.52, sin(uv.x * 165.0 + uv.y * 93.0 + t * 3.0));
-	water += vec3(0.24, 0.10, 0.025) * reflection_lane * reflection_flicker * (1.0 - depth) * 0.65;
+	// Su altındaki hareketli ışık kırılmaları.
+	float ca = sin(suv.x * 67.0 + suv.y * 35.0 + t * 1.8 + sin(suv.y * 21.0));
+	float cb = sin(suv.x * 44.0 - suv.y * 51.0 - t * 1.25);
+	float cc = sin((suv.x - suv.y) * 92.0 + t * 0.85);
+	float caustic = smoothstep(1.28, 2.05, ca + cb + cc * 0.42);
+	water += vec3(0.055, 0.19, 0.22) * caustic * (1.0 - depth * 0.72);
 
-	// Su altı ışık çizgileri / caustics.
-	float caustic_a = sin(uv.x * 72.0 + t * 1.8 + sin(uv.y * 31.0));
-	float caustic_b = sin(uv.x * 46.0 - t * 1.2 - uv.y * 44.0);
-	float caustic = smoothstep(1.05, 1.55, caustic_a + caustic_b);
-	water += vec3(0.03, 0.13, 0.16) * caustic * (0.9 - depth * 0.6);
+	// Yüzeye yakın birkaç farklı köpüklü dalga sırası.
+	float surface_mask = 1.0 - smoothstep(0.0, 0.075, uv.y);
+	float crest_a = smoothstep(0.63, 0.88, sin(suv.x * 76.0 + t * 2.55 + sin(suv.x * 17.0) * 0.8) * 0.5 + 0.5);
+	float crest_b = smoothstep(0.72, 0.94, sin(suv.x * 119.0 - t * 2.0 + 1.4) * 0.5 + 0.5);
+	float crest = max(crest_a * 0.82, crest_b * 0.62);
+	water = mix(water, vec3(0.80, 0.96, 0.98), crest * surface_mask * 0.86);
 
-	// Pixel-art hissi için renkleri hafif kuantize et.
-	water = floor(water * 26.0) / 26.0;
+	// Çok hafif askıdaki parçacık hissi; balıklar boş bir renk bloğunda durmasın.
+	float speck = step(0.986, fract(sin(dot(floor(suv * vec2(320.0, 190.0)), vec2(12.9898, 78.233))) * 43758.5453));
+	water += vec3(0.08, 0.14, 0.17) * speck * (0.35 + depth * 0.35);
 
-	// Yüzeye yakın beyaz köpük çizgileri.
-	float surface_mask = 1.0 - smoothstep(0.0, 0.045, depth);
-	float foam = smoothstep(0.54, 0.86, sin(uv.x * 96.0 + t * 3.2) * 0.5 + 0.5);
-	water = mix(water, vec3(0.78, 0.94, 0.96), foam * surface_mask * 0.72);
-
+	// Pixel-art paletini koru.
+	water = floor(clamp(water, 0.0, 1.0) * 30.0) / 30.0;
 	COLOR = vec4(water, 1.0);
 }
