@@ -71,25 +71,25 @@ func _ready() -> void:
 
 
 func _setup_harbor() -> void:
-	# Limanı küçük bir dekor değil, ekranın sol tarafını dolduran ana üs olarak göster.
-	# Kullanıcının işaretlediği yaklaşık alanı kaplayacak şekilde öncekinin belirgin biçimde üstüne çıkarıldı.
+	# Liman boyutuna dokunma: onaylanan büyük ölçek aynen kalır.
 	dock_sprite.scale = Vector2(7.8, 7.8)
 	dock_sprite.position = Vector2(310.0, 250.0)
 
 	# Büyüyen limanın iskelesinin içine tekne giremez; yalnızca sağdaki yanaşma bölgesine kadar gelir.
 	boat.min_world_x = 790.0
 
-	# Yanaşma / geliştirme alanı yeni liman boyutuna göre sağ tarafa taşındı ve genişletildi.
-	dock_collision.position = Vector2(900.0, 335.0)
+	# Tekne sprite/collision merkezi kendi node kökünden sağa ofsetli olduğu için eski DockArea
+	# teknenin gerçek çarpışma gövdesine değmiyordu. Görsel limana dokunmadan sadece etkileşim alanını
+	# teknenin yanaşma noktasını kapsayacak şekilde sağa alıp genişletiyoruz.
+	dock_collision.position = Vector2(1120.0, 335.0)
 	var dock_shape := dock_collision.shape as RectangleShape2D
 	if dock_shape != null:
-		dock_shape.size = Vector2(440.0, 220.0)
+		dock_shape.size = Vector2(700.0, 240.0)
 
 	dock_prompt.position = Vector2(770.0, 145.0)
 	dock_prompt.size = Vector2(270.0, 38.0)
 	dock_prompt.add_theme_font_size_override("font_size", 18)
 
-	# Büyük limanla birlikte geliştirme ekranı da daha rahat okunacak ölçüde büyütüldü.
 	upgrade_menu.position = Vector2(330.0, 42.0)
 	upgrade_menu.size = Vector2(620.0, 430.0)
 
