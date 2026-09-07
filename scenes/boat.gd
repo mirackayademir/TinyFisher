@@ -71,11 +71,11 @@ func _physics_process(delta: float) -> void:
 func _update_surface_motion(delta: float) -> void:
 	_sea_time += delta
 
-	# İki farklı dalga tekneyi yukarı-aşağı taşır; yatay hareket ederken faz da değişir.
-	var wave_a := sin(_sea_time * 1.72 + global_position.x * 0.018) * 5.2
-	var wave_b := sin(_sea_time * 1.08 + global_position.x * 0.043 + 0.8) * 2.2
+	# World su çizgisiyle aynı iki dalga formu: tekne gerçekten dalganın üstünde yüzer.
+	var wave_a := sin(global_position.x * 0.018 + _sea_time * 1.72) * 5.2
+	var wave_b := sin(global_position.x * 0.043 - _sea_time * 1.08 + 0.8) * 2.2
 	var bob := wave_a + wave_b
-	var tilt := cos(_sea_time * 1.72 + global_position.x * 0.018) * 0.014
+	var tilt := cos(global_position.x * 0.018 + _sea_time * 1.72) * 0.014
 	var speed_tilt := clampf(velocity.x / maxf(speed, 1.0), -1.0, 1.0) * 0.006
 
 	boat_visual.position = _boat_visual_base_position + Vector2(0.0, bob)
