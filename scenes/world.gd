@@ -89,9 +89,11 @@ func _setup_surface_waves() -> void:
 
 
 func _surface_height_at(x: float) -> float:
-	return WATER_SURFACE_Y \
-		+ sin(x * 0.018 + _sea_time * 1.72) * 5.2 \
+	return (
+		WATER_SURFACE_Y
+		+ sin(x * 0.018 + _sea_time * 1.72) * 5.2
 		+ sin(x * 0.043 - _sea_time * 1.08 + 0.8) * 2.2
+	)
 
 
 func _update_surface_waves() -> void:
