@@ -37,8 +37,11 @@ func _unhandled_input(event: InputEvent) -> void:
 func deploy() -> void:
 	if deployed or world.docked or not hud.can_add_fish():
 		return
+
 	deployed = true
-	boat.set_movement_enabled(false)
+	# Cat Goes Fishing hissi: olta sudayken de tekne A/D ile hareket edebilir.
+	# Kanca Boat'un child'i olduğu için yatayda tekneyle beraber taşınır ve ip dik kalır.
+	boat.set_movement_enabled(true)
 
 
 func _physics_process(delta: float) -> void:
@@ -50,14 +53,17 @@ func _physics_process(delta: float) -> void:
 			if hud.is_fight_won() and is_reeling():
 				position.y -= reel_speed * delta
 		else:
-			# An empty line sinks automatically; reeling takes priority.
+			# Boş olta otomatik batar; sarma her zaman önceliklidir.
 			position.y += (-reel_speed if is_reeling() else hook_speed) * delta
+
 		position.y = clampf(position.y, start_position.y, start_position.y + max_depth)
+		# X yerel koordinatta sabit kalır. Boat hareket edince kanca dünya uzayında onunla gider.
 		position.x = start_position.x
+
 		if position.y <= start_position.y:
 			land_catch()
 		elif not is_instance_valid(hooked_fish):
-			# Also catches fish already overlapping when a new drop starts.
+			# Yeni atışta halihazırda üst üste gelen balığı da yakala.
 			for area in get_overlapping_areas():
 				_on_hook_area_entered(area)
 
@@ -76,6 +82,7 @@ func land_catch() -> void:
 			hooked_fish.queue_free()
 		else:
 			hooked_fish.release_from_hook()
+
 	hooked_fish = null
 	deployed = false
 	position = start_position
@@ -92,6 +99,7 @@ func update_camera(delta: float) -> void:
 func _on_hook_area_entered(area: Area2D) -> void:
 	if not deployed or is_instance_valid(hooked_fish) or position.y <= start_position.y:
 		return
+
 	if area.has_method("hook_to") and not area.is_hooked and hud.can_add_fish():
 		hooked_fish = area
 		area.hook_to(self)
