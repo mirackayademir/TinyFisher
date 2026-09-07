@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://b20m3xbbwtxhf"]
+
+[ext_resource type="Script" uid="uid://bftsfu60p5c5h" path="res://scenes/fish.gd" id="1_n6yr6"]
+[ext_resource type="Texture2D" uid="uid://dm16qvivms05o" path="res://assets/sardalya.png" id="2_8g0i4"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_nm43w"]
+size = Vector2(64.5, 28)
+
+[node name="Fish" type="Area2D" unique_id=1429060153]
+collision_layer = 2
+collision_mask = 0
+script = ExtResource("1_n6yr6")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=739355813]
+position = Vector2(3.25, 3)
+shape = SubResource("RectangleShape2D_nm43w")
+
+[node name="FishSprite" type="Sprite2D" parent="." unique_id=1609794893]
+scale = Vector2(0.08, 0.08)
+texture = ExtResource("2_8g0i4")

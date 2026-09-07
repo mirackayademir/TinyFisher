@@ -1,0 +1,255 @@
+[gd_scene format=3 uid="uid://co8rn6ahh5rgq"]
+
+[ext_resource type="PackedScene" uid="uid://cavsa44f8xbe8" path="res://scenes/boat.tscn" id="1_nnsk1"]
+[ext_resource type="Script" uid="uid://ce3c7jktgljjt" path="res://scenes/world.gd" id="1_rwgxs"]
+[ext_resource type="Script" uid="uid://c6cy1qb6bjk2m" path="res://scenes/fishing_spot.gd" id="3_71j4m"]
+[ext_resource type="Script" uid="uid://cj43jjxv1jhcf" path="res://scenes/hud.gd" id="4_k0juu"]
+[ext_resource type="PackedScene" uid="uid://b20m3xbbwtxhf" path="res://scenes/fish.tscn" id="4_qfnet"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_5ivpy"]
+size = Vector2(195, 204)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_82fyb"]
+size = Vector2(532, 305)
+
+[node name="World" type="Node2D" unique_id=616934241]
+script = ExtResource("1_rwgxs")
+
+[node name="Sky" type="ColorRect" parent="." unique_id=1115701017]
+mouse_filter = 2
+offset_left = -1000.0
+offset_top = -500.0
+offset_right = 11000.0
+offset_bottom = 360.0
+color = Color(0.1254902, 0.74509805, 1, 1)
+
+[node name="Water" type="ColorRect" parent="." unique_id=374897714]
+mouse_filter = 2
+offset_left = -1000.0
+offset_top = 360.0
+offset_right = 11000.0
+offset_bottom = 1860.0
+color = Color(4.235506e-06, 0.37335896, 0.74916744, 1)
+
+[node name="Boat" parent="." unique_id=1129358676 instance=ExtResource("1_nnsk1")]
+position = Vector2(432.56, 350)
+
+[node name="Dock" type="ColorRect" parent="." unique_id=1677001902]
+mouse_filter = 2
+offset_left = -157.0
+offset_top = 232.0
+offset_right = 242.0
+offset_bottom = 430.0
+
+[node name="DockArea" type="Area2D" parent="." unique_id=518462342]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DockArea" unique_id=2012548598]
+position = Vector2(340, 335)
+shape = SubResource("RectangleShape2D_5ivpy")
+
+[node name="DockPrompt" type="Label" parent="." unique_id=2011597763]
+offset_left = 150.18
+offset_top = 132.21
+offset_right = 281.18018
+offset_bottom = 155.21005
+text = "[E] Limana Yanaş"
+
+[node name="DockMenu" type="Panel" parent="." unique_id=2115008133]
+visible = false
+offset_left = 259.0
+offset_top = 14.0
+offset_right = 559.0
+offset_bottom = 234.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="DockMenu" unique_id=1328485147]
+layout_mode = 0
+offset_left = 60.915
+offset_top = 60.47
+offset_right = 241.70502
+offset_bottom = 164.7449
+
+[node name="SellButton" type="Button" parent="DockMenu/VBoxContainer" unique_id=308227245]
+layout_mode = 2
+text = "Balıkları Sat"
+
+[node name="UpgradeButton" type="Button" parent="DockMenu/VBoxContainer" unique_id=1158073155]
+layout_mode = 2
+text = "Geliştirmeler"
+
+[node name="LeaveButton" type="Button" parent="DockMenu/VBoxContainer" unique_id=101649524]
+layout_mode = 2
+text = "Denize Açıl"
+
+[node name="MoneyLabel" type="Label" parent="." unique_id=1688949435]
+offset_left = 562.0
+offset_top = 13.0
+offset_right = 605.5901
+offset_bottom = 36.000008
+text = "$0"
+
+[node name="FishingSpot" type="Area2D" parent="." unique_id=1937477127]
+position = Vector2(922, 769)
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_71j4m")
+fish_scene = ExtResource("4_qfnet")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FishingSpot" unique_id=469551573]
+position = Vector2(47, -65)
+shape = SubResource("RectangleShape2D_82fyb")
+
+[node name="Fish" parent="FishingSpot" unique_id=1429060153 instance=ExtResource("4_qfnet")]
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1149827934]
+script = ExtResource("4_k0juu")
+
+[node name="Controls" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 640.0
+offset_right = 1250.0
+offset_bottom = 708.0
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "A/D: Tekne | Sağ tık / S: Oltayı bırak | Sol tuş basılı / W: Sar | E: Liman
+Mücadele: Fareyle yeşil alanı balık işaretinde tut ve sar. Çubuk dolunca balığı yukarı çek.
+Olta sudayken tekne durur. Envanter: 8 balık; dolunca limanda sat."
+
+[node name="InventoryPanel" type="Panel" parent="HUD" unique_id=1002202826]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="InventorySlots" type="HBoxContainer" parent="HUD/InventoryPanel" unique_id=2096407552]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Slot1" type="Panel" parent="HUD/InventoryPanel/InventorySlots" unique_id=882602623]
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+
+[node name="FishIcon" type="TextureRect" parent="HUD/InventoryPanel/InventorySlots/Slot1" unique_id=1816926269]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CountLabel" type="Label" parent="HUD/InventoryPanel/InventorySlots/Slot1" unique_id=19598998]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -40.0
+offset_top = -23.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="Slot2" type="Panel" parent="HUD/InventoryPanel/InventorySlots" unique_id=1854667528]
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+
+[node name="FishIcon" type="TextureRect" parent="HUD/InventoryPanel/InventorySlots/Slot2" unique_id=566521716]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CountLabel" type="Label" parent="HUD/InventoryPanel/InventorySlots/Slot2" unique_id=1294407380]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -40.0
+offset_top = -23.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="Slot3" type="Panel" parent="HUD/InventoryPanel/InventorySlots" unique_id=1343096954]
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+
+[node name="FishIcon" type="TextureRect" parent="HUD/InventoryPanel/InventorySlots/Slot3" unique_id=461337939]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CountLabel" type="Label" parent="HUD/InventoryPanel/InventorySlots/Slot3" unique_id=666295915]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -40.0
+offset_top = -23.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="Slot4" type="Panel" parent="HUD/InventoryPanel/InventorySlots" unique_id=837840556]
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+
+[node name="FishIcon" type="TextureRect" parent="HUD/InventoryPanel/InventorySlots/Slot4" unique_id=439223719]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CountLabel" type="Label" parent="HUD/InventoryPanel/InventorySlots/Slot4" unique_id=1310463508]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -40.0
+offset_top = -23.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="FightPanel" type="Panel" parent="HUD" unique_id=660311352]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="FightBar" type="ProgressBar" parent="HUD/FightPanel" unique_id=659615111]
+custom_minimum_size = Vector2(300, 28)
+layout_mode = 0
+offset_left = 738.0
+offset_top = 86.0
+offset_right = 1038.0
+offset_bottom = 114.0
+
+[node name="FishMarker" type="ColorRect" parent="HUD/FightPanel/FightBar" unique_id=805450078]
+z_index = 1
+color = Color(1, 0.7, 0.2, 1)
+custom_minimum_size = Vector2(24, 28)
+layout_mode = 0
+offset_left = 20.0
+offset_right = 60.0
+offset_bottom = 40.0
+
+[node name="CatchZone" type="ColorRect" parent="HUD/FightPanel/FightBar" unique_id=634357901]
+color = Color(0.2, 0.9, 0.4, 0.65)
+custom_minimum_size = Vector2(70, 28)
+layout_mode = 0
+offset_left = 100.0
+offset_right = 170.0
+offset_bottom = 40.0
+
+[connection signal="body_entered" from="DockArea" to="." method="_on_dock_area_body_entered"]
+[connection signal="body_exited" from="DockArea" to="." method="_on_dock_area_body_exited"]
+[connection signal="pressed" from="DockMenu/VBoxContainer/SellButton" to="." method="_on_sell_button_pressed"]
+[connection signal="pressed" from="DockMenu/VBoxContainer/LeaveButton" to="." method="_on_leave_button_pressed"]

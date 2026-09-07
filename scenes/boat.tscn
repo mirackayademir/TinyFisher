@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://cavsa44f8xbe8"]
+
+[ext_resource type="Script" uid="uid://daqjimp3wh021" path="res://scenes/boat.gd" id="1_0063d"]
+[ext_resource type="Script" uid="uid://lygsaqh6m70w" path="res://scenes/hook.gd" id="2_qyrje"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_5ivpy"]
+size = Vector2(319, 123)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_82fyb"]
+
+[node name="Boat" type="CharacterBody2D" unique_id=1129358676]
+script = ExtResource("1_0063d")
+
+[node name="BoatVisual" type="Polygon2D" parent="." unique_id=81027790]
+position = Vector2(249.985, -418.9)
+color = Color(0.27078065, 0.06251948, 0.0055980757, 1)
+polygon = PackedVector2Array(46, 340, 94, 455, 382, 453, 440, 327, 222, 357)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1674171951]
+position = Vector2(489, -21)
+shape = SubResource("RectangleShape2D_5ivpy")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1755523253]
+position = Vector2(350, 220)
+
+[node name="Hook" type="Area2D" parent="." unique_id=786582749]
+position = Vector2(489.975, 42.6)
+script = ExtResource("2_qyrje")
+max_depth = 736.265
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hook" unique_id=406202555]
+position = Vector2(0, 8)
+shape = SubResource("RectangleShape2D_82fyb")
+
+[node name="Polygon2D" type="Polygon2D" parent="Hook" unique_id=372325786]
+position = Vector2(-132, -166)
+color = Color(0.99999994, 0.35334328, 0.045329593, 1)
+polygon = PackedVector2Array(124, 170, 124, 182, 140, 182, 138, 162)
+
+[node name="HookLine" type="Line2D" parent="." unique_id=1026712407]
