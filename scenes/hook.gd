@@ -29,6 +29,11 @@ func _ready() -> void:
 	max_depth = maxf(max_depth, BASE_DEPTH_PIXELS)
 	camera_deep_y = maxf(camera_deep_y, 1420.0)
 
+	# Derin kamera aşağı indiğinde deniz görseli bitmesin.
+	var water := world.get_node_or_null("Water") as ColorRect
+	if water != null:
+		water.offset_bottom = maxf(water.offset_bottom, 2700.0)
+
 	collision_layer = 0
 	collision_mask = 2
 	area_entered.connect(_on_hook_area_entered)
