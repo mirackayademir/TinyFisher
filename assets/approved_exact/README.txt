@@ -1,0 +1,1 @@
+Approved exact fish art assets are stored in this folder. Do not replace without user approval.
