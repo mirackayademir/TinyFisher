@@ -5,6 +5,8 @@ const UPGRADE_COSTS: Array[int] = [50, 100, 175, 275, 400]
 const WATER_SURFACE_Y: float = 360.0
 const CAMERA_NORMAL_X: float = 350.0
 const CAMERA_HARBOR_X: float = -160.0
+const BASE_DEPTH_METERS: int = 50
+const DEPTH_METERS_PER_LEVEL: int = 10
 
 @onready var dock_prompt: Label = $DockPrompt
 @onready var dock_menu: Panel = $DockMenu
@@ -31,14 +33,17 @@ const CAMERA_HARBOR_X: float = -160.0
 @onready var capacity_button: Button = $UpgradeMenu/CapacityButton
 @onready var fight_ease_button: Button = $UpgradeMenu/FightEaseButton
 @onready var upgrade_info_label: Label = $UpgradeMenu/InfoLabel
+@onready var upgrade_back_button: Button = $UpgradeMenu/BackButton
 
 var boat_in_dock_area: bool = false
 var docked: bool = false
 var money: int = 0
 var money_panel: Panel
+var depth_button: Button
 
 var boat_speed_level: int = 0
 var rod_speed_level: int = 0
+var depth_level: int = 0
 var capacity_level: int = 0
 var fight_ease_level: int = 0
 
@@ -62,6 +67,7 @@ func _ready() -> void:
 	upgrade_menu.visible = false
 	_setup_harbor()
 	_setup_dock_menu()
+	_setup_depth_upgrade_button()
 	_setup_surface_waves()
 	_setup_money_hud()
 	_setup_inventory_discovery()
@@ -75,12 +81,10 @@ func _setup_harbor() -> void:
 	dock_sprite.scale = Vector2(7.8, 7.8)
 	dock_sprite.position = Vector2(310.0, 250.0)
 
-	# Büyüyen limanın iskelesinin içine tekne giremez; yalnızca sağdaki yanaşma bölgesine kadar gelir.
-	boat.min_world_x = 790.0
+	# Tekne limanın iskelesine kadar yaklaşabilir; liman görselinin boyutuna dokunma.
+	boat.min_world_x = 520.0
 
-	# Tekne sprite/collision merkezi kendi node kökünden sağa ofsetli olduğu için eski DockArea
-	# teknenin gerçek çarpışma gövdesine değmiyordu. Görsel limana dokunmadan sadece etkileşim alanını
-	# teknenin yanaşma noktasını kapsayacak şekilde sağa alıp genişletiyoruz.
+	# Etkileşim alanı teknenin yanaşma noktasını kapsar.
 	dock_collision.position = Vector2(1120.0, 335.0)
 	var dock_shape := dock_collision.shape as RectangleShape2D
 	if dock_shape != null:
@@ -90,8 +94,9 @@ func _setup_harbor() -> void:
 	dock_prompt.size = Vector2(270.0, 38.0)
 	dock_prompt.add_theme_font_size_override("font_size", 18)
 
-	upgrade_menu.position = Vector2(330.0, 42.0)
-	upgrade_menu.size = Vector2(620.0, 430.0)
+	# Beşinci geliştirme satırı için menüyü biraz aşağı uzat.
+	upgrade_menu.position = Vector2(330.0, 30.0)
+	upgrade_menu.size = Vector2(620.0, 500.0)
 
 
 func _setup_dock_menu() -> void:
@@ -119,6 +124,34 @@ func _setup_dock_menu() -> void:
 	for button in [dock_sell_button, dock_upgrade_button, dock_leave_button]:
 		button.custom_minimum_size = Vector2(300.0, 54.0)
 		button.add_theme_font_size_override("font_size", 18)
+
+
+func _setup_depth_upgrade_button() -> void:
+	# Olta derinliği geliştirmesi mevcut menüye çalışma anında eklenir.
+	# Böylece mevcut liman sahnesinin geri kalan yapısına dokunmadan beşinci geliştirmeyi kazanırız.
+	depth_button = upgrade_menu.get_node_or_null("DepthButton") as Button
+	if depth_button == null:
+		depth_button = Button.new()
+		depth_button.name = "DepthButton"
+		upgrade_menu.add_child(depth_button)
+
+	depth_button.position = Vector2(42.0, 200.0)
+	depth_button.size = Vector2(376.0, 42.0)
+	depth_button.add_theme_font_size_override("font_size", 16)
+
+	if not depth_button.pressed.is_connected(_on_depth_button_pressed):
+		depth_button.pressed.connect(_on_depth_button_pressed)
+
+	# Eski dört satırın alt kısmını bir sıra aşağı kaydır.
+	capacity_button.position = Vector2(42.0, 250.0)
+	capacity_button.size = Vector2(376.0, 42.0)
+	fight_ease_button.position = Vector2(42.0, 300.0)
+	fight_ease_button.size = Vector2(376.0, 42.0)
+	upgrade_info_label.position = Vector2(28.0, 354.0)
+	upgrade_info_label.size = Vector2(404.0, 54.0)
+	upgrade_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	upgrade_back_button.position = Vector2(150.0, 420.0)
+	upgrade_back_button.size = Vector2(160.0, 34.0)
 
 
 func _set_harbor_camera(active: bool) -> void:
@@ -332,6 +365,10 @@ func _on_rod_speed_button_pressed() -> void:
 	_buy_upgrade("rod_speed")
 
 
+func _on_depth_button_pressed() -> void:
+	_buy_upgrade("depth")
+
+
 func _on_capacity_button_pressed() -> void:
 	_buy_upgrade("capacity")
 
@@ -344,11 +381,11 @@ func _buy_upgrade(key: String) -> void:
 	if not docked:
 		return
 
-	var level := _get_upgrade_level(key)
+	var level: int = _get_upgrade_level(key)
 	if level >= MAX_UPGRADE_LEVEL:
 		return
 
-	var cost := UPGRADE_COSTS[level]
+	var cost: int = UPGRADE_COSTS[level]
 	if money < cost:
 		upgrade_info_label.text = "Yeterli paran yok. Gereken: $" + str(cost)
 		return
@@ -366,6 +403,8 @@ func _get_upgrade_level(key: String) -> int:
 			return boat_speed_level
 		"rod_speed":
 			return rod_speed_level
+		"depth":
+			return depth_level
 		"capacity":
 			return capacity_level
 		"fight_ease":
@@ -380,6 +419,8 @@ func _set_upgrade_level(key: String, level: int) -> void:
 			boat_speed_level = level
 		"rod_speed":
 			rod_speed_level = level
+		"depth":
+			depth_level = level
 		"capacity":
 			capacity_level = level
 		"fight_ease":
@@ -389,27 +430,53 @@ func _set_upgrade_level(key: String, level: int) -> void:
 func _apply_upgrades() -> void:
 	boat.set_speed_level(boat_speed_level)
 	hook.set_reel_speed_level(rod_speed_level)
+	hook.set_depth_level(depth_level)
 	hud.set_capacity_level(capacity_level)
 	hud.set_fight_ease_level(fight_ease_level)
+
+	# Derinlik büyüdükçe kamera ve deniz görseli de yeni limite kadar devam etsin.
+	hook.camera_deep_y = maxf(hook.max_depth - 280.0, 1420.0)
+	var water := $Water as ColorRect
+	water.offset_bottom = maxf(water.offset_bottom, hook.max_depth + 1100.0)
 
 
 func _refresh_upgrade_menu() -> void:
 	boat_speed_button.text = _upgrade_button_text("Motor Gücü", boat_speed_level)
 	rod_speed_button.text = _upgrade_button_text("Makara Hızı", rod_speed_level)
+	depth_button.text = _depth_upgrade_button_text(depth_level)
 	capacity_button.text = _upgrade_button_text("Tekne Ambarı", capacity_level)
 	fight_ease_button.text = _upgrade_button_text("Mücadele Desteği", fight_ease_level)
 
 	boat_speed_button.disabled = not _can_afford_level(boat_speed_level)
 	rod_speed_button.disabled = not _can_afford_level(rod_speed_level)
+	depth_button.disabled = not _can_afford_level(depth_level)
 	capacity_button.disabled = not _can_afford_level(capacity_level)
 	fight_ease_button.disabled = not _can_afford_level(fight_ease_level)
-	upgrade_info_label.text = "Her geliştirme 5 seviyedir. Balık satıp para kazan."
+
+	upgrade_info_label.text = (
+		"Olta erişimi: " + str(_current_depth_meters()) + " m. "
+		+ "Derinlik geliştirmesi her seviyede +" + str(DEPTH_METERS_PER_LEVEL) + " m kazandırır."
+	)
 
 
 func _upgrade_button_text(title: String, level: int) -> String:
 	if level >= MAX_UPGRADE_LEVEL:
 		return title + "  |  Seviye " + str(level) + "/5  |  MAX"
 	return title + "  |  Seviye " + str(level) + "/5  |  $" + str(UPGRADE_COSTS[level])
+
+
+func _depth_upgrade_button_text(level: int) -> String:
+	var meters: int = BASE_DEPTH_METERS + (level * DEPTH_METERS_PER_LEVEL)
+	if level >= MAX_UPGRADE_LEVEL:
+		return "Olta Derinliği  |  " + str(meters) + " m  |  MAX"
+	return (
+		"Olta Derinliği  |  " + str(meters) + " m → "
+		+ str(meters + DEPTH_METERS_PER_LEVEL) + " m  |  $" + str(UPGRADE_COSTS[level])
+	)
+
+
+func _current_depth_meters() -> int:
+	return BASE_DEPTH_METERS + (depth_level * DEPTH_METERS_PER_LEVEL)
 
 
 func _can_afford_level(level: int) -> bool:
