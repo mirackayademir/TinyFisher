@@ -1,14 +1,17 @@
 extends Node
 
 # Derin deniz atmosferi:
-# - Olta derine indikçe dünyanın ortam ışığını yumuşak biçimde azaltır.
-# - 50 m sonrasında kancanın çevresinde sınırlı görüş sağlayan soğuk bir ışık açar.
-# - Fener Balıkları kendi sıcak, hafif titreşen ışıklarını taşır.
+# - Sığ suda ortam neredeyse değişmez.
+# - 20 m sonrasında ışık belirgin şekilde azalır.
+# - 60 m sonrasında kancanın çevresindeki ışık önemli hale gelir.
+# - 80-100 m arası gerçekten karanlık derin denizdir.
+# - Fener Balıkları kendi sıcak, titreşen ışıklarını taşır.
 # HUD ayrı CanvasLayer'da olduğu için karanlıktan etkilenmez.
 
-const SHALLOW_START_M: float = 32.0
-const HOOK_LIGHT_START_M: float = 50.0
+const SHALLOW_START_M: float = 18.0
+const HOOK_LIGHT_START_M: float = 58.0
 const ANGLER_SCAN_INTERVAL: float = 0.30
+const AMBIENT_LERP_SPEED: float = 0.16
 
 var _world: Node2D = null
 var _hook: Area2D = null
@@ -69,9 +72,9 @@ func _ensure_scene_nodes() -> void:
 		_hook_light = PointLight2D.new()
 		_hook_light.name = "DeepSeaHookLight"
 		_hook_light.texture = _light_texture
-		_hook_light.color = Color(0.52, 0.78, 1.0, 1.0)
+		_hook_light.color = Color(0.46, 0.73, 1.0, 1.0)
 		_hook_light.energy = 0.0
-		_hook_light.texture_scale = 2.8
+		_hook_light.texture_scale = 2.45
 		_hook_light.shadow_enabled = false
 		_hook_light.z_index = 20
 		_hook.add_child(_hook_light)
@@ -92,33 +95,48 @@ func _get_current_depth_meters() -> float:
 func _update_ambient(depth_m: float) -> void:
 	var target: Color = Color.WHITE
 
+	# 0-18 m: yüzeye yakın, parlak.
 	if depth_m <= SHALLOW_START_M:
 		target = Color.WHITE
-	elif depth_m < 52.0:
-		var t1: float = inverse_lerp(SHALLOW_START_M, 52.0, depth_m)
-		target = Color.WHITE.lerp(Color(0.72, 0.84, 0.94, 1.0), t1)
-	elif depth_m < 70.0:
-		var t2: float = inverse_lerp(52.0, 70.0, depth_m)
-		target = Color(0.72, 0.84, 0.94, 1.0).lerp(Color(0.40, 0.58, 0.72, 1.0), t2)
-	elif depth_m < 86.0:
-		var t3: float = inverse_lerp(70.0, 86.0, depth_m)
-		target = Color(0.40, 0.58, 0.72, 1.0).lerp(Color(0.18, 0.31, 0.46, 1.0), t3)
-	else:
-		var t4: float = clampf(inverse_lerp(86.0, 100.0, depth_m), 0.0, 1.0)
-		target = Color(0.18, 0.31, 0.46, 1.0).lerp(Color(0.07, 0.13, 0.22, 1.0), t4)
 
-	_canvas_modulate.color = _canvas_modulate.color.lerp(target, 0.085)
+	# 18-35 m: ilk fark burada gözle görülür hale gelir.
+	elif depth_m < 35.0:
+		var t1: float = inverse_lerp(SHALLOW_START_M, 35.0, depth_m)
+		target = Color.WHITE.lerp(Color(0.68, 0.80, 0.90, 1.0), t1)
+
+	# 35-55 m: orta su artık açık biçimde daha koyudur.
+	elif depth_m < 55.0:
+		var t2: float = inverse_lerp(35.0, 55.0, depth_m)
+		target = Color(0.68, 0.80, 0.90, 1.0).lerp(Color(0.36, 0.51, 0.66, 1.0), t2)
+
+	# 55-72 m: açık deniz ışığı hızla kaybolur.
+	elif depth_m < 72.0:
+		var t3: float = inverse_lerp(55.0, 72.0, depth_m)
+		target = Color(0.36, 0.51, 0.66, 1.0).lerp(Color(0.18, 0.29, 0.42, 1.0), t3)
+
+	# 72-86 m: köpekbalığı katmanı; çevre artık gerçekten karanlık.
+	elif depth_m < 86.0:
+		var t4: float = inverse_lerp(72.0, 86.0, depth_m)
+		target = Color(0.18, 0.29, 0.42, 1.0).lerp(Color(0.085, 0.145, 0.24, 1.0), t4)
+
+	# 86-100 m: Fener Balığı bölgesi. Kanca ışığı olmadan görüş çok sınırlı.
+	else:
+		var t5: float = clampf(inverse_lerp(86.0, 100.0, depth_m), 0.0, 1.0)
+		target = Color(0.085, 0.145, 0.24, 1.0).lerp(Color(0.025, 0.045, 0.085, 1.0), t5)
+
+	_canvas_modulate.color = _canvas_modulate.color.lerp(target, AMBIENT_LERP_SPEED)
 
 
 func _update_hook_light(depth_m: float) -> void:
 	if depth_m < HOOK_LIGHT_START_M or not bool(_hook.get("deployed")):
-		_hook_light.energy = lerpf(_hook_light.energy, 0.0, 0.18)
+		_hook_light.energy = lerpf(_hook_light.energy, 0.0, 0.22)
 		return
 
 	var depth_t: float = clampf(inverse_lerp(HOOK_LIGHT_START_M, 100.0, depth_m), 0.0, 1.0)
-	var target_energy: float = lerpf(0.38, 1.42, depth_t)
-	_hook_light.energy = lerpf(_hook_light.energy, target_energy, 0.12)
-	_hook_light.texture_scale = lerpf(2.35, 3.05, depth_t)
+	# Karanlık arttıkça ışık güçleniyor fakat görüş alanı kontrollü kalıyor.
+	var target_energy: float = lerpf(0.70, 2.15, depth_t)
+	_hook_light.energy = lerpf(_hook_light.energy, target_energy, 0.16)
+	_hook_light.texture_scale = lerpf(2.05, 2.65, depth_t)
 
 
 func _update_angler_lights() -> void:
@@ -145,15 +163,15 @@ func _ensure_angler_light(fish: Node) -> void:
 		light = PointLight2D.new()
 		light.name = "AnglerNaturalLight"
 		light.texture = _light_texture
-		light.texture_scale = 1.55
-		light.color = Color(1.0, 0.53, 0.16, 1.0)
+		light.texture_scale = 1.65
+		light.color = Color(1.0, 0.46, 0.10, 1.0)
 		light.shadow_enabled = false
 		light.z_index = 21
 		fish_2d.add_child(light)
 
 	var phase: float = float(fish_2d.get_instance_id() % 1000) * 0.013
 	var pulse: float = sin((Time.get_ticks_msec() * 0.001) * 2.6 + phase)
-	light.energy = 1.02 + pulse * 0.18
+	light.energy = 1.45 + pulse * 0.28
 
 
 func _create_radial_light_texture(size: int) -> Texture2D:
@@ -164,7 +182,7 @@ func _create_radial_light_texture(size: int) -> Texture2D:
 	for y: int in range(size):
 		for x: int in range(size):
 			var distance_ratio: float = Vector2(float(x), float(y)).distance_to(center) / radius
-			var intensity: float = pow(clampf(1.0 - distance_ratio, 0.0, 1.0), 2.15)
+			var intensity: float = pow(clampf(1.0 - distance_ratio, 0.0, 1.0), 2.35)
 			image.set_pixel(x, y, Color(intensity, intensity, intensity, 1.0))
 
 	return ImageTexture.create_from_image(image)
