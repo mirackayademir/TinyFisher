@@ -33,6 +33,7 @@ var tension_label: Label
 var tension_hint: Label
 var tension_fill_style: StyleBoxFlat
 var line_break_feedback_timer: float = 0.0
+var line_strength_level: int = 0
 
 @onready var hook_line: Line2D = $"../HookLine"
 @onready var hud = $"../../HUD"
@@ -110,7 +111,6 @@ func _setup_depth_hud() -> void:
 
 func _setup_tension_hud() -> void:
 	# Mücadele sırasında ekranın alt-orta kısmında misina gerilimini gösterir.
-	# FightPanel'den ayrı tutulduğu için mevcut mücadele HUD'una dokunmaz.
 	tension_panel = Panel.new()
 	tension_panel.name = "LineTensionPanel"
 	tension_panel.z_index = 93
@@ -250,8 +250,6 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_line_tension(delta: float) -> void:
-	# Gerilim sadece aktif balık mücadelesi sırasında uygulanır.
-	# Oyuncu sarmayı bıraktığında misina hızla rahatlar.
 	if not is_instance_valid(hooked_fish) or not hud.fight_active:
 		return
 
@@ -272,7 +270,7 @@ func _update_line_tension(delta: float) -> void:
 
 
 func _configure_tension_for_fish(fish_type: String) -> void:
-	# Küçük balıkta affedici, büyük balıkta sarmayı aralıklı yapmayı gerektiren değerler.
+	# Küçük balıklar kolay, büyük balıklar güçlü misina ve kontrollü sarma ister.
 	match fish_type:
 		"Sardalya":
 			tension_gain_rate = 8.0
@@ -287,18 +285,26 @@ func _configure_tension_for_fish(fish_type: String) -> void:
 			tension_recovery_rate = 27.0
 			tension_fish_pull = 6.0
 		"Ton Balığı":
-			tension_gain_rate = 27.0
-			tension_recovery_rate = 24.0
-			tension_fish_pull = 9.0
+			# Başlangıç misinasıyla hâlâ zor; birkaç dayanıklılık seviyesiyle yönetilebilir hale gelir.
+			tension_gain_rate = 25.0
+			tension_recovery_rate = 25.0
+			tension_fish_pull = 8.0
 		_:
 			tension_gain_rate = 14.0
 			tension_recovery_rate = 30.0
 			tension_fish_pull = 4.0
 
-	# Mücadele Desteği geliştirmesi gerilimi de bir miktar affedici yapar.
+	# Mücadele Desteği genel minigame kolaylığını sağlar.
 	var ease_level: int = int(hud.fight_ease_level)
-	tension_gain_rate = maxf(5.0, tension_gain_rate - float(ease_level) * 1.6)
-	tension_recovery_rate += float(ease_level) * 1.5
+	tension_gain_rate = maxf(5.0, tension_gain_rate - float(ease_level) * 1.2)
+	tension_recovery_rate += float(ease_level) * 1.0
+
+	# Misina Dayanıklılığı doğrudan gerilim mekaniğine etki eder.
+	# Her seviye gerilim oluşumunu %8 azaltır ve misinanın daha hızlı rahatlamasını sağlar.
+	var strength_multiplier: float = maxf(0.60, 1.0 - float(line_strength_level) * 0.08)
+	tension_gain_rate *= strength_multiplier
+	tension_fish_pull *= strength_multiplier
+	tension_recovery_rate += float(line_strength_level) * 2.2
 
 	line_tension = 12.0
 	tension_time = 0.0
@@ -376,7 +382,7 @@ func _break_line() -> void:
 		tension_fill_style.bg_color = Color(1.0, 0.16, 0.12, 1.0)
 		tension_label.text = "MİSİNA KOPTU!"
 		tension_label.add_theme_color_override("font_color", Color(1.0, 0.32, 0.26, 1.0))
-		tension_hint.text = "Balık kaçtı — gerilimi kırmızıya taşımamaya çalış"
+		tension_hint.text = "Balık kaçtı — daha güçlü misina kullan veya sarmayı aralıklarla yap"
 
 	_update_depth_hud()
 	_update_line_visual()
@@ -409,13 +415,16 @@ func set_depth_level(level: int) -> void:
 	max_depth = BASE_DEPTH_PIXELS + (float(depth_level) * DEPTH_PER_LEVEL)
 	max_depth_meters = BASE_DEPTH_METERS + (depth_level * DEPTH_METERS_PER_LEVEL)
 
-	# Daha derin geliştirmelerde kamera ve su alanı da yeni erişime uyum sağlar.
 	camera_deep_y = 1420.0 + (float(depth_level) * 300.0)
 	var water := world.get_node_or_null("Water") as ColorRect
 	if water != null:
 		water.offset_bottom = maxf(water.offset_bottom, 2700.0 + (float(depth_level) * 350.0))
 
 	_update_depth_hud()
+
+
+func set_line_strength_level(level: int) -> void:
+	line_strength_level = clampi(level, 0, 5)
 
 
 func land_catch() -> void:
