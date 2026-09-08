@@ -13,6 +13,7 @@ extends Area2D
 @export var angler_target: int = 3
 
 var respawning: bool = false
+var rare_spawn_roll_timer: float = 0.0
 
 const FISH_TYPES: Array[String] = [
 	"Sardalya",
@@ -23,6 +24,10 @@ const FISH_TYPES: Array[String] = [
 	"Köpekbalığı",
 	"Fener Balığı"
 ]
+
+const RARE_FISH_TYPE: String = "Abyssal Leviathan"
+const RARE_SPAWN_CHANCE: float = 0.018
+const RARE_CHECK_INTERVAL: float = 6.0
 
 const SARDINE_SCHOOL_GLOBAL_CENTERS: Array[Vector2] = [
 	Vector2(1350.0, 640.0),
@@ -49,12 +54,18 @@ func _ready() -> void:
 			child.queue_free()
 
 	_spawn_initial_population()
+	rare_spawn_roll_timer = randf_range(2.5, RARE_CHECK_INTERVAL)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not respawning and get_fish_count() < get_target_total():
 		respawning = true
 		respawn_fish()
+
+	rare_spawn_roll_timer -= delta
+	if rare_spawn_roll_timer <= 0.0:
+		rare_spawn_roll_timer = RARE_CHECK_INTERVAL
+		_try_spawn_rare_fish()
 
 
 func get_target_total() -> int:
@@ -72,7 +83,7 @@ func get_target_total() -> int:
 func get_fish_count() -> int:
 	var count: int = 0
 	for child: Node in get_children():
-		if child.has_method("hook_to"):
+		if child.has_method("hook_to") and String(child.get("fish_type")) != RARE_FISH_TYPE:
 			count += 1
 	return count
 
@@ -130,6 +141,14 @@ func respawn_fish() -> void:
 	respawning = false
 
 
+func _try_spawn_rare_fish() -> void:
+	if get_type_count(RARE_FISH_TYPE) > 0:
+		return
+	if randf() > RARE_SPAWN_CHANCE:
+		return
+	spawn_fish_type(RARE_FISH_TYPE, randi())
+
+
 func spawn_fish_type(fish_type: String, index_seed: int = 0) -> void:
 	if fish_scene == null:
 		return
@@ -153,6 +172,8 @@ func spawn_fish_type(fish_type: String, index_seed: int = 0) -> void:
 			_configure_shark(new_fish)
 		"Fener Balığı":
 			_configure_angler(new_fish)
+		RARE_FISH_TYPE:
+			_configure_abyssal_leviathan(new_fish)
 		_:
 			_configure_sardine(new_fish, index_seed)
 
@@ -192,24 +213,28 @@ func _configure_tuna(fish: Node2D) -> void:
 
 
 func _configure_swordfish(fish: Node2D) -> void:
-	# 50 m başlangıç erişiminin hemen altında: oyuncu derinlik yükseltmeye başlamak zorunda.
 	var target_global: Vector2 = Vector2(randf_range(4300.0, 7800.0), randf_range(2150.0, 2450.0))
 	fish.position = _local_from_global(target_global)
 	_set_fish_stats(fish, "Kılıç Balığı", 130, randf_range(72.0, 90.0), randf_range(430.0, 680.0), randf_range(6.0, 8.0))
 
 
 func _configure_shark(fish: Node2D) -> void:
-	# Yaklaşık 70-80 m ve güçlü misina isteyen büyük avcı.
 	var target_global: Vector2 = Vector2(randf_range(5200.0, 9000.0), randf_range(2600.0, 3050.0))
 	fish.position = _local_from_global(target_global)
 	_set_fish_stats(fish, "Köpekbalığı", 220, randf_range(42.0, 55.0), randf_range(560.0, 820.0), randf_range(7.0, 10.0))
 
 
 func _configure_angler(fish: Node2D) -> void:
-	# 90-100 m bandındaki ilk gerçek derin su türü.
 	var target_global: Vector2 = Vector2(randf_range(5900.0, 10000.0), randf_range(3300.0, 3720.0))
 	fish.position = _local_from_global(target_global)
 	_set_fish_stats(fish, "Fener Balığı", 300, randf_range(28.0, 38.0), randf_range(180.0, 330.0), randf_range(10.0, 14.0))
+
+
+func _configure_abyssal_leviathan(fish: Node2D) -> void:
+	# Mevcut 100 m test erişiminde yalnızca en karanlık bantta görülür.
+	var target_global: Vector2 = Vector2(randf_range(6750.0, 9900.0), randf_range(3520.0, 3800.0))
+	fish.position = _local_from_global(target_global)
+	_set_fish_stats(fish, RARE_FISH_TYPE, 1250, randf_range(24.0, 31.0), randf_range(500.0, 820.0), randf_range(12.0, 18.0))
 
 
 func _set_fish_stats(
