@@ -46,6 +46,7 @@ var docked: bool = false
 var money: int = 0
 var money_panel: Panel
 var depth_button: Button
+var line_strength_button: Button
 var fish_book_button: Button
 
 var fish_book_panel: Panel
@@ -61,6 +62,7 @@ var rod_speed_level: int = 0
 var depth_level: int = 0
 var capacity_level: int = 0
 var fight_ease_level: int = 0
+var line_strength_level: int = 0
 
 var _sea_time: float = 0.0
 var _surface_shadow: Line2D
@@ -82,7 +84,7 @@ func _ready() -> void:
 	_setup_harbor()
 	_setup_fish_book_button()
 	_setup_dock_menu()
-	_setup_depth_upgrade_button()
+	_setup_upgrade_buttons()
 	_setup_fish_book_ui()
 	_setup_surface_waves()
 	_setup_money_hud()
@@ -107,8 +109,9 @@ func _setup_harbor() -> void:
 	dock_prompt.size = Vector2(270.0, 38.0)
 	dock_prompt.add_theme_font_size_override("font_size", 18)
 
-	upgrade_menu.position = Vector2(330.0, 30.0)
-	upgrade_menu.size = Vector2(620.0, 500.0)
+	# Altıncı geliştirme satırı için menü biraz uzatılır; liman görseline dokunulmaz.
+	upgrade_menu.position = Vector2(330.0, 18.0)
+	upgrade_menu.size = Vector2(620.0, 565.0)
 
 
 func _setup_fish_book_button() -> void:
@@ -151,28 +154,43 @@ func _setup_dock_menu() -> void:
 		button.add_theme_font_size_override("font_size", 18)
 
 
-func _setup_depth_upgrade_button() -> void:
+func _setup_upgrade_buttons() -> void:
 	depth_button = upgrade_menu.get_node_or_null("DepthButton") as Button
 	if depth_button == null:
 		depth_button = Button.new()
 		depth_button.name = "DepthButton"
 		upgrade_menu.add_child(depth_button)
-
-	depth_button.position = Vector2(42.0, 200.0)
-	depth_button.size = Vector2(376.0, 42.0)
-	depth_button.add_theme_font_size_override("font_size", 16)
 	if not depth_button.pressed.is_connected(_on_depth_button_pressed):
 		depth_button.pressed.connect(_on_depth_button_pressed)
 
-	capacity_button.position = Vector2(42.0, 250.0)
-	capacity_button.size = Vector2(376.0, 42.0)
-	fight_ease_button.position = Vector2(42.0, 300.0)
-	fight_ease_button.size = Vector2(376.0, 42.0)
-	upgrade_info_label.position = Vector2(28.0, 354.0)
-	upgrade_info_label.size = Vector2(404.0, 54.0)
+	line_strength_button = upgrade_menu.get_node_or_null("LineStrengthButton") as Button
+	if line_strength_button == null:
+		line_strength_button = Button.new()
+		line_strength_button.name = "LineStrengthButton"
+		upgrade_menu.add_child(line_strength_button)
+	if not line_strength_button.pressed.is_connected(_on_line_strength_button_pressed):
+		line_strength_button.pressed.connect(_on_line_strength_button_pressed)
+
+	var upgrade_buttons: Array[Button] = [
+		boat_speed_button,
+		rod_speed_button,
+		depth_button,
+		capacity_button,
+		fight_ease_button,
+		line_strength_button
+	]
+	for i: int in range(upgrade_buttons.size()):
+		var button: Button = upgrade_buttons[i]
+		button.position = Vector2(60.0, 100.0 + float(i) * 50.0)
+		button.size = Vector2(500.0, 42.0)
+		button.add_theme_font_size_override("font_size", 16)
+
+	upgrade_info_label.position = Vector2(60.0, 405.0)
+	upgrade_info_label.size = Vector2(500.0, 62.0)
 	upgrade_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	upgrade_back_button.position = Vector2(150.0, 420.0)
-	upgrade_back_button.size = Vector2(160.0, 34.0)
+	upgrade_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	upgrade_back_button.position = Vector2(230.0, 490.0)
+	upgrade_back_button.size = Vector2(160.0, 36.0)
 
 
 func _setup_fish_book_ui() -> void:
@@ -610,6 +628,10 @@ func _on_fight_ease_button_pressed() -> void:
 	_buy_upgrade("fight_ease")
 
 
+func _on_line_strength_button_pressed() -> void:
+	_buy_upgrade("line_strength")
+
+
 func _buy_upgrade(key: String) -> void:
 	if not docked:
 		return
@@ -642,6 +664,8 @@ func _get_upgrade_level(key: String) -> int:
 			return capacity_level
 		"fight_ease":
 			return fight_ease_level
+		"line_strength":
+			return line_strength_level
 		_:
 			return 0
 
@@ -658,12 +682,15 @@ func _set_upgrade_level(key: String, level: int) -> void:
 			capacity_level = level
 		"fight_ease":
 			fight_ease_level = level
+		"line_strength":
+			line_strength_level = level
 
 
 func _apply_upgrades() -> void:
 	boat.set_speed_level(boat_speed_level)
 	hook.set_reel_speed_level(rod_speed_level)
 	hook.set_depth_level(depth_level)
+	hook.set_line_strength_level(line_strength_level)
 	hud.set_capacity_level(capacity_level)
 	hud.set_fight_ease_level(fight_ease_level)
 
@@ -678,16 +705,20 @@ func _refresh_upgrade_menu() -> void:
 	depth_button.text = _depth_upgrade_button_text(depth_level)
 	capacity_button.text = _upgrade_button_text("Tekne Ambarı", capacity_level)
 	fight_ease_button.text = _upgrade_button_text("Mücadele Desteği", fight_ease_level)
+	line_strength_button.text = _upgrade_button_text("Misina Dayanıklılığı", line_strength_level)
 
 	boat_speed_button.disabled = not _can_afford_level(boat_speed_level)
 	rod_speed_button.disabled = not _can_afford_level(rod_speed_level)
 	depth_button.disabled = not _can_afford_level(depth_level)
 	capacity_button.disabled = not _can_afford_level(capacity_level)
 	fight_ease_button.disabled = not _can_afford_level(fight_ease_level)
+	line_strength_button.disabled = not _can_afford_level(line_strength_level)
 
+	var tension_reduction_percent: int = line_strength_level * 8
 	upgrade_info_label.text = (
-		"Olta erişimi: " + str(_current_depth_meters()) + " m. "
-		+ "Derinlik geliştirmesi her seviyede +" + str(DEPTH_METERS_PER_LEVEL) + " m kazandırır."
+		"Olta erişimi: " + str(_current_depth_meters()) + " m.  "
+		+ "Misina Sv." + str(line_strength_level) + "/5: gerilim artışı -%"
+		+ str(tension_reduction_percent) + "."
 	)
 
 
