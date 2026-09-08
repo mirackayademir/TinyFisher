@@ -239,7 +239,7 @@ func _setup_bait_hud() -> void:
 		_bait_panel = Panel.new()
 		_bait_panel.name = "BaitPanel"
 		_bait_panel.z_index = 250
-		_bait_panel.position = Vector2(14.0, 98.0)
+		_bait_panel.position = Vector2(720.0, 540.0)
 		_bait_panel.size = Vector2(545.0, 86.0)
 		_bait_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_hud.add_child(_bait_panel)
@@ -297,7 +297,14 @@ func _setup_bait_hud() -> void:
 
 
 func _update_bait_hud() -> void:
-	if _bait_title == null or _bait_options == null or _bait_feedback == null:
+	if _bait_panel == null or _bait_title == null or _bait_options == null or _bait_feedback == null:
+		return
+
+	# Mücadele sırasında yem seçimi kullanılamadığı için paneli gizle.
+	# Böylece Fight HUD ve Misina Gerilimi HUD'u ile hiçbir zaman çakışmaz.
+	var fight_active: bool = _hook != null and _hook.get("hooked_fish") != null
+	_bait_panel.visible = not fight_active
+	if fight_active:
 		return
 
 	var target_text: String = ""
