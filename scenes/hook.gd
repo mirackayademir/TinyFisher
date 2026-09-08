@@ -21,6 +21,19 @@ var max_depth_meters: int = BASE_DEPTH_METERS
 var depth_panel: Panel
 var depth_label: Label
 
+# Misina gerilimi sistemi.
+var line_tension: float = 0.0
+var tension_gain_rate: float = 15.0
+var tension_recovery_rate: float = 28.0
+var tension_fish_pull: float = 4.0
+var tension_time: float = 0.0
+var tension_panel: Panel
+var tension_bar: ProgressBar
+var tension_label: Label
+var tension_hint: Label
+var tension_fill_style: StyleBoxFlat
+var line_break_feedback_timer: float = 0.0
+
 @onready var hook_line: Line2D = $"../HookLine"
 @onready var hud = $"../../HUD"
 @onready var camera: Camera2D = $"../Camera2D"
@@ -49,7 +62,9 @@ func _ready() -> void:
 	camera.position = Vector2(350.0, camera_surface_y)
 
 	_setup_depth_hud()
+	_setup_tension_hud()
 	_update_depth_hud()
+	_update_tension_hud()
 
 
 func _setup_depth_hud() -> void:
@@ -93,6 +108,92 @@ func _setup_depth_hud() -> void:
 	depth_panel.add_child(depth_label)
 
 
+func _setup_tension_hud() -> void:
+	# Mücadele sırasında ekranın alt-orta kısmında misina gerilimini gösterir.
+	# FightPanel'den ayrı tutulduğu için mevcut mücadele HUD'una dokunmaz.
+	tension_panel = Panel.new()
+	tension_panel.name = "LineTensionPanel"
+	tension_panel.z_index = 93
+	tension_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(tension_panel)
+
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.018, 0.045, 0.075, 0.94)
+	panel_style.border_color = Color(0.20, 0.64, 0.76, 0.95)
+	panel_style.border_width_left = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_bottom = 2
+	panel_style.corner_radius_top_left = 8
+	panel_style.corner_radius_top_right = 8
+	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_bottom_right = 8
+	tension_panel.add_theme_stylebox_override("panel", panel_style)
+
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	tension_panel.size = Vector2(390.0, 82.0)
+	tension_panel.position = Vector2((viewport_size.x - tension_panel.size.x) * 0.5, 214.0)
+	tension_panel.visible = false
+
+	tension_label = Label.new()
+	tension_label.name = "TensionLabel"
+	tension_label.position = Vector2(14.0, 7.0)
+	tension_label.size = Vector2(362.0, 24.0)
+	tension_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tension_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	tension_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tension_label.add_theme_font_size_override("font_size", 17)
+	tension_label.add_theme_color_override("font_color", Color(0.84, 0.95, 1.0, 1.0))
+	tension_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
+	tension_label.add_theme_constant_override("shadow_offset_x", 1)
+	tension_label.add_theme_constant_override("shadow_offset_y", 1)
+	tension_panel.add_child(tension_label)
+
+	tension_bar = ProgressBar.new()
+	tension_bar.name = "TensionBar"
+	tension_bar.position = Vector2(18.0, 34.0)
+	tension_bar.size = Vector2(354.0, 20.0)
+	tension_bar.min_value = 0.0
+	tension_bar.max_value = 100.0
+	tension_bar.value = 0.0
+	tension_bar.show_percentage = false
+	tension_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var bar_bg: StyleBoxFlat = StyleBoxFlat.new()
+	bar_bg.bg_color = Color(0.025, 0.08, 0.11, 1.0)
+	bar_bg.border_color = Color(0.10, 0.27, 0.34, 1.0)
+	bar_bg.border_width_left = 1
+	bar_bg.border_width_top = 1
+	bar_bg.border_width_right = 1
+	bar_bg.border_width_bottom = 1
+	bar_bg.corner_radius_top_left = 5
+	bar_bg.corner_radius_top_right = 5
+	bar_bg.corner_radius_bottom_left = 5
+	bar_bg.corner_radius_bottom_right = 5
+	tension_bar.add_theme_stylebox_override("background", bar_bg)
+
+	tension_fill_style = StyleBoxFlat.new()
+	tension_fill_style.bg_color = Color(0.20, 0.82, 0.50, 0.96)
+	tension_fill_style.corner_radius_top_left = 4
+	tension_fill_style.corner_radius_top_right = 4
+	tension_fill_style.corner_radius_bottom_left = 4
+	tension_fill_style.corner_radius_bottom_right = 4
+	tension_bar.add_theme_stylebox_override("fill", tension_fill_style)
+	tension_panel.add_child(tension_bar)
+
+	tension_hint = Label.new()
+	tension_hint.name = "TensionHint"
+	tension_hint.position = Vector2(12.0, 57.0)
+	tension_hint.size = Vector2(366.0, 18.0)
+	tension_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tension_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	tension_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tension_hint.text = "Gerilim yükselirse sarmayı bırak ve misinayı dinlendir"
+	tension_hint.add_theme_font_size_override("font_size", 12)
+	tension_hint.add_theme_color_override("font_color", Color(0.70, 0.84, 0.89, 0.92))
+	tension_panel.add_child(tension_hint)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 		deploy()
@@ -113,8 +214,19 @@ func _physics_process(delta: float) -> void:
 	if Input.is_physical_key_pressed(KEY_S):
 		deploy()
 
+	if line_break_feedback_timer > 0.0:
+		line_break_feedback_timer -= delta
+		if line_break_feedback_timer <= 0.0 and tension_panel != null:
+			tension_panel.visible = false
+
 	if deployed:
 		if is_instance_valid(hooked_fish):
+			_update_line_tension(delta)
+			if not deployed:
+				_update_line_visual()
+				_update_depth_hud()
+				return
+
 			if hud.is_fight_won() and is_reeling():
 				position.y -= reel_speed * delta
 		else:
@@ -131,8 +243,143 @@ func _physics_process(delta: float) -> void:
 
 	hook_line.set_point_position(0, boat.get_line_origin_local())
 	hook_line.set_point_position(1, position)
+	_update_line_visual()
 	update_camera(delta)
 	_update_depth_hud()
+	_update_tension_hud()
+
+
+func _update_line_tension(delta: float) -> void:
+	# Gerilim sadece aktif balık mücadelesi sırasında uygulanır.
+	# Oyuncu sarmayı bıraktığında misina hızla rahatlar.
+	if not is_instance_valid(hooked_fish) or not hud.fight_active:
+		return
+
+	tension_time += delta
+	var pull_wave: float = 0.55 + absf(sin(tension_time * 3.1)) * 0.75
+	var reeling: bool = is_reeling()
+
+	if reeling:
+		line_tension += (tension_gain_rate + tension_fish_pull * pull_wave) * delta
+	else:
+		line_tension -= tension_recovery_rate * delta
+
+	line_tension = clampf(line_tension, 0.0, 100.0)
+	_update_tension_hud()
+
+	if line_tension >= 100.0:
+		_break_line()
+
+
+func _configure_tension_for_fish(fish_type: String) -> void:
+	# Küçük balıkta affedici, büyük balıkta sarmayı aralıklı yapmayı gerektiren değerler.
+	match fish_type:
+		"Sardalya":
+			tension_gain_rate = 8.0
+			tension_recovery_rate = 34.0
+			tension_fish_pull = 2.0
+		"Levrek":
+			tension_gain_rate = 14.0
+			tension_recovery_rate = 30.0
+			tension_fish_pull = 4.0
+		"Uskumru":
+			tension_gain_rate = 20.0
+			tension_recovery_rate = 27.0
+			tension_fish_pull = 6.0
+		"Ton Balığı":
+			tension_gain_rate = 27.0
+			tension_recovery_rate = 24.0
+			tension_fish_pull = 9.0
+		_:
+			tension_gain_rate = 14.0
+			tension_recovery_rate = 30.0
+			tension_fish_pull = 4.0
+
+	# Mücadele Desteği geliştirmesi gerilimi de bir miktar affedici yapar.
+	var ease_level: int = int(hud.fight_ease_level)
+	tension_gain_rate = maxf(5.0, tension_gain_rate - float(ease_level) * 1.6)
+	tension_recovery_rate += float(ease_level) * 1.5
+
+	line_tension = 12.0
+	tension_time = 0.0
+	line_break_feedback_timer = 0.0
+	_update_tension_hud()
+
+
+func _update_tension_hud() -> void:
+	if tension_panel == null or tension_bar == null or tension_label == null:
+		return
+
+	if line_break_feedback_timer > 0.0:
+		tension_panel.visible = true
+		return
+
+	var show_tension: bool = deployed and is_instance_valid(hooked_fish) and hud.fight_active
+	tension_panel.visible = show_tension
+	if not show_tension:
+		return
+
+	tension_bar.value = line_tension
+	tension_label.text = "MİSİNA GERİLİMİ  %d%%" % int(round(line_tension))
+
+	if line_tension < 55.0:
+		tension_fill_style.bg_color = Color(0.20, 0.82, 0.50, 0.96)
+		tension_label.add_theme_color_override("font_color", Color(0.80, 0.96, 0.88, 1.0))
+		tension_hint.text = "Güvenli — balığı kontrollü şekilde sar"
+	elif line_tension < 82.0:
+		tension_fill_style.bg_color = Color(0.96, 0.72, 0.18, 0.98)
+		tension_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.48, 1.0))
+		tension_hint.text = "DİKKAT — kısa süre sarmayı bırak"
+	else:
+		tension_fill_style.bg_color = Color(0.96, 0.22, 0.16, 1.0)
+		tension_label.add_theme_color_override("font_color", Color(1.0, 0.42, 0.34, 1.0))
+		tension_hint.text = "TEHLİKE — misina kopmak üzere!"
+
+
+func _update_line_visual() -> void:
+	if hook_line == null:
+		return
+
+	if is_instance_valid(hooked_fish) and hud.fight_active:
+		var ratio: float = clampf(line_tension / 100.0, 0.0, 1.0)
+		hook_line.width = lerpf(2.0, 3.2, ratio)
+		if line_tension < 55.0:
+			hook_line.default_color = Color(0.88, 0.94, 0.97, 0.96)
+		elif line_tension < 82.0:
+			hook_line.default_color = Color(1.0, 0.82, 0.38, 0.98)
+		else:
+			var pulse: float = 0.72 + absf(sin(tension_time * 10.0)) * 0.28
+			hook_line.default_color = Color(1.0, 0.25, 0.18, pulse)
+	else:
+		hook_line.width = 2.0
+		hook_line.default_color = Color(0.88, 0.92, 0.95, 0.95)
+
+
+func _break_line() -> void:
+	if not deployed:
+		return
+
+	if is_instance_valid(hooked_fish):
+		hooked_fish.release_from_hook()
+
+	hooked_fish = null
+	deployed = false
+	position = start_position
+	hud.reset_fight()
+	boat.set_movement_enabled(not world.docked)
+
+	line_tension = 100.0
+	line_break_feedback_timer = 1.15
+	if tension_panel != null and tension_label != null and tension_bar != null:
+		tension_panel.visible = true
+		tension_bar.value = 100.0
+		tension_fill_style.bg_color = Color(1.0, 0.16, 0.12, 1.0)
+		tension_label.text = "MİSİNA KOPTU!"
+		tension_label.add_theme_color_override("font_color", Color(1.0, 0.32, 0.26, 1.0))
+		tension_hint.text = "Balık kaçtı — gerilimi kırmızıya taşımamaya çalış"
+
+	_update_depth_hud()
+	_update_line_visual()
 
 
 func _update_depth_hud() -> void:
@@ -183,7 +430,10 @@ func land_catch() -> void:
 	position = start_position
 	hud.reset_fight()
 	boat.set_movement_enabled(not world.docked)
+	line_tension = 0.0
+	line_break_feedback_timer = 0.0
 	_update_depth_hud()
+	_update_tension_hud()
 
 
 func update_camera(delta: float) -> void:
@@ -199,4 +449,6 @@ func _on_hook_area_entered(area: Area2D) -> void:
 	if area.has_method("hook_to") and not area.is_hooked and hud.can_add_fish():
 		hooked_fish = area
 		area.hook_to(self)
+		_configure_tension_for_fish(area.fish_type)
 		hud.show_fight_bar(area.fish_type)
+		_update_tension_hud()
