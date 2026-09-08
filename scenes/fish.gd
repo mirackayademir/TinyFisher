@@ -23,6 +23,17 @@ var swim_wave_angle: float = 3.0
 var swim_phase: float = 0.0
 var base_sprite_scale: Vector2 = Vector2.ONE
 
+# Türlere özel davranış sistemi.
+var behavior_time: float = 0.0
+var decision_timer: float = 0.0
+var behavior_state: int = 0
+var behavior_speed_multiplier: float = 1.0
+var behavior_range_multiplier: float = 1.0
+var behavior_vertical_offset: float = 0.0
+var behavior_vertical_target: float = 0.0
+var sardine_school_key: int = 0
+var world_hook: Area2D = null
+
 const SARDALYA_TEXTURE = preload("res://assets/sardalya.png")
 const LEVREK_TEXTURE = preload("res://assets/levrek2.png")
 const USKUMRU_TEXTURE = preload("res://assets/uskumru.png")
@@ -35,6 +46,13 @@ func _ready() -> void:
 	start_x = global_position.x
 	start_y = global_position.y
 	swim_phase = randf_range(0.0, TAU)
+	sardine_school_key = int(round(start_x / 800.0))
+	decision_timer = randf_range(0.35, 1.25)
+
+	var scene_root: Node = get_tree().current_scene
+	if scene_root != null:
+		world_hook = scene_root.get_node_or_null("Boat/Hook") as Area2D
+
 	update_fish_visual()
 	update_sprite_direction()
 
@@ -50,21 +68,182 @@ func _physics_process(delta: float) -> void:
 			release_from_hook()
 		return
 
+	behavior_time += delta
+	decision_timer -= delta
+	update_species_behavior(delta)
 	update_swim_animation(delta)
 
-	global_position.x += swim_speed * direction * delta
+	global_position.x += swim_speed * behavior_speed_multiplier * direction * delta
 
-	if global_position.x >= start_x + swim_distance:
-		global_position.x = start_x + swim_distance
+	var active_swim_distance: float = swim_distance * behavior_range_multiplier
+	if global_position.x >= start_x + active_swim_distance:
+		global_position.x = start_x + active_swim_distance
 		direction = -1.0
 		update_sprite_direction()
 		play_turn_animation()
 
-	elif global_position.x <= start_x - swim_distance:
-		global_position.x = start_x - swim_distance
+	elif global_position.x <= start_x - active_swim_distance:
+		global_position.x = start_x - active_swim_distance
 		direction = 1.0
 		update_sprite_direction()
 		play_turn_animation()
+
+
+func update_species_behavior(delta: float) -> void:
+	behavior_speed_multiplier = 1.0
+	behavior_range_multiplier = 1.0
+	behavior_vertical_target = 0.0
+
+	match fish_type:
+		"Sardalya":
+			_update_sardine_behavior()
+		"Levrek":
+			_update_levrek_behavior()
+		"Uskumru":
+			_update_uskumru_behavior()
+		"Ton Balığı":
+			_update_tuna_behavior()
+		_:
+			behavior_speed_multiplier = 1.0
+
+	behavior_vertical_offset = move_toward(
+		behavior_vertical_offset,
+		behavior_vertical_target,
+		42.0 * delta
+	)
+
+
+func _update_sardine_behavior() -> void:
+	# Sardalyalar aynı bölgedeki sürüyle beraber yön değiştirir.
+	# Aynı school_key'e sahip balıkların dalga fazı aynıdır, bu yüzden grup dağılmadan hareket eder.
+	var school_wave: float = sin(behavior_time * 0.72 + float(sardine_school_key) * 1.35)
+	var wanted_direction: float = 1.0 if school_wave >= 0.0 else -1.0
+
+	if wanted_direction != direction and absf(school_wave) > 0.12:
+		direction = wanted_direction
+		update_sprite_direction()
+
+	behavior_speed_multiplier = 0.90 + absf(sin(behavior_time * 1.7 + swim_phase)) * 0.18
+	behavior_range_multiplier = 0.95
+	behavior_vertical_target = sin(behavior_time * 0.9 + float(sardine_school_key)) * 4.0
+
+	# Kanca sürünün tam içine girerse hafifçe ürkerler; küçük balık oldukları için kaçış kısa sürer.
+	if _hook_is_active():
+		var hook_distance: float = global_position.distance_to(world_hook.global_position)
+		if hook_distance < 92.0:
+			direction = -1.0 if world_hook.global_position.x > global_position.x else 1.0
+			behavior_speed_multiplier = 1.35
+			behavior_range_multiplier = 1.18
+			behavior_vertical_target = clampf(
+				(global_position.y - world_hook.global_position.y) * 0.32,
+				-18.0,
+				18.0
+			)
+			update_sprite_direction()
+
+
+func _update_levrek_behavior() -> void:
+	# Levrek meraklıdır: kancayı görür, yaklaşır, bazen tereddüt edip geri döner.
+	behavior_speed_multiplier = 0.72 + absf(sin(behavior_time * 1.25 + swim_phase)) * 0.22
+	behavior_vertical_target = sin(behavior_time * 0.62 + swim_phase) * 7.0
+
+	if not _hook_is_active():
+		behavior_state = 0
+		return
+
+	var hook_distance: float = global_position.distance_to(world_hook.global_position)
+	if hook_distance > 285.0:
+		behavior_state = 0
+		return
+
+	if decision_timer <= 0.0:
+		# Çoğu zaman yeme/kancaya yaklaşır, bazen kısa süreli ürküp geri kaçar.
+		behavior_state = 1 if randf() < 0.72 else 2
+		decision_timer = randf_range(0.65, 1.35)
+
+	if behavior_state == 1:
+		direction = 1.0 if world_hook.global_position.x > global_position.x else -1.0
+		behavior_speed_multiplier = 0.82
+		behavior_range_multiplier = 1.35
+		behavior_vertical_target = clampf(
+			world_hook.global_position.y - start_y,
+			-95.0,
+			95.0
+		)
+		update_sprite_direction()
+	elif behavior_state == 2:
+		direction = -1.0 if world_hook.global_position.x > global_position.x else 1.0
+		behavior_speed_multiplier = 0.52
+		behavior_range_multiplier = 1.12
+		behavior_vertical_target = clampf(
+			(start_y - world_hook.global_position.y) * 0.12,
+			-22.0,
+			22.0
+		)
+		update_sprite_direction()
+
+
+func _update_uskumru_behavior() -> void:
+	# Uskumru uzun süre düz hızda gitmez; süratli kısa deparlar ve keskin yön değişimleri yapar.
+	var burst_wave: float = sin(behavior_time * 2.45 + swim_phase)
+	behavior_speed_multiplier = 1.72 if burst_wave > 0.48 else 0.92
+	behavior_vertical_target = sin(behavior_time * 2.0 + swim_phase) * 12.0
+	behavior_range_multiplier = 1.15
+
+	if decision_timer <= 0.0:
+		if randf() < 0.28:
+			direction *= -1.0
+			update_sprite_direction()
+			play_turn_animation()
+		decision_timer = randf_range(0.75, 1.65)
+
+	# Kanca çok yakınsa ani bir yan kaçış yapabilir; tamamen kaçmaz, hâlâ yakalanabilir.
+	if _hook_is_active():
+		var hook_distance: float = global_position.distance_to(world_hook.global_position)
+		if hook_distance < 105.0 and randf() < 0.018:
+			direction = -1.0 if world_hook.global_position.x > global_position.x else 1.0
+			behavior_speed_multiplier = 1.95
+			behavior_vertical_target = clampf(
+				(global_position.y - world_hook.global_position.y) * 0.38,
+				-28.0,
+				28.0
+			)
+			update_sprite_direction()
+
+
+func _update_tuna_behavior() -> void:
+	# Ton balığı normalde ağır ve kararlı gezer; uygun hedef görünce güçlü bir hamle yapar.
+	var surge_wave: float = sin(behavior_time * 1.15 + swim_phase)
+	behavior_speed_multiplier = 1.48 if surge_wave > 0.72 else 0.86
+	behavior_vertical_target = sin(behavior_time * 0.48 + swim_phase) * 10.0
+	behavior_range_multiplier = 1.20
+
+	if not _hook_is_active():
+		return
+
+	var hook_distance: float = global_position.distance_to(world_hook.global_position)
+	if hook_distance < 360.0:
+		direction = 1.0 if world_hook.global_position.x > global_position.x else -1.0
+		behavior_speed_multiplier = 1.34
+		behavior_range_multiplier = 1.75
+		behavior_vertical_target = clampf(
+			world_hook.global_position.y - start_y,
+			-135.0,
+			135.0
+		)
+		update_sprite_direction()
+
+		# Kancaya iyice yaklaştığında saldırı hamlesi yapar.
+		if hook_distance < 135.0:
+			behavior_speed_multiplier = 1.72
+
+
+func _hook_is_active() -> bool:
+	if not is_instance_valid(world_hook):
+		return false
+
+	var deployed_value: Variant = world_hook.get("deployed")
+	return deployed_value is bool and deployed_value == true
 
 
 func update_swim_animation(delta: float) -> void:
@@ -73,17 +252,17 @@ func update_swim_animation(delta: float) -> void:
 	var wave: float = sin(swim_wave_time + swim_phase)
 	var slow_wave: float = sin(swim_wave_time * 0.55 + swim_phase)
 
-	# Balığın tamamını sallamak yerine küçük gövde salınımı + dikey yüzüş.
+	# Tür davranışından gelen hareket, küçük gövde salınımıyla birleşir.
 	fish_sprite.rotation = deg_to_rad(wave * swim_wave_angle * 0.42)
 	fish_sprite.skew = wave * 0.035
 	fish_sprite.scale = Vector2(
-		base_sprite_scale.x * (1.0 + abs(wave) * 0.018),
-		base_sprite_scale.y * (1.0 - abs(wave) * 0.025)
+		base_sprite_scale.x * (1.0 + absf(wave) * 0.018),
+		base_sprite_scale.y * (1.0 - absf(wave) * 0.025)
 	)
-	global_position.y = start_y + slow_wave * bob_height
+	global_position.y = start_y + behavior_vertical_offset + slow_wave * bob_height
 
 	# Derine indikçe balık biraz daha mavi ve karanlık görünür.
-	var depth_ratio := clampf((global_position.y - 360.0) / 900.0, 0.0, 1.0)
+	var depth_ratio: float = clampf((global_position.y - 360.0) / 900.0, 0.0, 1.0)
 	fish_sprite.modulate = Color(
 		lerpf(1.0, 0.68, depth_ratio),
 		lerpf(1.0, 0.84, depth_ratio),
@@ -139,7 +318,7 @@ func update_sprite_direction() -> void:
 
 
 func play_turn_animation() -> void:
-	var tween := create_tween()
+	var tween: Tween = create_tween()
 	tween.set_trans(Tween.TRANS_SINE)
 	tween.set_ease(Tween.EASE_OUT)
 	tween.tween_property(fish_sprite, "scale:y", base_sprite_scale.y * 0.78, 0.08)
@@ -147,7 +326,7 @@ func play_turn_animation() -> void:
 
 
 func play_hooked_animation() -> void:
-	var tween := create_tween()
+	var tween: Tween = create_tween()
 	tween.set_trans(Tween.TRANS_SINE)
 	tween.set_ease(Tween.EASE_IN_OUT)
 
@@ -157,7 +336,7 @@ func play_hooked_animation() -> void:
 	tween.tween_property(fish_sprite, "rotation", deg_to_rad(-11.0), 0.06)
 	tween.tween_property(fish_sprite, "rotation", 0.0, 0.08)
 
-	var flash := create_tween()
+	var flash: Tween = create_tween()
 	flash.tween_property(fish_sprite, "modulate", Color(1.5, 1.5, 1.15, 1.0), 0.08)
 	flash.tween_property(fish_sprite, "modulate", Color.WHITE, 0.18)
 
@@ -179,6 +358,9 @@ func release_from_hook() -> void:
 	hook_ref = null
 	start_x = global_position.x
 	start_y = global_position.y
+	behavior_vertical_offset = 0.0
+	behavior_vertical_target = 0.0
+	behavior_state = 0
 	fish_sprite.rotation = 0.0
 	fish_sprite.skew = 0.0
 	fish_sprite.scale = base_sprite_scale
