@@ -2,10 +2,23 @@ extends CanvasLayer
 
 @export var max_fish_capacity: int = 8
 
-const SARDALYA_TEXTURE = preload("res://assets/sardalya.png")
-const LEVREK_TEXTURE = preload("res://assets/levrek2.png")
-const USKUMRU_TEXTURE = preload("res://assets/uskumru.png")
-const TON_BALIGI_TEXTURE = preload("res://assets/tonbaligi.png")
+const FISH_ORDER: Array[String] = [
+	"Sardalya",
+	"Levrek",
+	"Uskumru",
+	"Ton Balığı",
+	"Kılıç Balığı",
+	"Köpekbalığı",
+	"Fener Balığı"
+]
+
+const SARDALYA_TEXTURE: Texture2D = preload("res://assets/sardalya.png")
+const LEVREK_TEXTURE: Texture2D = preload("res://assets/levrek2.png")
+const USKUMRU_TEXTURE: Texture2D = preload("res://assets/uskumru.png")
+const TON_BALIGI_TEXTURE: Texture2D = preload("res://assets/tonbaligi.png")
+const KILIC_BALIGI_TEXTURE: Texture2D = preload("res://assets/kilic_baligi.svg")
+const KOPEKBALIGI_TEXTURE: Texture2D = preload("res://assets/kopekbaligi.svg")
+const FENER_BALIGI_TEXTURE: Texture2D = preload("res://assets/fener_baligi.svg")
 
 @onready var inventory_panel: Panel = $InventoryPanel
 @onready var inventory_slots: HBoxContainer = $InventoryPanel/InventorySlots
@@ -52,11 +65,19 @@ var _fight_hint: Label
 var _catch_status: Label
 var _catch_sparks: Array = []
 
+var inventory_slots_by_type: Dictionary = {}
+var inventory_icons_by_type: Dictionary = {}
+var inventory_labels_by_type: Dictionary = {}
+var discovery_state: Dictionary = {}
+
 var inventory: Dictionary = {
 	"Sardalya": 0,
 	"Levrek": 0,
 	"Uskumru": 0,
-	"Ton Balığı": 0
+	"Ton Balığı": 0,
+	"Kılıç Balığı": 0,
+	"Köpekbalığı": 0,
+	"Fener Balığı": 0
 }
 
 
@@ -64,8 +85,10 @@ func _ready() -> void:
 	_setup_inventory_visuals()
 	update_inventory()
 
-	for control in find_children("*", "Control", true, false):
-		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for control: Node in find_children("*", "Control", true, false):
+		var ui_control: Control = control as Control
+		if ui_control != null:
+			ui_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	_setup_fight_visuals()
 	_setup_catch_visuals()
@@ -77,10 +100,10 @@ func _ready() -> void:
 
 func _setup_inventory_visuals() -> void:
 	inventory_panel.position = Vector2(14.0, 14.0)
-	inventory_panel.size = Vector2(310.0, 78.0)
+	inventory_panel.size = Vector2(532.0, 78.0)
 	inventory_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var panel_style := StyleBoxFlat.new()
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.018, 0.055, 0.09, 0.90)
 	panel_style.border_color = Color(0.18, 0.48, 0.62, 0.92)
 	panel_style.border_width_left = 2
@@ -94,43 +117,94 @@ func _setup_inventory_visuals() -> void:
 	inventory_panel.add_theme_stylebox_override("panel", panel_style)
 
 	inventory_slots.position = Vector2(7.0, 7.0)
+	inventory_slots.size = Vector2(518.0, 64.0)
 	inventory_slots.add_theme_constant_override("separation", 6)
 
-	var slots: Array[Panel] = [slot_1, slot_2, slot_3, slot_4]
-	var icons: Array[TextureRect] = [fish_icon_1, fish_icon_2, fish_icon_3, fish_icon_4]
-	var labels: Array[Label] = [count_label_1, count_label_2, count_label_3, count_label_4]
-	var textures: Array[Texture2D] = [SARDALYA_TEXTURE, LEVREK_TEXTURE, USKUMRU_TEXTURE, TON_BALIGI_TEXTURE]
+	_register_inventory_slot("Sardalya", slot_1, fish_icon_1, count_label_1)
+	_register_inventory_slot("Levrek", slot_2, fish_icon_2, count_label_2)
+	_register_inventory_slot("Uskumru", slot_3, fish_icon_3, count_label_3)
+	_register_inventory_slot("Ton Balığı", slot_4, fish_icon_4, count_label_4)
 
-	for i in range(4):
-		var slot := slots[i]
-		var icon := icons[i]
-		var label := labels[i]
+	for fish_type: String in ["Kılıç Balığı", "Köpekbalığı", "Fener Balığı"]:
+		var runtime_slot: Panel = _create_runtime_inventory_slot(fish_type)
+		var runtime_icon: TextureRect = runtime_slot.get_node("FishIcon") as TextureRect
+		var runtime_label: Label = runtime_slot.get_node("CountLabel") as Label
+		_register_inventory_slot(fish_type, runtime_slot, runtime_icon, runtime_label)
 
-		slot.custom_minimum_size = Vector2(68.0, 64.0)
-		var slot_style := StyleBoxFlat.new()
-		slot_style.bg_color = Color(0.025, 0.09, 0.14, 0.92)
-		slot_style.border_color = Color(0.16, 0.34, 0.43, 0.95)
-		slot_style.border_width_left = 2
-		slot_style.border_width_top = 2
-		slot_style.border_width_right = 2
-		slot_style.border_width_bottom = 2
-		slot_style.corner_radius_top_left = 5
-		slot_style.corner_radius_top_right = 5
-		slot_style.corner_radius_bottom_left = 5
-		slot_style.corner_radius_bottom_right = 5
-		slot.add_theme_stylebox_override("panel", slot_style)
+	for fish_type: String in FISH_ORDER:
+		discovery_state[fish_type] = false
+	_update_inventory_slot_visibility()
 
-		icon.texture = textures[i]
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		icon.modulate = Color(1.08, 1.08, 1.08, 1.0)
 
-		label.add_theme_font_size_override("font_size", 18)
-		label.add_theme_color_override("font_color", Color.WHITE)
-		label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
-		label.add_theme_constant_override("shadow_offset_x", 2)
-		label.add_theme_constant_override("shadow_offset_y", 2)
+func _create_runtime_inventory_slot(fish_type: String) -> Panel:
+	var slot: Panel = Panel.new()
+	slot.name = fish_type.replace(" ", "") + "Slot"
+	inventory_slots.add_child(slot)
+
+	var icon: TextureRect = TextureRect.new()
+	icon.name = "FishIcon"
+	slot.add_child(icon)
+
+	var count_label: Label = Label.new()
+	count_label.name = "CountLabel"
+	slot.add_child(count_label)
+
+	return slot
+
+
+func _register_inventory_slot(fish_type: String, slot: Panel, icon: TextureRect, label: Label) -> void:
+	inventory_slots_by_type[fish_type] = slot
+	inventory_icons_by_type[fish_type] = icon
+	inventory_labels_by_type[fish_type] = label
+
+	slot.custom_minimum_size = Vector2(68.0, 64.0)
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var slot_style: StyleBoxFlat = StyleBoxFlat.new()
+	slot_style.bg_color = Color(0.025, 0.09, 0.14, 0.92)
+	slot_style.border_color = Color(0.16, 0.34, 0.43, 0.95)
+	slot_style.border_width_left = 2
+	slot_style.border_width_top = 2
+	slot_style.border_width_right = 2
+	slot_style.border_width_bottom = 2
+	slot_style.corner_radius_top_left = 5
+	slot_style.corner_radius_top_right = 5
+	slot_style.corner_radius_bottom_left = 5
+	slot_style.corner_radius_bottom_right = 5
+	slot.add_theme_stylebox_override("panel", slot_style)
+
+	icon.position = Vector2(4.0, 3.0)
+	icon.size = Vector2(60.0, 54.0)
+	icon.texture = _get_fish_texture(fish_type)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.modulate = Color(1.08, 1.08, 1.08, 1.0)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	label.position = Vector2(2.0, 40.0)
+	label.size = Vector2(64.0, 22.0)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("font_size", 17)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+
+
+func set_discovery_state(states: Dictionary) -> void:
+	for fish_type: String in FISH_ORDER:
+		discovery_state[fish_type] = bool(states.get(fish_type, false))
+	_update_inventory_slot_visibility()
+
+
+func _update_inventory_slot_visibility() -> void:
+	for fish_type: String in FISH_ORDER:
+		var icon: TextureRect = inventory_icons_by_type.get(fish_type) as TextureRect
+		if icon != null:
+			icon.visible = bool(discovery_state.get(fish_type, false))
 
 
 func _process(delta: float) -> void:
@@ -148,7 +222,7 @@ func _process(delta: float) -> void:
 
 
 func _setup_fight_visuals() -> void:
-	var panel_style := StyleBoxFlat.new()
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.018, 0.055, 0.095, 0.94)
 	panel_style.border_color = Color(0.19, 0.63, 0.78, 0.95)
 	panel_style.border_width_left = 3
@@ -161,7 +235,7 @@ func _setup_fight_visuals() -> void:
 	panel_style.corner_radius_bottom_right = 10
 	fight_panel.add_theme_stylebox_override("panel", panel_style)
 
-	var bar_bg := StyleBoxFlat.new()
+	var bar_bg: StyleBoxFlat = StyleBoxFlat.new()
 	bar_bg.bg_color = Color(0.025, 0.09, 0.14, 1.0)
 	bar_bg.border_color = Color(0.10, 0.28, 0.36, 1.0)
 	bar_bg.border_width_left = 2
@@ -174,7 +248,7 @@ func _setup_fight_visuals() -> void:
 	bar_bg.corner_radius_bottom_right = 6
 	fight_bar.add_theme_stylebox_override("background", bar_bg)
 
-	var bar_fill := StyleBoxFlat.new()
+	var bar_fill: StyleBoxFlat = StyleBoxFlat.new()
 	bar_fill.bg_color = Color(0.16, 0.68, 0.79, 0.92)
 	bar_fill.corner_radius_top_left = 5
 	bar_fill.corner_radius_top_right = 5
@@ -214,7 +288,7 @@ func _setup_fight_visuals() -> void:
 
 
 func _setup_catch_visuals() -> void:
-	var catch_style := StyleBoxFlat.new()
+	var catch_style: StyleBoxFlat = StyleBoxFlat.new()
 	catch_style.bg_color = Color(0.018, 0.052, 0.09, 0.96)
 	catch_style.border_color = Color(1.0, 0.64, 0.18, 1.0)
 	catch_style.border_width_left = 5
@@ -243,15 +317,17 @@ func _setup_catch_visuals() -> void:
 	_catch_status.add_theme_color_override("font_color", Color(0.55, 0.92, 0.78, 0.95))
 
 	_catch_sparks.clear()
-	for spark in catch_popup.find_children("Spark*", "ColorRect", false, false):
-		spark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		spark.pivot_offset = spark.size * 0.5
-		_catch_sparks.append(spark)
+	for spark_node: Node in catch_popup.find_children("Spark*", "ColorRect", false, false):
+		var spark: ColorRect = spark_node as ColorRect
+		if spark != null:
+			spark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			spark.pivot_offset = spark.size * 0.5
+			_catch_sparks.append(spark)
 
 
 func layout_fight_bar() -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var panel_size := Vector2(540.0, 138.0)
+	var panel_size: Vector2 = Vector2(540.0, 138.0)
 	fight_panel.position = Vector2(maxf((viewport_size.x - panel_size.x) * 0.5, 0.0), 34.0)
 	fight_panel.size = panel_size
 
@@ -350,28 +426,42 @@ func show_fight_bar(fish_type: String) -> void:
 			fight_gain_speed = 36.0
 			fight_loss_speed = 11.0
 			zone_width = 112.0
-
 		"Levrek":
 			fish_move_speed = 145.0
 			fish_change_interval = 0.70
 			fight_gain_speed = 31.0
 			fight_loss_speed = 17.0
 			zone_width = 92.0
-
 		"Uskumru":
 			fish_move_speed = 205.0
 			fish_change_interval = 0.46
 			fight_gain_speed = 26.0
 			fight_loss_speed = 23.0
 			zone_width = 76.0
-
 		"Ton Balığı":
 			fish_move_speed = 265.0
 			fish_change_interval = 0.32
 			fight_gain_speed = 22.0
 			fight_loss_speed = 29.0
 			zone_width = 64.0
-
+		"Kılıç Balığı":
+			fish_move_speed = 315.0
+			fish_change_interval = 0.27
+			fight_gain_speed = 19.0
+			fight_loss_speed = 32.0
+			zone_width = 58.0
+		"Köpekbalığı":
+			fish_move_speed = 225.0
+			fish_change_interval = 0.42
+			fight_gain_speed = 17.5
+			fight_loss_speed = 35.0
+			zone_width = 60.0
+		"Fener Balığı":
+			fish_move_speed = 180.0
+			fish_change_interval = 0.50
+			fight_gain_speed = 18.0
+			fight_loss_speed = 31.0
+			zone_width = 56.0
 		_:
 			fish_move_speed = 125.0
 			fish_change_interval = 0.8
@@ -379,7 +469,7 @@ func show_fight_bar(fish_type: String) -> void:
 			fight_loss_speed = 18.0
 			zone_width = 88.0
 
-	var ease_multiplier := maxf(0.58, 1.0 - float(fight_ease_level) * 0.08)
+	var ease_multiplier: float = maxf(0.58, 1.0 - float(fight_ease_level) * 0.08)
 	fish_move_speed *= ease_multiplier
 	fight_gain_speed += float(fight_ease_level) * 2.0
 	fight_loss_speed = maxf(8.0, fight_loss_speed - float(fight_ease_level) * 2.0)
@@ -416,8 +506,8 @@ func reset_fight() -> void:
 
 func get_total_fish() -> int:
 	var total: int = 0
-	for amount in inventory.values():
-		total += amount
+	for amount: Variant in inventory.values():
+		total += int(amount)
 	return total
 
 
@@ -429,10 +519,7 @@ func add_fish(fish_type: String) -> bool:
 	if not can_add_fish():
 		return false
 
-	if not inventory.has(fish_type):
-		inventory[fish_type] = 0
-
-	inventory[fish_type] += 1
+	inventory[fish_type] = int(inventory.get(fish_type, 0)) + 1
 	update_inventory()
 	show_catch_effect(fish_type)
 	return true
@@ -454,9 +541,11 @@ func show_catch_effect(fish_type: String) -> void:
 	catch_fish_icon.modulate = Color(1.7, 1.48, 0.76, 1.0)
 	catch_glow.color = Color(1.0, 0.67, 0.12, 0.06)
 
-	for spark in _catch_sparks:
-		spark.scale = Vector2(0.15, 0.15)
-		spark.modulate.a = 0.0
+	for spark_value: Variant in _catch_sparks:
+		var spark: ColorRect = spark_value as ColorRect
+		if spark != null:
+			spark.scale = Vector2(0.15, 0.15)
+			spark.modulate.a = 0.0
 
 	_catch_tween = create_tween()
 	_catch_tween.set_trans(Tween.TRANS_BACK)
@@ -467,10 +556,11 @@ func show_catch_effect(fish_type: String) -> void:
 	_catch_tween.parallel().tween_property(catch_fish_icon, "modulate", Color.WHITE, 0.42)
 	_catch_tween.parallel().tween_property(catch_glow, "color", Color(1.0, 0.77, 0.18, 0.34), 0.24)
 
-	for i in range(_catch_sparks.size()):
-		var spark = _catch_sparks[i]
-		_catch_tween.parallel().tween_property(spark, "modulate:a", 1.0, 0.10).set_delay(0.03 * i)
-		_catch_tween.parallel().tween_property(spark, "scale", Vector2(1.65, 1.65), 0.18).set_delay(0.03 * i)
+	for i: int in range(_catch_sparks.size()):
+		var spark: ColorRect = _catch_sparks[i] as ColorRect
+		if spark != null:
+			_catch_tween.parallel().tween_property(spark, "modulate:a", 1.0, 0.10).set_delay(0.03 * i)
+			_catch_tween.parallel().tween_property(spark, "scale", Vector2(1.65, 1.65), 0.18).set_delay(0.03 * i)
 
 	_catch_tween.tween_property(catch_fish_icon, "rotation", deg_to_rad(4.0), 0.08)
 	_catch_tween.tween_property(catch_fish_icon, "rotation", deg_to_rad(-4.0), 0.08)
@@ -496,26 +586,20 @@ func _get_fish_texture(fish_type: String) -> Texture2D:
 			return USKUMRU_TEXTURE
 		"Ton Balığı":
 			return TON_BALIGI_TEXTURE
+		"Kılıç Balığı":
+			return KILIC_BALIGI_TEXTURE
+		"Köpekbalığı":
+			return KOPEKBALIGI_TEXTURE
+		"Fener Balığı":
+			return FENER_BALIGI_TEXTURE
 		_:
 			return SARDALYA_TEXTURE
 
 
 func update_inventory() -> void:
-	count_label_1.text = ""
-	count_label_2.text = ""
-	count_label_3.text = ""
-	count_label_4.text = ""
-
-	var sardalya_count: int = inventory.get("Sardalya", 0)
-	var levrek_count: int = inventory.get("Levrek", 0)
-	var uskumru_count: int = inventory.get("Uskumru", 0)
-	var ton_baligi_count: int = inventory.get("Ton Balığı", 0)
-
-	if sardalya_count > 0:
-		count_label_1.text = str(sardalya_count)
-	if levrek_count > 0:
-		count_label_2.text = str(levrek_count)
-	if uskumru_count > 0:
-		count_label_3.text = str(uskumru_count)
-	if ton_baligi_count > 0:
-		count_label_4.text = str(ton_baligi_count)
+	for fish_type: String in FISH_ORDER:
+		var label: Label = inventory_labels_by_type.get(fish_type) as Label
+		if label == null:
+			continue
+		var amount: int = int(inventory.get(fish_type, 0))
+		label.text = str(amount) if amount > 0 else ""
