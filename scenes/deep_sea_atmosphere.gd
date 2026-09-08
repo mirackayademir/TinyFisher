@@ -239,22 +239,22 @@ func _setup_bait_hud() -> void:
 		_bait_panel = Panel.new()
 		_bait_panel.name = "BaitPanel"
 		_bait_panel.z_index = 250
-		_bait_panel.position = Vector2(720.0, 540.0)
-		_bait_panel.size = Vector2(545.0, 86.0)
+		_bait_panel.position = Vector2(855.0, 650.0)
+		_bait_panel.size = Vector2(410.0, 54.0)
 		_bait_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_hud.add_child(_bait_panel)
 
 		var style: StyleBoxFlat = StyleBoxFlat.new()
-		style.bg_color = Color(0.012, 0.045, 0.075, 0.96)
+		style.bg_color = Color(0.012, 0.045, 0.075, 0.94)
 		style.border_color = Color(0.95, 0.63, 0.19, 0.98)
-		style.border_width_left = 3
-		style.border_width_top = 3
-		style.border_width_right = 3
-		style.border_width_bottom = 3
-		style.corner_radius_top_left = 8
-		style.corner_radius_top_right = 8
-		style.corner_radius_bottom_left = 8
-		style.corner_radius_bottom_right = 8
+		style.border_width_left = 2
+		style.border_width_top = 2
+		style.border_width_right = 2
+		style.border_width_bottom = 2
+		style.corner_radius_top_left = 6
+		style.corner_radius_top_right = 6
+		style.corner_radius_bottom_left = 6
+		style.corner_radius_bottom_right = 6
 		_bait_panel.add_theme_stylebox_override("panel", style)
 
 	_bait_panel.visible = true
@@ -263,13 +263,13 @@ func _setup_bait_hud() -> void:
 	if _bait_title == null:
 		_bait_title = Label.new()
 		_bait_title.name = "BaitTitle"
-		_bait_title.position = Vector2(12.0, 5.0)
-		_bait_title.size = Vector2(520.0, 28.0)
-		_bait_title.add_theme_font_size_override("font_size", 18)
+		_bait_title.position = Vector2(9.0, 3.0)
+		_bait_title.size = Vector2(392.0, 23.0)
+		_bait_title.add_theme_font_size_override("font_size", 13)
 		_bait_title.add_theme_color_override("font_color", Color(1.0, 0.84, 0.42, 1.0))
 		_bait_title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
-		_bait_title.add_theme_constant_override("shadow_offset_x", 2)
-		_bait_title.add_theme_constant_override("shadow_offset_y", 2)
+		_bait_title.add_theme_constant_override("shadow_offset_x", 1)
+		_bait_title.add_theme_constant_override("shadow_offset_y", 1)
 		_bait_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_bait_panel.add_child(_bait_title)
 
@@ -277,9 +277,9 @@ func _setup_bait_hud() -> void:
 	if _bait_options == null:
 		_bait_options = Label.new()
 		_bait_options.name = "BaitOptions"
-		_bait_options.position = Vector2(12.0, 34.0)
-		_bait_options.size = Vector2(520.0, 24.0)
-		_bait_options.add_theme_font_size_override("font_size", 14)
+		_bait_options.position = Vector2(9.0, 27.0)
+		_bait_options.size = Vector2(392.0, 20.0)
+		_bait_options.add_theme_font_size_override("font_size", 10)
 		_bait_options.add_theme_color_override("font_color", Color(0.83, 0.94, 0.98, 1.0))
 		_bait_options.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_bait_panel.add_child(_bait_options)
@@ -288,11 +288,7 @@ func _setup_bait_hud() -> void:
 	if _bait_feedback == null:
 		_bait_feedback = Label.new()
 		_bait_feedback.name = "BaitFeedback"
-		_bait_feedback.position = Vector2(12.0, 59.0)
-		_bait_feedback.size = Vector2(520.0, 20.0)
-		_bait_feedback.add_theme_font_size_override("font_size", 12)
-		_bait_feedback.add_theme_color_override("font_color", Color(0.62, 0.84, 0.76, 1.0))
-		_bait_feedback.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_bait_feedback.visible = false
 		_bait_panel.add_child(_bait_feedback)
 
 
@@ -301,7 +297,6 @@ func _update_bait_hud() -> void:
 		return
 
 	# Mücadele sırasında yem seçimi kullanılamadığı için paneli gizle.
-	# Böylece Fight HUD ve Misina Gerilimi HUD'u ile hiçbir zaman çakışmaz.
 	var fight_active: bool = _hook != null and _hook.get("hooked_fish") != null
 	_bait_panel.visible = not fight_active
 	if fight_active:
@@ -315,12 +310,12 @@ func _update_bait_hud() -> void:
 	else:
 		target_text = "Ton / Kılıç / Köpekbalığı"
 
-	_bait_title.text = "YEM: " + selected_bait.to_upper() + "  →  " + target_text
-	_bait_options.text = "[1] Solucan ∞     [2] Karides ∞     [3] Canlı Sardalya x%d" % _get_sardine_count()
-	if _feedback_timer > 0.0:
-		_bait_feedback.text = "• " + _bait_feedback.text.trim_prefix("• ")
+	if _feedback_timer > 0.0 and not _bait_feedback.text.is_empty():
+		_bait_title.text = _bait_feedback.text
 	else:
-		_bait_feedback.text = "1 / 2 / 3 ile yem seç — yem kancanın altında hareket eder"
+		_bait_title.text = "YEM: " + selected_bait.to_upper() + "  →  " + target_text
+
+	_bait_options.text = "[1] Solucan ∞   [2] Karides ∞   [3] Canlı Sardalya x%d" % _get_sardine_count()
 
 
 func _show_bait_feedback(text: String, duration: float) -> void:
@@ -381,6 +376,9 @@ func _setup_bait_visuals() -> void:
 	_live_sardine.position = Vector2(0.0, 6.0)
 	_bait_root.add_child(_live_sardine)
 
+	# Yem kancanın ucuna otursun; yalnızca görsel ölçek küçülür, fizik korunur.
+	_bait_root.scale = Vector2(0.72, 0.72)
+	_bait_root.position = Vector2(0.0, 5.0)
 	_update_bait_visibility()
 
 
@@ -423,7 +421,7 @@ func _update_bait_physics(delta: float) -> void:
 	_sway_angle += _sway_velocity * delta
 	_sway_angle = clampf(_sway_angle, -0.42, 0.42)
 	_bait_root.rotation = _sway_angle
-	_bait_root.position = Vector2(sin(_time * 0.8) * 2.0, 24.0 + sin(_time * 1.15) * 1.2)
+	_bait_root.position = Vector2(sin(_time * 0.8) * 1.4, 5.0 + sin(_time * 1.15) * 0.8)
 
 	# Solucan kıvrılması
 	var points: PackedVector2Array = PackedVector2Array()
