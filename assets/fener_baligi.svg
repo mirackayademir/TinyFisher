@@ -1,18 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="128" viewBox="0 0 192 128" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" width="384" height="256" viewBox="0 0 384 256" shape-rendering="crispEdges">
   <g>
-    <polygon points="43,57 18,45 29,62 15,76 44,70 55,82 59,69" fill="#171a32"/>
-    <polygon points="46,47 72,34 126,35 154,50 166,66 151,83 119,94 76,91 48,76 36,61" fill="#34365c"/>
-    <polygon points="50,65 81,57 133,58 157,68 143,82 112,88 75,84" fill="#57547b"/>
-    <polygon points="84,37 100,18 111,38" fill="#242744"/>
-    <polygon points="99,91 116,108 124,88" fill="#262a48"/>
-    <rect x="128" y="50" width="10" height="10" fill="#07131c"/>
-    <rect x="131" y="52" width="3" height="3" fill="#d9fbff"/>
-    <rect x="139" y="69" width="20" height="5" fill="#0b0c16"/>
-    <polygon points="142,70 146,77 150,70 154,77 158,70" fill="#eef4df"/>
-    <rect x="103" y="19" width="4" height="17" fill="#5a648d"/>
-    <rect x="106" y="14" width="4" height="7" fill="#7ad9e8"/>
-    <rect x="109" y="10" width="9" height="9" fill="#bdf8ff"/>
-    <rect x="111" y="12" width="5" height="5" fill="#ffffff"/>
-    <rect x="58" y="47" width="8" height="4" fill="#6f6e99"/>
+    <!-- tail -->
+    <polygon points="94,117 48,91 58,119 31,142 69,145 46,178 94,153 124,163 132,139" fill="#151225"/>
+    <polygon points="96,112 61,96 70,121 48,139 77,141 62,166 99,149 126,156 132,137" fill="#322640"/>
+    <!-- body -->
+    <polygon points="111,93 159,64 228,65 284,82 326,111 346,139 329,170 291,192 235,204 177,196 133,174 105,145 96,118" fill="#211629"/>
+    <polygon points="121,98 164,74 223,74 273,89 311,113 330,139 314,163 280,182 232,192 184,187 145,168 118,144 108,119" fill="#4a304b"/>
+    <polygon points="128,126 165,108 225,106 276,118 310,139 292,160 251,174 196,174 153,160" fill="#71445c"/>
+    <!-- huge dorsal / side fins -->
+    <polygon points="148,82 156,43 174,70 190,31 205,68 225,39 238,76" fill="#21172b"/>
+    <polygon points="155,80 161,52 174,75 189,42 201,73 222,49 232,78" fill="#513550"/>
+    <polygon points="124,118 84,93 94,130 69,157 118,151" fill="#261a31"/>
+    <polygon points="132,119 97,101 105,130 86,151 124,145" fill="#5a3a58"/>
+    <polygon points="194,181 171,221 208,192" fill="#23172d"/>
+    <!-- face / mouth -->
+    <polygon points="257,103 304,109 340,129 356,151 342,176 309,192 274,187 247,166 240,137" fill="#3a2439"/>
+    <polygon points="278,128 325,124 352,142 348,168 321,187 281,181 255,158 257,139" fill="#110c13"/>
+    <polygon points="287,137 328,133 344,145 340,163 319,177 285,173 267,157 267,143" fill="#28111a"/>
+    <!-- teeth top -->
+    <polygon points="274,137 282,154 289,135 296,155 304,134 312,155 320,134 329,154 337,138 341,151" fill="#ece2c9"/>
+    <!-- teeth bottom -->
+    <polygon points="278,169 286,153 294,173 302,153 310,176 318,154 326,172 334,156 339,165" fill="#f2e8d1"/>
+    <!-- eye -->
+    <rect x="267" y="105" width="20" height="20" fill="#0a0910"/>
+    <rect x="272" y="109" width="12" height="12" fill="#ffd58a"/>
+    <rect x="276" y="112" width="6" height="6" fill="#fff4c4"/>
+    <!-- lure stalk -->
+    <rect x="214" y="42" width="6" height="34" fill="#6d4a4a"/>
+    <rect x="220" y="28" width="6" height="18" fill="#8d5b4d"/>
+    <rect x="226" y="19" width="5" height="13" fill="#b67652"/>
+    <!-- lure glow pixel rings -->
+    <rect x="222" y="8" width="18" height="18" fill="#8a4a21" opacity="0.55"/>
+    <rect x="225" y="11" width="12" height="12" fill="#ff9d2e"/>
+    <rect x="228" y="14" width="6" height="6" fill="#fff0a2"/>
+    <rect x="230" y="16" width="2" height="2" fill="#ffffff"/>
+    <!-- skin nodules -->
+    <rect x="146" y="104" width="8" height="8" fill="#8b5667"/>
+    <rect x="168" y="91" width="7" height="7" fill="#6c4158"/>
+    <rect x="191" y="84" width="8" height="8" fill="#8a5268"/>
+    <rect x="216" y="89" width="6" height="6" fill="#6c4158"/>
+    <rect x="153" y="139" width="7" height="7" fill="#8a5268"/>
+    <rect x="184" y="151" width="9" height="9" fill="#5b344d"/>
+    <rect x="220" y="154" width="7" height="7" fill="#8a5268"/>
+    <rect x="239" y="119" width="6" height="6" fill="#6c4158"/>
+    <!-- ribbed fin rays -->
+    <rect x="160" y="55" width="4" height="22" fill="#77526d"/>
+    <rect x="173" y="50" width="4" height="26" fill="#8a5d79"/>
+    <rect x="189" y="44" width="4" height="27" fill="#77526d"/>
+    <rect x="204" y="51" width="4" height="24" fill="#8a5d79"/>
+    <rect x="219" y="54" width="4" height="22" fill="#77526d"/>
+    <!-- highlights -->
+    <rect x="137" y="112" width="18" height="5" fill="#9c667d"/>
+    <rect x="206" y="78" width="16" height="5" fill="#9a647b"/>
+    <rect x="238" y="92" width="13" height="5" fill="#a56b7d"/>
   </g>
 </svg>
