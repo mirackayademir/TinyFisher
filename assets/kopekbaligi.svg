@@ -1,17 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="128" viewBox="0 0 256 128" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="256" viewBox="0 0 512 256" shape-rendering="crispEdges">
   <g>
-    <polygon points="45,57 16,38 29,61 10,77 45,69 60,80 64,68" fill="#263746"/>
-    <polygon points="50,55 82,44 166,43 207,51 230,61 210,72 166,79 83,76 50,67" fill="#536777"/>
-    <polygon points="73,64 166,59 211,63 201,71 160,76 82,73" fill="#a9b2b7"/>
-    <polygon points="113,44 139,17 149,45" fill="#344a5a"/>
-    <polygon points="106,76 126,97 135,76" fill="#344b5c"/>
-    <polygon points="176,76 191,91 195,73" fill="#31495a"/>
-    <polygon points="216,56 238,60 229,67 209,67" fill="#677c8a"/>
-    <rect x="202" y="56" width="7" height="7" fill="#07131c"/>
-    <rect x="204" y="57" width="2" height="2" fill="#e7fbff"/>
-    <rect x="214" y="68" width="12" height="3" fill="#1b2933"/>
-    <rect x="168" y="48" width="5" height="22" fill="#405565"/>
-    <rect x="174" y="49" width="4" height="21" fill="#405565"/>
-    <rect x="180" y="51" width="4" height="18" fill="#405565"/>
+    <!-- tail -->
+    <polygon points="103,118 56,66 67,113 28,132 69,145 48,193 103,155 135,164 143,137" fill="#111c2d"/>
+    <polygon points="105,112 69,79 78,118 45,132 81,139 66,176 108,151 138,157 143,135" fill="#25364d"/>
+    <!-- body mass -->
+    <polygon points="123,108 181,84 278,79 363,91 421,111 456,132 430,154 372,172 288,181 191,172 132,151 105,133" fill="#172638"/>
+    <polygon points="136,109 191,92 278,88 351,98 409,116 439,133 414,149 361,162 286,169 203,163 148,147 119,132" fill="#33495f"/>
+    <polygon points="155,129 208,119 301,118 369,126 417,138 385,151 320,160 232,159 174,149" fill="#8e9ba3"/>
+    <polygon points="172,140 231,137 311,139 354,145 322,158 248,161 194,154" fill="#c0c6c5"/>
+    <!-- dorsal fin -->
+    <polygon points="234,91 268,33 294,93" fill="#18283b"/>
+    <polygon points="245,89 268,49 285,91" fill="#344b62"/>
+    <!-- pectoral fins -->
+    <polygon points="225,157 181,205 239,173 266,160" fill="#1c2d42"/>
+    <polygon points="339,158 366,190 373,154" fill="#1a2a3f"/>
+    <!-- head -->
+    <polygon points="401,113 446,114 476,125 492,137 476,151 448,158 414,151 392,137" fill="#34495e"/>
+    <polygon points="410,135 450,130 482,137 461,151 425,153" fill="#d1d0c9"/>
+    <!-- open mouth -->
+    <polygon points="438,137 472,132 488,139 476,157 444,162 426,151" fill="#180e12"/>
+    <polygon points="442,140 468,136 481,141 472,153 447,157 432,150" fill="#4a1c22"/>
+    <!-- teeth -->
+    <polygon points="440,141 446,149 451,140 456,149 462,138 467,148 473,139 476,147" fill="#f1eee0"/>
+    <polygon points="443,157 448,150 453,158 458,150 463,157 468,149 472,155" fill="#f5f1e6"/>
+    <!-- eye -->
+    <rect x="437" y="120" width="12" height="12" fill="#090b0d"/>
+    <rect x="441" y="122" width="5" height="5" fill="#b71e1e"/>
+    <!-- gill slashes -->
+    <rect x="407" y="124" width="5" height="26" fill="#5d1d24"/>
+    <rect x="416" y="126" width="5" height="25" fill="#67222a"/>
+    <rect x="425" y="128" width="5" height="23" fill="#5d1d24"/>
+    <!-- scars -->
+    <polygon points="362,104 367,102 356,121 352,123" fill="#6e3035"/>
+    <polygon points="374,108 379,106 369,126 365,128" fill="#74343b"/>
+    <polygon points="385,112 390,111 381,131 376,132" fill="#6f3035"/>
+    <!-- highlights / skin texture -->
+    <rect x="170" y="101" width="24" height="5" fill="#50677b"/>
+    <rect x="204" y="93" width="18" height="4" fill="#5f7486"/>
+    <rect x="298" y="96" width="20" height="4" fill="#536b7f"/>
+    <rect x="328" y="102" width="18" height="4" fill="#647b8e"/>
+    <rect x="205" y="151" width="18" height="4" fill="#d3d5d1"/>
+    <rect x="280" y="154" width="22" height="4" fill="#d9d8d3"/>
+    <!-- subtle dark mottling -->
+    <rect x="194" y="113" width="13" height="7" fill="#293d52"/>
+    <rect x="251" y="104" width="15" height="8" fill="#293d52"/>
+    <rect x="316" y="116" width="14" height="7" fill="#293d52"/>
   </g>
 </svg>
