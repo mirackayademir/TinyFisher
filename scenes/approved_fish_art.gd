@@ -1,8 +1,9 @@
 extends Node
 
 # Miraç tarafından onaylanan üç detaylı balık görselini oyunun her yerinde
-# eski prototip SVG'lerin yerine kullanır. Görseller import/preload zincirine
-# takılmasın diye dosyadan doğrudan Image olarak yüklenip Texture2D'ye çevrilir.
+# eski prototip SVG'lerin yerine kullanır. WebP dosyaları Godot import zincirine
+# bırakılmıyor; ham dosya baytları okunup ImageTexture olarak oluşturuluyor.
+# Böylece editor import/preload sorunu olsa bile ekranda onaylanan görseller çıkar.
 
 const KILIC_OLD: String = "res://assets/kilic_baligi.svg"
 const KOPEK_OLD: String = "res://assets/kopekbaligi.svg"
@@ -12,7 +13,7 @@ const KILIC_PATH: String = "res://assets/approved/kilic_baligi.webp"
 const KOPEK_PATH: String = "res://assets/approved/kopekbaligi.webp"
 const FENER_PATH: String = "res://assets/approved/fener_baligi.webp"
 
-const SCAN_INTERVAL: float = 0.12
+const SCAN_INTERVAL: float = 0.10
 
 var _scan_timer: float = 0.0
 var _kilic_approved: Texture2D = null
@@ -35,22 +36,40 @@ func _process(delta: float) -> void:
 
 
 func _load_approved_textures() -> void:
-	_kilic_approved = _load_texture_direct(KILIC_PATH)
-	_kopek_approved = _load_texture_direct(KOPEK_PATH)
-	_fener_approved = _load_texture_direct(FENER_PATH)
+	_kilic_approved = _load_webp_direct(KILIC_PATH)
+	_kopek_approved = _load_webp_direct(KOPEK_PATH)
+	_fener_approved = _load_webp_direct(FENER_PATH)
 
 
-func _load_texture_direct(path: String) -> Texture2D:
+func _load_webp_direct(path: String) -> Texture2D:
 	if not FileAccess.file_exists(path):
 		push_error("Onaylı balık görseli bulunamadı: " + path)
 		return null
 
-	var image: Image = Image.load_from_file(path)
-	if image == null or image.is_empty():
-		push_error("Onaylı balık görseli yüklenemedi: " + path)
+	var bytes: PackedByteArray = FileAccess.get_file_as_bytes(path)
+	if bytes.is_empty():
+		push_error("Onaylı balık görseli okunamadı: " + path)
+		return null
+
+	var image: Image = Image.new()
+	var load_error: Error = image.load_webp_from_buffer(bytes)
+	if load_error != OK or image.is_empty():
+		push_error("Onaylı balık WebP görseli çözülemedi: " + path + " hata=" + str(load_error))
 		return null
 
 	return ImageTexture.create_from_image(image)
+
+
+func get_texture_for_fish(fish_type: String) -> Texture2D:
+	match fish_type:
+		"Kılıç Balığı":
+			return _kilic_approved
+		"Köpekbalığı":
+			return _kopek_approved
+		"Fener Balığı":
+			return _fener_approved
+		_:
+			return null
 
 
 func _apply_to_current_scene() -> void:
@@ -122,9 +141,6 @@ func _replace_texture_rect(rect: TextureRect) -> void:
 
 
 func _compensate_fish_scale(sprite: Sprite2D, fish_type: String) -> void:
-	# Onaylı raster görseller eski prototip SVG kanvaslarından daha sıkı kırpılmıştır.
-	# Balığın oyun içindeki fiziksel boyutunu korumak için yalnızca görüntü ölçeğini
-	# telafi ediyoruz; görselin piksel içeriği değişmeden birebir kullanılıyor.
 	var fish: Node = sprite.get_parent()
 	if fish == null or not fish.has_method("hook_to"):
 		return
