@@ -5,6 +5,12 @@ const DEPTH_PER_LEVEL: float = 350.0
 const BASE_DEPTH_METERS: int = 50
 const DEPTH_METERS_PER_LEVEL: int = 10
 
+# TEST MODU: Yeni derin su balıklarını geliştirme kasmadan deneyebilmek için
+# fiziksel olta erişimini geçici olarak maksimum seviyede tutuyoruz.
+# İlerleme dengesi testleri başladığında false yapılacak.
+const TEST_FULL_DEPTH_UNLOCK: bool = true
+const TEST_DEPTH_LEVEL: int = 5
+
 @export var hook_speed: float = 220.0
 @export var reel_speed: float = 240.0
 @export var reel_speed_per_level: float = 40.0
@@ -412,14 +418,17 @@ func set_reel_speed_level(level: int) -> void:
 
 
 func set_depth_level(level: int) -> void:
+	# Gerçek upgrade seviyesi saklanır; test sırasında fiziksel erişim geçici olarak 100 m'ye açılır.
 	depth_level = clampi(level, 0, 5)
-	max_depth = BASE_DEPTH_PIXELS + (float(depth_level) * DEPTH_PER_LEVEL)
-	max_depth_meters = BASE_DEPTH_METERS + (depth_level * DEPTH_METERS_PER_LEVEL)
+	var effective_depth_level: int = TEST_DEPTH_LEVEL if TEST_FULL_DEPTH_UNLOCK else depth_level
 
-	camera_deep_y = 1420.0 + (float(depth_level) * 300.0)
+	max_depth = BASE_DEPTH_PIXELS + (float(effective_depth_level) * DEPTH_PER_LEVEL)
+	max_depth_meters = BASE_DEPTH_METERS + (effective_depth_level * DEPTH_METERS_PER_LEVEL)
+
+	camera_deep_y = 1420.0 + (float(effective_depth_level) * 300.0)
 	var water: ColorRect = world.get_node_or_null("Water") as ColorRect
 	if water != null:
-		water.offset_bottom = maxf(water.offset_bottom, 2700.0 + (float(depth_level) * 350.0))
+		water.offset_bottom = maxf(water.offset_bottom, 2700.0 + (float(effective_depth_level) * 350.0))
 
 	_update_depth_hud()
 
