@@ -146,7 +146,7 @@ func _update_depth_hud() -> void:
 	var depth_pixels: float = clampf(position.y - start_position.y, 0.0, max_depth)
 	var depth_ratio: float = depth_pixels / maxf(max_depth, 1.0)
 	var current_depth_meters: int = int(round(depth_ratio * float(max_depth_meters)))
-	depth_label.text = "DERİNLİK  %d / %d m" % [current_depth_meters, max_depth_meters]
+	depth_label.text = "DERİNLİK  %d m" % current_depth_meters
 
 
 func is_reeling() -> bool:
