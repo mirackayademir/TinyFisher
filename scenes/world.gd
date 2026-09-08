@@ -7,12 +7,24 @@ const CAMERA_NORMAL_X: float = 350.0
 const CAMERA_HARBOR_X: float = -160.0
 const BASE_DEPTH_METERS: int = 50
 const DEPTH_METERS_PER_LEVEL: int = 10
-const FISH_ORDER: Array[String] = ["Sardalya", "Levrek", "Uskumru", "Ton Balığı"]
+
+const FISH_ORDER: Array[String] = [
+	"Sardalya",
+	"Levrek",
+	"Uskumru",
+	"Ton Balığı",
+	"Kılıç Balığı",
+	"Köpekbalığı",
+	"Fener Balığı"
+]
 
 const SARDALYA_TEXTURE: Texture2D = preload("res://assets/sardalya.png")
 const LEVREK_TEXTURE: Texture2D = preload("res://assets/levrek2.png")
 const USKUMRU_TEXTURE: Texture2D = preload("res://assets/uskumru.png")
 const TON_BALIGI_TEXTURE: Texture2D = preload("res://assets/tonbaligi.png")
+const KILIC_BALIGI_TEXTURE: Texture2D = preload("res://assets/kilic_baligi.svg")
+const KOPEKBALIGI_TEXTURE: Texture2D = preload("res://assets/kopekbaligi.svg")
+const FENER_BALIGI_TEXTURE: Texture2D = preload("res://assets/fener_baligi.svg")
 
 @onready var dock_prompt: Label = $DockPrompt
 @onready var dock_menu: Panel = $DockMenu
@@ -28,11 +40,6 @@ const TON_BALIGI_TEXTURE: Texture2D = preload("res://assets/tonbaligi.png")
 @onready var hook = $Boat/Hook
 @onready var money_label: Label = $MoneyLabel
 @onready var hud = $HUD
-
-@onready var fish_icon_1: TextureRect = $HUD/InventoryPanel/InventorySlots/Slot1/FishIcon
-@onready var fish_icon_2: TextureRect = $HUD/InventoryPanel/InventorySlots/Slot2/FishIcon
-@onready var fish_icon_3: TextureRect = $HUD/InventoryPanel/InventorySlots/Slot3/FishIcon
-@onready var fish_icon_4: TextureRect = $HUD/InventoryPanel/InventorySlots/Slot4/FishIcon
 
 @onready var boat_speed_button: Button = $UpgradeMenu/BoatSpeedButton
 @onready var rod_speed_button: Button = $UpgradeMenu/RodSpeedButton
@@ -73,7 +80,10 @@ var discovered_fish: Dictionary = {
 	"Sardalya": false,
 	"Levrek": false,
 	"Uskumru": false,
-	"Ton Balığı": false
+	"Ton Balığı": false,
+	"Kılıç Balığı": false,
+	"Köpekbalığı": false,
+	"Fener Balığı": false
 }
 
 
@@ -95,7 +105,7 @@ func _ready() -> void:
 
 
 func _setup_harbor() -> void:
-	# Onaylanan liman boyutu aynen korunur.
+	# Onaylanan büyük liman boyutuna dokunmuyoruz.
 	dock_sprite.scale = Vector2(7.8, 7.8)
 	dock_sprite.position = Vector2(310.0, 250.0)
 	boat.min_world_x = 520.0
@@ -109,7 +119,6 @@ func _setup_harbor() -> void:
 	dock_prompt.size = Vector2(270.0, 38.0)
 	dock_prompt.add_theme_font_size_override("font_size", 18)
 
-	# Altıncı geliştirme satırı için menü biraz uzatılır; liman görseline dokunulmaz.
 	upgrade_menu.position = Vector2(330.0, 18.0)
 	upgrade_menu.size = Vector2(620.0, 565.0)
 
@@ -179,6 +188,7 @@ func _setup_upgrade_buttons() -> void:
 		fight_ease_button,
 		line_strength_button
 	]
+
 	for i: int in range(upgrade_buttons.size()):
 		var button: Button = upgrade_buttons[i]
 		button.position = Vector2(60.0, 100.0 + float(i) * 50.0)
@@ -197,7 +207,8 @@ func _setup_fish_book_ui() -> void:
 	fish_book_panel = Panel.new()
 	fish_book_panel.name = "FishBookPanel"
 	fish_book_panel.z_index = 110
-	fish_book_panel.size = Vector2(900.0, 570.0)
+	fish_book_panel.size = Vector2(1000.0, 620.0)
+
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	fish_book_panel.position = Vector2(
 		maxf((viewport_size.x - fish_book_panel.size.x) * 0.5, 0.0),
@@ -220,8 +231,8 @@ func _setup_fish_book_ui() -> void:
 	fish_book_panel.add_theme_stylebox_override("panel", panel_style)
 
 	var title: Label = Label.new()
-	title.position = Vector2(30.0, 18.0)
-	title.size = Vector2(840.0, 42.0)
+	title.position = Vector2(30.0, 16.0)
+	title.size = Vector2(940.0, 42.0)
 	title.text = "BALIK DEFTERİ"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 30)
@@ -229,19 +240,19 @@ func _setup_fish_book_ui() -> void:
 	fish_book_panel.add_child(title)
 
 	fish_book_progress = Label.new()
-	fish_book_progress.position = Vector2(30.0, 60.0)
-	fish_book_progress.size = Vector2(840.0, 28.0)
+	fish_book_progress.position = Vector2(30.0, 58.0)
+	fish_book_progress.size = Vector2(940.0, 28.0)
 	fish_book_progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	fish_book_progress.add_theme_font_size_override("font_size", 16)
 	fish_book_progress.add_theme_color_override("font_color", Color(0.70, 0.88, 0.94, 1.0))
 	fish_book_panel.add_child(fish_book_progress)
 
 	fish_book_grid = GridContainer.new()
-	fish_book_grid.columns = 2
-	fish_book_grid.position = Vector2(34.0, 100.0)
-	fish_book_grid.size = Vector2(832.0, 392.0)
-	fish_book_grid.add_theme_constant_override("h_separation", 14)
-	fish_book_grid.add_theme_constant_override("v_separation", 14)
+	fish_book_grid.columns = 3
+	fish_book_grid.position = Vector2(35.0, 96.0)
+	fish_book_grid.size = Vector2(930.0, 450.0)
+	fish_book_grid.add_theme_constant_override("h_separation", 12)
+	fish_book_grid.add_theme_constant_override("v_separation", 12)
 	fish_book_panel.add_child(fish_book_grid)
 
 	for fish_type: String in FISH_ORDER:
@@ -249,7 +260,7 @@ func _setup_fish_book_ui() -> void:
 
 	fish_book_back_button = Button.new()
 	fish_book_back_button.text = "Geri"
-	fish_book_back_button.position = Vector2(350.0, 510.0)
+	fish_book_back_button.position = Vector2(400.0, 560.0)
 	fish_book_back_button.size = Vector2(200.0, 42.0)
 	fish_book_back_button.add_theme_font_size_override("font_size", 18)
 	fish_book_panel.add_child(fish_book_back_button)
@@ -260,7 +271,7 @@ func _setup_fish_book_ui() -> void:
 
 func _create_fish_book_card(fish_type: String) -> void:
 	var card: Panel = Panel.new()
-	card.custom_minimum_size = Vector2(405.0, 188.0)
+	card.custom_minimum_size = Vector2(300.0, 138.0)
 	fish_book_grid.add_child(card)
 
 	var card_style: StyleBoxFlat = StyleBoxFlat.new()
@@ -277,8 +288,8 @@ func _create_fish_book_card(fish_type: String) -> void:
 	card.add_theme_stylebox_override("panel", card_style)
 
 	var icon: TextureRect = TextureRect.new()
-	icon.position = Vector2(14.0, 28.0)
-	icon.size = Vector2(155.0, 125.0)
+	icon.position = Vector2(8.0, 22.0)
+	icon.size = Vector2(104.0, 94.0)
 	icon.texture = _get_fish_texture(fish_type)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -287,17 +298,17 @@ func _create_fish_book_card(fish_type: String) -> void:
 	card.add_child(icon)
 
 	var name_label: Label = Label.new()
-	name_label.position = Vector2(178.0, 20.0)
-	name_label.size = Vector2(210.0, 34.0)
-	name_label.add_theme_font_size_override("font_size", 22)
+	name_label.position = Vector2(116.0, 12.0)
+	name_label.size = Vector2(176.0, 30.0)
+	name_label.add_theme_font_size_override("font_size", 18)
 	name_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.42, 1.0))
 	card.add_child(name_label)
 
 	var detail_label: Label = Label.new()
-	detail_label.position = Vector2(178.0, 58.0)
-	detail_label.size = Vector2(210.0, 110.0)
+	detail_label.position = Vector2(116.0, 43.0)
+	detail_label.size = Vector2(176.0, 88.0)
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail_label.add_theme_font_size_override("font_size", 15)
+	detail_label.add_theme_font_size_override("font_size", 12)
 	detail_label.add_theme_color_override("font_color", Color(0.84, 0.93, 0.96, 1.0))
 	card.add_child(detail_label)
 
@@ -316,6 +327,8 @@ func _refresh_fish_book() -> void:
 		var icon: TextureRect = fish_book_icons.get(fish_type) as TextureRect
 		var title: Label = fish_book_titles.get(fish_type) as Label
 		var details: Label = fish_book_details.get(fish_type) as Label
+		if icon == null or title == null or details == null:
+			continue
 
 		if discovered:
 			discovered_count += 1
@@ -323,14 +336,14 @@ func _refresh_fish_book() -> void:
 			title.text = fish_type
 			details.text = (
 				"Değer: $" + str(_fish_value(fish_type))
-				+ "\nYaşam alanı: " + _fish_habitat(fish_type)
+				+ "\nBölge: " + _fish_habitat(fish_type)
 				+ "\nDerinlik: " + _fish_depth(fish_type)
-				+ "\nDurum: Keşfedildi"
+				+ "\nKeşfedildi"
 			)
 		else:
 			icon.modulate = Color(0.015, 0.025, 0.035, 0.82)
 			title.text = "???"
-			details.text = "Henüz keşfedilmedi.\nDenizin farklı bölgelerini ve derinliklerini araştır."
+			details.text = "Henüz keşfedilmedi.\nDaha uzağa git ve daha derine in."
 
 	fish_book_progress.text = "Keşif: " + str(discovered_count) + " / " + str(FISH_ORDER.size())
 
@@ -343,6 +356,12 @@ func _get_fish_texture(fish_type: String) -> Texture2D:
 			return USKUMRU_TEXTURE
 		"Ton Balığı":
 			return TON_BALIGI_TEXTURE
+		"Kılıç Balığı":
+			return KILIC_BALIGI_TEXTURE
+		"Köpekbalığı":
+			return KOPEKBALIGI_TEXTURE
+		"Fener Balığı":
+			return FENER_BALIGI_TEXTURE
 		_:
 			return SARDALYA_TEXTURE
 
@@ -357,6 +376,12 @@ func _fish_value(fish_type: String) -> int:
 			return 40
 		"Ton Balığı":
 			return 75
+		"Kılıç Balığı":
+			return 130
+		"Köpekbalığı":
+			return 220
+		"Fener Balığı":
+			return 300
 		_:
 			return 0
 
@@ -371,6 +396,12 @@ func _fish_habitat(fish_type: String) -> String:
 			return "Açık deniz"
 		"Ton Balığı":
 			return "Derin açık deniz"
+		"Kılıç Balığı":
+			return "Uzak açık deniz"
+		"Köpekbalığı":
+			return "Derin av bölgesi"
+		"Fener Balığı":
+			return "Karanlık derinlik"
 		_:
 			return "Bilinmiyor"
 
@@ -385,6 +416,12 @@ func _fish_depth(fish_type: String) -> String:
 			return "25–38 m"
 		"Ton Balığı":
 			return "38–50 m"
+		"Kılıç Balığı":
+			return "52–62 m"
+		"Köpekbalığı":
+			return "68–82 m"
+		"Fener Balığı":
+			return "88–100 m"
 		_:
 			return "???"
 
@@ -401,26 +438,15 @@ func _set_harbor_camera(active: bool) -> void:
 
 
 func _setup_inventory_discovery() -> void:
-	fish_icon_1.visible = false
-	fish_icon_2.visible = false
-	fish_icon_3.visible = false
-	fish_icon_4.visible = false
+	hud.set_discovery_state(discovered_fish)
 
 
 func _update_inventory_discovery() -> void:
-	if hud.inventory.get("Sardalya", 0) > 0:
-		discovered_fish["Sardalya"] = true
-	if hud.inventory.get("Levrek", 0) > 0:
-		discovered_fish["Levrek"] = true
-	if hud.inventory.get("Uskumru", 0) > 0:
-		discovered_fish["Uskumru"] = true
-	if hud.inventory.get("Ton Balığı", 0) > 0:
-		discovered_fish["Ton Balığı"] = true
+	for fish_type: String in FISH_ORDER:
+		if int(hud.inventory.get(fish_type, 0)) > 0:
+			discovered_fish[fish_type] = true
 
-	fish_icon_1.visible = bool(discovered_fish["Sardalya"])
-	fish_icon_2.visible = bool(discovered_fish["Levrek"])
-	fish_icon_3.visible = bool(discovered_fish["Uskumru"])
-	fish_icon_4.visible = bool(discovered_fish["Ton Balığı"])
+	hud.set_discovery_state(discovered_fish)
 
 	if fish_book_panel != null and fish_book_panel.visible:
 		_refresh_fish_book()
@@ -459,7 +485,7 @@ func _update_surface_waves() -> void:
 
 	var shadow_points: PackedVector2Array = PackedVector2Array()
 	var foam_points: PackedVector2Array = PackedVector2Array()
-	for x: int in range(-1000, 11001, 28):
+	for x: int in range(-1000, 12001, 28):
 		var wave_y: float = _surface_height_at(float(x))
 		shadow_points.append(Vector2(float(x), wave_y + 3.0))
 		foam_points.append(Vector2(float(x), wave_y))
@@ -552,26 +578,22 @@ func _on_leave_button_pressed() -> void:
 
 
 func _on_sell_button_pressed() -> void:
-	var sardalya_count: int = hud.inventory.get("Sardalya", 0)
-	var levrek_count: int = hud.inventory.get("Levrek", 0)
-	var uskumru_count: int = hud.inventory.get("Uskumru", 0)
-	var ton_baligi_count: int = hud.inventory.get("Ton Balığı", 0)
-	var total_fish: int = sardalya_count + levrek_count + uskumru_count + ton_baligi_count
+	var total_fish: int = 0
+	var total_value: int = 0
+
+	for fish_type: String in FISH_ORDER:
+		var amount: int = int(hud.inventory.get(fish_type, 0))
+		total_fish += amount
+		total_value += amount * _fish_value(fish_type)
+
 	if total_fish == 0:
 		print("SATILACAK BALIK YOK!")
 		return
 
-	var total_value: int = 0
-	total_value += sardalya_count * 10
-	total_value += levrek_count * 25
-	total_value += uskumru_count * 40
-	total_value += ton_baligi_count * 75
 	money += total_value
+	for fish_type: String in FISH_ORDER:
+		hud.inventory[fish_type] = 0
 
-	hud.inventory["Sardalya"] = 0
-	hud.inventory["Levrek"] = 0
-	hud.inventory["Uskumru"] = 0
-	hud.inventory["Ton Balığı"] = 0
 	hud.update_inventory()
 	update_money_label()
 	_refresh_upgrade_menu()
