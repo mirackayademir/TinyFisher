@@ -7,6 +7,12 @@ const CAMERA_NORMAL_X: float = 350.0
 const CAMERA_HARBOR_X: float = -160.0
 const BASE_DEPTH_METERS: int = 50
 const DEPTH_METERS_PER_LEVEL: int = 10
+const FISH_ORDER: Array[String] = ["Sardalya", "Levrek", "Uskumru", "Ton Balığı"]
+
+const SARDALYA_TEXTURE: Texture2D = preload("res://assets/sardalya.png")
+const LEVREK_TEXTURE: Texture2D = preload("res://assets/levrek2.png")
+const USKUMRU_TEXTURE: Texture2D = preload("res://assets/uskumru.png")
+const TON_BALIGI_TEXTURE: Texture2D = preload("res://assets/tonbaligi.png")
 
 @onready var dock_prompt: Label = $DockPrompt
 @onready var dock_menu: Panel = $DockMenu
@@ -40,6 +46,15 @@ var docked: bool = false
 var money: int = 0
 var money_panel: Panel
 var depth_button: Button
+var fish_book_button: Button
+
+var fish_book_panel: Panel
+var fish_book_grid: GridContainer
+var fish_book_progress: Label
+var fish_book_back_button: Button
+var fish_book_icons: Dictionary = {}
+var fish_book_titles: Dictionary = {}
+var fish_book_details: Dictionary = {}
 
 var boat_speed_level: int = 0
 var rod_speed_level: int = 0
@@ -52,7 +67,6 @@ var _surface_shadow: Line2D
 var _surface_foam: Line2D
 var _camera_tween: Tween
 
-# Balık türleri başlangıçta anonimdir. Oyuncu o türü ilk kez yakalayınca ikonu kalıcı olarak açılır.
 var discovered_fish: Dictionary = {
 	"Sardalya": false,
 	"Levrek": false,
@@ -66,8 +80,10 @@ func _ready() -> void:
 	dock_menu.visible = false
 	upgrade_menu.visible = false
 	_setup_harbor()
+	_setup_fish_book_button()
 	_setup_dock_menu()
 	_setup_depth_upgrade_button()
+	_setup_fish_book_ui()
 	_setup_surface_waves()
 	_setup_money_hud()
 	_setup_inventory_discovery()
@@ -77,16 +93,13 @@ func _ready() -> void:
 
 
 func _setup_harbor() -> void:
-	# Liman boyutuna dokunma: onaylanan büyük ölçek aynen kalır.
+	# Onaylanan liman boyutu aynen korunur.
 	dock_sprite.scale = Vector2(7.8, 7.8)
 	dock_sprite.position = Vector2(310.0, 250.0)
-
-	# Tekne limanın iskelesine kadar yaklaşabilir; liman görselinin boyutuna dokunma.
 	boat.min_world_x = 520.0
 
-	# Etkileşim alanı teknenin yanaşma noktasını kapsar.
 	dock_collision.position = Vector2(1120.0, 335.0)
-	var dock_shape := dock_collision.shape as RectangleShape2D
+	var dock_shape: RectangleShape2D = dock_collision.shape as RectangleShape2D
 	if dock_shape != null:
 		dock_shape.size = Vector2(700.0, 240.0)
 
@@ -94,17 +107,28 @@ func _setup_harbor() -> void:
 	dock_prompt.size = Vector2(270.0, 38.0)
 	dock_prompt.add_theme_font_size_override("font_size", 18)
 
-	# Beşinci geliştirme satırı için menüyü biraz aşağı uzat.
 	upgrade_menu.position = Vector2(330.0, 30.0)
 	upgrade_menu.size = Vector2(620.0, 500.0)
 
 
-func _setup_dock_menu() -> void:
-	# Limana yanaşınca açılan satış / geliştirme HUD'u daha büyük ve okunaklı.
-	dock_menu.position = Vector2(360.0, 62.0)
-	dock_menu.size = Vector2(410.0, 300.0)
+func _setup_fish_book_button() -> void:
+	fish_book_button = dock_menu_vbox.get_node_or_null("FishBookButton") as Button
+	if fish_book_button == null:
+		fish_book_button = Button.new()
+		fish_book_button.name = "FishBookButton"
+		fish_book_button.text = "Balık Defteri"
+		dock_menu_vbox.add_child(fish_book_button)
+		dock_menu_vbox.move_child(fish_book_button, 2)
 
-	var panel_style := StyleBoxFlat.new()
+	if not fish_book_button.pressed.is_connected(_on_fish_book_button_pressed):
+		fish_book_button.pressed.connect(_on_fish_book_button_pressed)
+
+
+func _setup_dock_menu() -> void:
+	dock_menu.position = Vector2(360.0, 38.0)
+	dock_menu.size = Vector2(410.0, 360.0)
+
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.06, 0.055, 0.09, 0.95)
 	panel_style.border_color = Color(0.58, 0.38, 0.24, 0.95)
 	panel_style.border_width_left = 4
@@ -117,18 +141,17 @@ func _setup_dock_menu() -> void:
 	panel_style.corner_radius_bottom_right = 10
 	dock_menu.add_theme_stylebox_override("panel", panel_style)
 
-	dock_menu_vbox.position = Vector2(55.0, 54.0)
-	dock_menu_vbox.size = Vector2(300.0, 205.0)
+	dock_menu_vbox.position = Vector2(55.0, 44.0)
+	dock_menu_vbox.size = Vector2(300.0, 275.0)
 	dock_menu_vbox.add_theme_constant_override("separation", 10)
 
-	for button in [dock_sell_button, dock_upgrade_button, dock_leave_button]:
+	var dock_buttons: Array[Button] = [dock_sell_button, dock_upgrade_button, fish_book_button, dock_leave_button]
+	for button: Button in dock_buttons:
 		button.custom_minimum_size = Vector2(300.0, 54.0)
 		button.add_theme_font_size_override("font_size", 18)
 
 
 func _setup_depth_upgrade_button() -> void:
-	# Olta derinliği geliştirmesi mevcut menüye çalışma anında eklenir.
-	# Böylece mevcut liman sahnesinin geri kalan yapısına dokunmadan beşinci geliştirmeyi kazanırız.
 	depth_button = upgrade_menu.get_node_or_null("DepthButton") as Button
 	if depth_button == null:
 		depth_button = Button.new()
@@ -138,11 +161,9 @@ func _setup_depth_upgrade_button() -> void:
 	depth_button.position = Vector2(42.0, 200.0)
 	depth_button.size = Vector2(376.0, 42.0)
 	depth_button.add_theme_font_size_override("font_size", 16)
-
 	if not depth_button.pressed.is_connected(_on_depth_button_pressed):
 		depth_button.pressed.connect(_on_depth_button_pressed)
 
-	# Eski dört satırın alt kısmını bir sıra aşağı kaydır.
 	capacity_button.position = Vector2(42.0, 250.0)
 	capacity_button.size = Vector2(376.0, 42.0)
 	fight_ease_button.position = Vector2(42.0, 300.0)
@@ -154,11 +175,207 @@ func _setup_depth_upgrade_button() -> void:
 	upgrade_back_button.size = Vector2(160.0, 34.0)
 
 
+func _setup_fish_book_ui() -> void:
+	fish_book_panel = Panel.new()
+	fish_book_panel.name = "FishBookPanel"
+	fish_book_panel.z_index = 110
+	fish_book_panel.size = Vector2(900.0, 570.0)
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	fish_book_panel.position = Vector2(
+		maxf((viewport_size.x - fish_book_panel.size.x) * 0.5, 0.0),
+		maxf((viewport_size.y - fish_book_panel.size.y) * 0.5, 0.0)
+	)
+	hud.add_child(fish_book_panel)
+	fish_book_panel.visible = false
+
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.018, 0.045, 0.075, 0.98)
+	panel_style.border_color = Color(0.25, 0.67, 0.78, 0.96)
+	panel_style.border_width_left = 4
+	panel_style.border_width_top = 4
+	panel_style.border_width_right = 4
+	panel_style.border_width_bottom = 4
+	panel_style.corner_radius_top_left = 14
+	panel_style.corner_radius_top_right = 14
+	panel_style.corner_radius_bottom_left = 14
+	panel_style.corner_radius_bottom_right = 14
+	fish_book_panel.add_theme_stylebox_override("panel", panel_style)
+
+	var title: Label = Label.new()
+	title.position = Vector2(30.0, 18.0)
+	title.size = Vector2(840.0, 42.0)
+	title.text = "BALIK DEFTERİ"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(1.0, 0.82, 0.42, 1.0))
+	fish_book_panel.add_child(title)
+
+	fish_book_progress = Label.new()
+	fish_book_progress.position = Vector2(30.0, 60.0)
+	fish_book_progress.size = Vector2(840.0, 28.0)
+	fish_book_progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	fish_book_progress.add_theme_font_size_override("font_size", 16)
+	fish_book_progress.add_theme_color_override("font_color", Color(0.70, 0.88, 0.94, 1.0))
+	fish_book_panel.add_child(fish_book_progress)
+
+	fish_book_grid = GridContainer.new()
+	fish_book_grid.columns = 2
+	fish_book_grid.position = Vector2(34.0, 100.0)
+	fish_book_grid.size = Vector2(832.0, 392.0)
+	fish_book_grid.add_theme_constant_override("h_separation", 14)
+	fish_book_grid.add_theme_constant_override("v_separation", 14)
+	fish_book_panel.add_child(fish_book_grid)
+
+	for fish_type: String in FISH_ORDER:
+		_create_fish_book_card(fish_type)
+
+	fish_book_back_button = Button.new()
+	fish_book_back_button.text = "Geri"
+	fish_book_back_button.position = Vector2(350.0, 510.0)
+	fish_book_back_button.size = Vector2(200.0, 42.0)
+	fish_book_back_button.add_theme_font_size_override("font_size", 18)
+	fish_book_panel.add_child(fish_book_back_button)
+	fish_book_back_button.pressed.connect(_on_fish_book_back_pressed)
+
+	_refresh_fish_book()
+
+
+func _create_fish_book_card(fish_type: String) -> void:
+	var card: Panel = Panel.new()
+	card.custom_minimum_size = Vector2(405.0, 188.0)
+	fish_book_grid.add_child(card)
+
+	var card_style: StyleBoxFlat = StyleBoxFlat.new()
+	card_style.bg_color = Color(0.025, 0.085, 0.125, 0.96)
+	card_style.border_color = Color(0.13, 0.34, 0.43, 0.95)
+	card_style.border_width_left = 2
+	card_style.border_width_top = 2
+	card_style.border_width_right = 2
+	card_style.border_width_bottom = 2
+	card_style.corner_radius_top_left = 8
+	card_style.corner_radius_top_right = 8
+	card_style.corner_radius_bottom_left = 8
+	card_style.corner_radius_bottom_right = 8
+	card.add_theme_stylebox_override("panel", card_style)
+
+	var icon: TextureRect = TextureRect.new()
+	icon.position = Vector2(14.0, 28.0)
+	icon.size = Vector2(155.0, 125.0)
+	icon.texture = _get_fish_texture(fish_type)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(icon)
+
+	var name_label: Label = Label.new()
+	name_label.position = Vector2(178.0, 20.0)
+	name_label.size = Vector2(210.0, 34.0)
+	name_label.add_theme_font_size_override("font_size", 22)
+	name_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.42, 1.0))
+	card.add_child(name_label)
+
+	var detail_label: Label = Label.new()
+	detail_label.position = Vector2(178.0, 58.0)
+	detail_label.size = Vector2(210.0, 110.0)
+	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail_label.add_theme_font_size_override("font_size", 15)
+	detail_label.add_theme_color_override("font_color", Color(0.84, 0.93, 0.96, 1.0))
+	card.add_child(detail_label)
+
+	fish_book_icons[fish_type] = icon
+	fish_book_titles[fish_type] = name_label
+	fish_book_details[fish_type] = detail_label
+
+
+func _refresh_fish_book() -> void:
+	if fish_book_panel == null:
+		return
+
+	var discovered_count: int = 0
+	for fish_type: String in FISH_ORDER:
+		var discovered: bool = bool(discovered_fish.get(fish_type, false))
+		var icon: TextureRect = fish_book_icons.get(fish_type) as TextureRect
+		var title: Label = fish_book_titles.get(fish_type) as Label
+		var details: Label = fish_book_details.get(fish_type) as Label
+
+		if discovered:
+			discovered_count += 1
+			icon.modulate = Color.WHITE
+			title.text = fish_type
+			details.text = (
+				"Değer: $" + str(_fish_value(fish_type))
+				+ "\nYaşam alanı: " + _fish_habitat(fish_type)
+				+ "\nDerinlik: " + _fish_depth(fish_type)
+				+ "\nDurum: Keşfedildi"
+			)
+		else:
+			icon.modulate = Color(0.015, 0.025, 0.035, 0.82)
+			title.text = "???"
+			details.text = "Henüz keşfedilmedi.\nDenizin farklı bölgelerini ve derinliklerini araştır."
+
+	fish_book_progress.text = "Keşif: " + str(discovered_count) + " / " + str(FISH_ORDER.size())
+
+
+func _get_fish_texture(fish_type: String) -> Texture2D:
+	match fish_type:
+		"Levrek":
+			return LEVREK_TEXTURE
+		"Uskumru":
+			return USKUMRU_TEXTURE
+		"Ton Balığı":
+			return TON_BALIGI_TEXTURE
+		_:
+			return SARDALYA_TEXTURE
+
+
+func _fish_value(fish_type: String) -> int:
+	match fish_type:
+		"Sardalya":
+			return 10
+		"Levrek":
+			return 25
+		"Uskumru":
+			return 40
+		"Ton Balığı":
+			return 75
+		_:
+			return 0
+
+
+func _fish_habitat(fish_type: String) -> String:
+	match fish_type:
+		"Sardalya":
+			return "Sığ su / sürüler"
+		"Levrek":
+			return "Orta sular"
+		"Uskumru":
+			return "Açık deniz"
+		"Ton Balığı":
+			return "Derin açık deniz"
+		_:
+			return "Bilinmiyor"
+
+
+func _fish_depth(fish_type: String) -> String:
+	match fish_type:
+		"Sardalya":
+			return "8–12 m"
+		"Levrek":
+			return "15–25 m"
+		"Uskumru":
+			return "25–38 m"
+		"Ton Balığı":
+			return "38–50 m"
+		_:
+			return "???"
+
+
 func _set_harbor_camera(active: bool) -> void:
 	if is_instance_valid(_camera_tween):
 		_camera_tween.kill()
 
-	var target_x := CAMERA_HARBOR_X if active else CAMERA_NORMAL_X
+	var target_x: float = CAMERA_HARBOR_X if active else CAMERA_NORMAL_X
 	_camera_tween = create_tween()
 	_camera_tween.set_trans(Tween.TRANS_SINE)
 	_camera_tween.set_ease(Tween.EASE_IN_OUT)
@@ -166,7 +383,6 @@ func _set_harbor_camera(active: bool) -> void:
 
 
 func _setup_inventory_discovery() -> void:
-	# Dört slot başta boş/anonim görünür. İlk yakalamada ilgili görsel açılır.
 	fish_icon_1.visible = false
 	fish_icon_2.visible = false
 	fish_icon_3.visible = false
@@ -183,10 +399,13 @@ func _update_inventory_discovery() -> void:
 	if hud.inventory.get("Ton Balığı", 0) > 0:
 		discovered_fish["Ton Balığı"] = true
 
-	fish_icon_1.visible = discovered_fish["Sardalya"]
-	fish_icon_2.visible = discovered_fish["Levrek"]
-	fish_icon_3.visible = discovered_fish["Uskumru"]
-	fish_icon_4.visible = discovered_fish["Ton Balığı"]
+	fish_icon_1.visible = bool(discovered_fish["Sardalya"])
+	fish_icon_2.visible = bool(discovered_fish["Levrek"])
+	fish_icon_3.visible = bool(discovered_fish["Uskumru"])
+	fish_icon_4.visible = bool(discovered_fish["Ton Balığı"])
+
+	if fish_book_panel != null and fish_book_panel.visible:
+		_refresh_fish_book()
 
 
 func _setup_surface_waves() -> void:
@@ -205,7 +424,6 @@ func _setup_surface_waves() -> void:
 	_surface_foam.default_color = Color(0.80, 0.95, 0.98, 0.88)
 	_surface_foam.antialiased = false
 	add_child(_surface_foam)
-
 	_update_surface_waves()
 
 
@@ -221,11 +439,10 @@ func _update_surface_waves() -> void:
 	if _surface_shadow == null or _surface_foam == null:
 		return
 
-	var shadow_points := PackedVector2Array()
-	var foam_points := PackedVector2Array()
-
-	for x in range(-1000, 11001, 28):
-		var wave_y := _surface_height_at(float(x))
+	var shadow_points: PackedVector2Array = PackedVector2Array()
+	var foam_points: PackedVector2Array = PackedVector2Array()
+	for x: int in range(-1000, 11001, 28):
+		var wave_y: float = _surface_height_at(float(x))
 		shadow_points.append(Vector2(float(x), wave_y + 3.0))
 		foam_points.append(Vector2(float(x), wave_y))
 
@@ -234,14 +451,13 @@ func _update_surface_waves() -> void:
 
 
 func _setup_money_hud() -> void:
-	# Para CanvasLayer altında kalır; kanca derine inse bile sağ üstten ayrılmaz.
 	money_panel = Panel.new()
 	money_panel.name = "MoneyPanel"
 	money_panel.z_index = 90
 	money_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(money_panel)
 
-	var panel_style := StyleBoxFlat.new()
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.02, 0.055, 0.095, 0.92)
 	panel_style.border_color = Color(0.95, 0.66, 0.24, 0.95)
 	panel_style.border_width_left = 3
@@ -254,7 +470,7 @@ func _setup_money_hud() -> void:
 	panel_style.corner_radius_bottom_right = 8
 	money_panel.add_theme_stylebox_override("panel", panel_style)
 
-	var viewport_size := get_viewport().get_visible_rect().size
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	money_panel.size = Vector2(154.0, 50.0)
 	money_panel.position = Vector2(viewport_size.x - money_panel.size.x - 18.0, 16.0)
 
@@ -282,6 +498,7 @@ func _process(delta: float) -> void:
 		dock_prompt.visible = false
 		dock_menu.visible = true
 		upgrade_menu.visible = false
+		fish_book_panel.visible = false
 		boat_camera.position.y = hook.camera_surface_y
 		print("LIMANA YANASTIN")
 
@@ -307,6 +524,7 @@ func _on_leave_button_pressed() -> void:
 	docked = false
 	dock_menu.visible = false
 	upgrade_menu.visible = false
+	fish_book_panel.visible = false
 	boat.set_movement_enabled(true)
 	_set_harbor_camera(false)
 
@@ -320,7 +538,6 @@ func _on_sell_button_pressed() -> void:
 	var levrek_count: int = hud.inventory.get("Levrek", 0)
 	var uskumru_count: int = hud.inventory.get("Uskumru", 0)
 	var ton_baligi_count: int = hud.inventory.get("Ton Balığı", 0)
-
 	var total_fish: int = sardalya_count + levrek_count + uskumru_count + ton_baligi_count
 	if total_fish == 0:
 		print("SATILACAK BALIK YOK!")
@@ -347,12 +564,28 @@ func _on_upgrade_button_pressed() -> void:
 	if not docked:
 		return
 	dock_menu.visible = false
+	fish_book_panel.visible = false
 	upgrade_menu.visible = true
 	_refresh_upgrade_menu()
 
 
 func _on_upgrade_back_button_pressed() -> void:
 	upgrade_menu.visible = false
+	if docked:
+		dock_menu.visible = true
+
+
+func _on_fish_book_button_pressed() -> void:
+	if not docked:
+		return
+	dock_menu.visible = false
+	upgrade_menu.visible = false
+	_refresh_fish_book()
+	fish_book_panel.visible = true
+
+
+func _on_fish_book_back_pressed() -> void:
+	fish_book_panel.visible = false
 	if docked:
 		dock_menu.visible = true
 
@@ -434,9 +667,8 @@ func _apply_upgrades() -> void:
 	hud.set_capacity_level(capacity_level)
 	hud.set_fight_ease_level(fight_ease_level)
 
-	# Derinlik büyüdükçe kamera ve deniz görseli de yeni limite kadar devam etsin.
 	hook.camera_deep_y = maxf(hook.max_depth - 280.0, 1420.0)
-	var water := $Water as ColorRect
+	var water: ColorRect = $Water as ColorRect
 	water.offset_bottom = maxf(water.offset_bottom, hook.max_depth + 1100.0)
 
 
