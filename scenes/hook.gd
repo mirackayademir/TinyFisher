@@ -21,7 +21,6 @@ var max_depth_meters: int = BASE_DEPTH_METERS
 var depth_panel: Panel
 var depth_label: Label
 
-# Misina gerilimi sistemi.
 var line_tension: float = 0.0
 var tension_gain_rate: float = 15.0
 var tension_recovery_rate: float = 28.0
@@ -44,13 +43,10 @@ var line_strength_level: int = 0
 
 func _ready() -> void:
 	start_position = position
-
-	# Scene'deki eski değer daha kısa olsa bile yeni başlangıç oltası yaklaşık 50 m'lik alanı tarar.
 	max_depth = maxf(max_depth, BASE_DEPTH_PIXELS)
 	camera_deep_y = maxf(camera_deep_y, 1420.0)
 
-	# Derin kamera aşağı indiğinde deniz görseli bitmesin.
-	var water := world.get_node_or_null("Water") as ColorRect
+	var water: ColorRect = world.get_node_or_null("Water") as ColorRect
 	if water != null:
 		water.offset_bottom = maxf(water.offset_bottom, 2700.0)
 
@@ -69,7 +65,6 @@ func _ready() -> void:
 
 
 func _setup_depth_hud() -> void:
-	# Ekranın üst-ortasında sabit kalır; kamera derine inse bile HUD ile birlikte görünür.
 	depth_panel = Panel.new()
 	depth_panel.name = "DepthPanel"
 	depth_panel.z_index = 92
@@ -110,7 +105,6 @@ func _setup_depth_hud() -> void:
 
 
 func _setup_tension_hud() -> void:
-	# Mücadele sırasında ekranın alt-orta kısmında misina gerilimini gösterir.
 	tension_panel = Panel.new()
 	tension_panel.name = "LineTensionPanel"
 	tension_panel.z_index = 93
@@ -238,7 +232,7 @@ func _physics_process(delta: float) -> void:
 		if position.y <= start_position.y:
 			land_catch()
 		elif not is_instance_valid(hooked_fish):
-			for area in get_overlapping_areas():
+			for area: Area2D in get_overlapping_areas():
 				_on_hook_area_entered(area)
 
 	hook_line.set_point_position(0, boat.get_line_origin_local())
@@ -270,7 +264,6 @@ func _update_line_tension(delta: float) -> void:
 
 
 func _configure_tension_for_fish(fish_type: String) -> void:
-	# Küçük balıklar kolay, büyük balıklar güçlü misina ve kontrollü sarma ister.
 	match fish_type:
 		"Sardalya":
 			tension_gain_rate = 8.0
@@ -285,22 +278,30 @@ func _configure_tension_for_fish(fish_type: String) -> void:
 			tension_recovery_rate = 27.0
 			tension_fish_pull = 6.0
 		"Ton Balığı":
-			# Başlangıç misinasıyla hâlâ zor; birkaç dayanıklılık seviyesiyle yönetilebilir hale gelir.
 			tension_gain_rate = 25.0
 			tension_recovery_rate = 25.0
 			tension_fish_pull = 8.0
+		"Kılıç Balığı":
+			tension_gain_rate = 29.0
+			tension_recovery_rate = 24.0
+			tension_fish_pull = 10.0
+		"Köpekbalığı":
+			tension_gain_rate = 35.0
+			tension_recovery_rate = 21.0
+			tension_fish_pull = 13.0
+		"Fener Balığı":
+			tension_gain_rate = 31.0
+			tension_recovery_rate = 22.0
+			tension_fish_pull = 11.0
 		_:
 			tension_gain_rate = 14.0
 			tension_recovery_rate = 30.0
 			tension_fish_pull = 4.0
 
-	# Mücadele Desteği genel minigame kolaylığını sağlar.
 	var ease_level: int = int(hud.fight_ease_level)
 	tension_gain_rate = maxf(5.0, tension_gain_rate - float(ease_level) * 1.2)
 	tension_recovery_rate += float(ease_level) * 1.0
 
-	# Misina Dayanıklılığı doğrudan gerilim mekaniğine etki eder.
-	# Her seviye gerilim oluşumunu %8 azaltır ve misinanın daha hızlı rahatlamasını sağlar.
 	var strength_multiplier: float = maxf(0.60, 1.0 - float(line_strength_level) * 0.08)
 	tension_gain_rate *= strength_multiplier
 	tension_fish_pull *= strength_multiplier
@@ -416,7 +417,7 @@ func set_depth_level(level: int) -> void:
 	max_depth_meters = BASE_DEPTH_METERS + (depth_level * DEPTH_METERS_PER_LEVEL)
 
 	camera_deep_y = 1420.0 + (float(depth_level) * 300.0)
-	var water := world.get_node_or_null("Water") as ColorRect
+	var water: ColorRect = world.get_node_or_null("Water") as ColorRect
 	if water != null:
 		water.offset_bottom = maxf(water.offset_bottom, 2700.0 + (float(depth_level) * 350.0))
 
@@ -429,7 +430,7 @@ func set_line_strength_level(level: int) -> void:
 
 func land_catch() -> void:
 	if is_instance_valid(hooked_fish):
-		if hud.add_fish(hooked_fish.fish_type):
+		if hud.add_fish(String(hooked_fish.get("fish_type"))):
 			hooked_fish.queue_free()
 		else:
 			hooked_fish.release_from_hook()
@@ -455,9 +456,10 @@ func _on_hook_area_entered(area: Area2D) -> void:
 	if not deployed or is_instance_valid(hooked_fish) or position.y <= start_position.y:
 		return
 
-	if area.has_method("hook_to") and not area.is_hooked and hud.can_add_fish():
+	if area.has_method("hook_to") and not bool(area.get("is_hooked")) and hud.can_add_fish():
 		hooked_fish = area
 		area.hook_to(self)
-		_configure_tension_for_fish(area.fish_type)
-		hud.show_fight_bar(area.fish_type)
+		var fish_type: String = String(area.get("fish_type"))
+		_configure_tension_for_fish(fish_type)
+		hud.show_fight_bar(fish_type)
 		_update_tension_hud()
