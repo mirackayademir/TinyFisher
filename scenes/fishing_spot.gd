@@ -88,12 +88,12 @@ func respawn_fish() -> void:
 
 	# Yakalanan türün ekosistemdeki yerini tekrar doldur.
 	# Bu sayede örneğin bütün ton balıklarının zamanla sardalyaya dönüşmesi gibi bir durum olmaz.
-	var sardine_missing := sardine_target - get_type_count("Sardalya")
-	var levrek_missing := levrek_target - get_type_count("Levrek")
-	var uskumru_missing := uskumru_target - get_type_count("Uskumru")
-	var tuna_missing := tuna_target - get_type_count("Ton Balığı")
+	var sardine_missing: int = sardine_target - get_type_count("Sardalya")
+	var levrek_missing: int = levrek_target - get_type_count("Levrek")
+	var uskumru_missing: int = uskumru_target - get_type_count("Uskumru")
+	var tuna_missing: int = tuna_target - get_type_count("Ton Balığı")
 
-	var largest_missing := max(sardine_missing, levrek_missing, uskumru_missing, tuna_missing)
+	var largest_missing: int = maxi(maxi(sardine_missing, levrek_missing), maxi(uskumru_missing, tuna_missing))
 
 	if largest_missing > 0:
 		if sardine_missing == largest_missing:
@@ -136,9 +136,10 @@ func _local_from_global(target: Vector2) -> Vector2:
 func _configure_sardine(fish, index_seed: int) -> void:
 	# Yüzeye yakın bölge: yaklaşık 8-12 metre hissi.
 	# Aynı sürüdeki balıklar dip dibe doğar ve kısa mesafelerde beraber gezinir.
-	var school_index := abs(index_seed) % SARDINE_SCHOOL_GLOBAL_CENTERS.size()
+	var school_count: int = SARDINE_SCHOOL_GLOBAL_CENTERS.size()
+	var school_index: int = absi(index_seed) % school_count
 	var school_center: Vector2 = SARDINE_SCHOOL_GLOBAL_CENTERS[school_index]
-	var target_global := school_center + Vector2(randf_range(-55.0, 55.0), randf_range(-22.0, 22.0))
+	var target_global: Vector2 = school_center + Vector2(randf_range(-55.0, 55.0), randf_range(-22.0, 22.0))
 
 	fish.position = _local_from_global(target_global)
 	fish.fish_type = "Sardalya"
@@ -150,7 +151,7 @@ func _configure_sardine(fish, index_seed: int) -> void:
 
 func _configure_levrek(fish) -> void:
 	# Orta sular: limana yakın başlayabilir ama sardalyadan belirgin biçimde daha derindedir.
-	var target_global := Vector2(
+	var target_global: Vector2 = Vector2(
 		randf_range(1250.0, 3900.0),
 		randf_range(820.0, 1080.0)
 	)
@@ -165,7 +166,7 @@ func _configure_levrek(fish) -> void:
 
 func _configure_uskumru(fish) -> void:
 	# Açık deniz / derin orta katman: daha sağda ve daha hızlı balıklar.
-	var target_global := Vector2(
+	var target_global: Vector2 = Vector2(
 		randf_range(2200.0, 5350.0),
 		randf_range(1110.0, 1420.0)
 	)
@@ -180,7 +181,7 @@ func _configure_uskumru(fish) -> void:
 
 func _configure_tuna(fish) -> void:
 	# Şimdilik ulaşılabilen en derin katman. Ton balığı limandan uzakta ve dip tarafa yakın yaşar.
-	var target_global := Vector2(
+	var target_global: Vector2 = Vector2(
 		randf_range(3400.0, 6200.0),
 		randf_range(1480.0, 1810.0)
 	)
