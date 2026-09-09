@@ -1,25 +1,22 @@
 extends Node
 
-# Miraç tarafından onaylanan üç detaylı balık görselini oyunun her yerinde
-# eski prototip SVG'lerin yerine kullanır. WebP dosyaları Godot import zincirine
-# bırakılmıyor; ham dosya baytları okunup ImageTexture olarak oluşturuluyor.
-# Böylece editor import/preload sorunu olsa bile ekranda onaylanan görseller çıkar.
-#
-# Aynı autoload, yem görselinin kancaya oranını/bağlantısını da son aşamada düzeltir.
-# DeepSeaAtmosphere mevcut yem fiziğini ve salınım rotasyonunu yönetmeye devam eder;
-# burada sadece yem kökünü gerçek kanca kıvrımına oturtup görsel ölçeği dengelenir.
+# Balık görsel düzeltmeleri + Leviathan test köprüsü.
+# Onaylı WebP dosyaları şu an bozuk olduğu için Godot başlangıçta decode hatası veriyordu.
+# Test sürecinde hatasız eski SVG texture'lara güvenli geri dönüş yapıyoruz.
+# Leviathan autoload yerelde eksik olsa bile bu çalışan autoload üzerinden runtime başlatılır.
 
 const KILIC_OLD: String = "res://assets/kilic_baligi.svg"
 const KOPEK_OLD: String = "res://assets/kopekbaligi.svg"
 const FENER_OLD: String = "res://assets/fener_baligi.svg"
 
-const KILIC_PATH: String = "res://assets/approved/kilic_baligi.webp"
-const KOPEK_PATH: String = "res://assets/approved/kopekbaligi.webp"
-const FENER_PATH: String = "res://assets/approved/fener_baligi.webp"
-
 const SCAN_INTERVAL: float = 0.10
 const BAIT_SCALE: Vector2 = Vector2(0.72, 0.72)
 const BAIT_HOOK_OFFSET: Vector2 = Vector2(3.5, 7.0)
+
+const LEVIATHAN_RUNTIME_SCRIPT: Script = preload("res://scenes/abyssal_leviathan_runtime.gd")
+const LEVIATHAN_TEST_MODE: bool = true
+const LEVIATHAN_TEST_DEPTH_Y: float = 600.0
+const LEVIATHAN_TEST_BOAT_OFFSET_X: float = 850.0
 
 var _scan_timer: float = 0.0
 var _kilic_approved: Texture2D = null
@@ -29,16 +26,16 @@ var _fener_approved: Texture2D = null
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	# DeepSeaAtmosphere yem fiziğini önce hesaplasın; bu autoload en son görsel
-	# hizalamayı uygulasın. Böylece iki sistem birbirinin pozisyonunu ezmez.
 	process_priority = 100
-	_load_approved_textures()
+	_load_safe_textures()
+	_ensure_leviathan_runtime()
 	_apply_to_current_scene()
 	_align_bait_to_hook()
 
 
 func _process(delta: float) -> void:
-	# Yem hizalaması her kare uygulanır; mevcut salınım/rotasyon korunur.
+	_ensure_leviathan_runtime()
+	_place_leviathan_for_test()
 	_align_bait_to_hook()
 
 	_scan_timer -= delta
@@ -48,29 +45,58 @@ func _process(delta: float) -> void:
 	_apply_to_current_scene()
 
 
-func _load_approved_textures() -> void:
-	_kilic_approved = _load_webp_direct(KILIC_PATH)
-	_kopek_approved = _load_webp_direct(KOPEK_PATH)
-	_fener_approved = _load_webp_direct(FENER_PATH)
+func _load_safe_textures() -> void:
+	# Geçici güvenli fallback: bozuk WebP dosyalarını decode etmeye çalışma.
+	_kilic_approved = load(KILIC_OLD) as Texture2D
+	_kopek_approved = load(KOPEK_OLD) as Texture2D
+	_fener_approved = load(FENER_OLD) as Texture2D
 
 
-func _load_webp_direct(path: String) -> Texture2D:
-	if not FileAccess.file_exists(path):
-		push_error("Onaylı balık görseli bulunamadı: " + path)
-		return null
+func _ensure_leviathan_runtime() -> void:
+	# project.godot yerelde eski kaldıysa RareFishSystem autoload olmayabilir.
+	# Böyle durumda bu autoload runtime'ı kendi altında tek kez başlatır.
+	var singleton: Node = get_node_or_null("/root/RareFishSystem")
+	if singleton != null:
+		return
+	if get_node_or_null("LeviathanRuntime") != null:
+		return
 
-	var bytes: PackedByteArray = FileAccess.get_file_as_bytes(path)
-	if bytes.is_empty():
-		push_error("Onaylı balık görseli okunamadı: " + path)
-		return null
+	var runtime: Node = Node.new()
+	runtime.name = "LeviathanRuntime"
+	runtime.set_script(LEVIATHAN_RUNTIME_SCRIPT)
+	add_child(runtime)
+	print("LEVIATHAN RUNTIME TEST ICIN AKTIF")
 
-	var image: Image = Image.new()
-	var load_error: Error = image.load_webp_from_buffer(bytes)
-	if load_error != OK or image.is_empty():
-		push_error("Onaylı balık WebP görseli çözülemedi: " + path + " hata=" + str(load_error))
-		return null
 
-	return ImageTexture.create_from_image(image)
+func _place_leviathan_for_test() -> void:
+	if not LEVIATHAN_TEST_MODE:
+		return
+	var root: Node = get_tree().current_scene
+	if root == null:
+		return
+
+	var leviathan: Node2D = _find_node_recursive(root, "AbyssalLeviathan") as Node2D
+	if leviathan == null or leviathan.has_meta("shallow_test_placed"):
+		return
+
+	var boat: Node2D = root.get_node_or_null("Boat") as Node2D
+	var target_x: float = 1400.0
+	if boat != null:
+		target_x = boat.global_position.x + LEVIATHAN_TEST_BOAT_OFFSET_X
+
+	leviathan.global_position = Vector2(target_x, LEVIATHAN_TEST_DEPTH_Y)
+	leviathan.set_meta("shallow_test_placed", true)
+	print("LEVIATHAN TEST KONUMUNA TASINDI: ", leviathan.global_position)
+
+
+func _find_node_recursive(node: Node, target_name: String) -> Node:
+	if node.name == target_name:
+		return node
+	for child: Node in node.get_children():
+		var found: Node = _find_node_recursive(child, target_name)
+		if found != null:
+			return found
+	return null
 
 
 func get_texture_for_fish(fish_type: String) -> Texture2D:
@@ -105,8 +131,6 @@ func _align_bait_to_hook() -> void:
 	if bait_root == null:
 		return
 
-	# Kanca görselinin en alt kıvrımı Area2D merkezine göre yaklaşık x=3..5, y=7..8.
-	# Yemin ilk noktası artık doğrudan bu kıvrımdan başlar; 24 px aşağıda asılı kalmaz.
 	var t: float = float(Time.get_ticks_msec()) * 0.001
 	bait_root.position = BAIT_HOOK_OFFSET + Vector2(sin(t * 0.80) * 0.8, sin(t * 1.15) * 0.45)
 	bait_root.scale = BAIT_SCALE
