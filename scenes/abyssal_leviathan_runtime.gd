@@ -2,10 +2,10 @@ extends Node
 
 # Leviathan kontrolu ikinci bir balik spawn ETMEZ.
 # Ekranda gorunen LeviathanVisualTest Sprite2D'sini hedefler.
-# STEP 9B: Boss yaklasma cilasi.
+# STEP 9C: Agiz-kanca temas cilasi.
 # - Yem gorulunce agresif ve hizli yaklasir.
 # - Yaklasma hizi arttikca kuyruk animasyonu da hizlanir.
-# - Boss basladiginda Leviathan'in agzi kancaya kilitlenir.
+# - Boss basladiginda kanca fener ucuna degil, dislerin arasina kilitlenir.
 
 const LEVIATHAN_NODE_NAME: String = "LeviathanVisualTest"
 const LEVIATHAN_SWIM_SHADER: Shader = preload("res://shaders/leviathan_swim.gdshader")
@@ -21,9 +21,9 @@ const LIVE_SARDINE_HUNT_SPEED: float = 230.0
 const STALK_SLOW_RADIUS: float = 185.0
 const RETURN_SPEED: float = 150.0
 
-# Bu oranlar texture merkezine gore agzin gorunen ucunu hedefler.
+# Texture merkezine gore acik agzin/dislerin orta noktasini hedefler.
 # Kaynak gorselde kafa solda; flip_h=true oldugunda kafa saga gecer.
-const LEVIATHAN_MOUTH_X_RATIO: float = 0.485
+const LEVIATHAN_MOUTH_X_RATIO: float = 0.360
 const LEVIATHAN_MOUTH_Y_RATIO: float = 0.015
 const BOSS_BITE_DISTANCE: float = 16.0
 
@@ -68,7 +68,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# ApprovedFishArt priority=100. Biz sonra calisip son hareketi uygulariz.
 	process_priority = 200
-	print("LEVIATHAN CONTROLLER V13: STEP 9B FAST HUNT + MOUTH HOOK LOCK")
+	print("LEVIATHAN CONTROLLER V14: STEP 9C TEETH HOOK LOCK")
 
 
 func _process(delta: float) -> void:
@@ -112,7 +112,7 @@ func _find_visible_leviathan() -> void:
 	_boss_caught = false
 	_boss_resistance = BOSS_MAX_RESISTANCE
 	_boss_result_timer = 0.0
-	print("LEVIATHAN V13 HEDEF BULUNDU: ", _leviathan_sprite.get_path())
+	print("LEVIATHAN V14 HEDEF BULUNDU: ", _leviathan_sprite.get_path())
 	_apply_visible_leviathan_material()
 
 
@@ -128,7 +128,7 @@ func _apply_visible_leviathan_material() -> void:
 
 	_leviathan_sprite.material = material
 	_material_applied = true
-	print("LEVIATHAN V13 ANIMASYON GORUNEN SPRITE'A UYGULANDI")
+	print("LEVIATHAN V14 ANIMASYON GORUNEN SPRITE'A UYGULANDI")
 
 
 func _update_bait_detection(delta: float) -> void:
@@ -192,13 +192,11 @@ func _update_bait_detection(delta: float) -> void:
 	_leviathan_sprite.rotation = aim_rotation
 
 	# Merkez yerine agiz ile kanca arasindaki mesafeyi baz aliyoruz.
-	# Boylece balik kancanin onunde durmaz; gercekten agzina kadar gelir.
 	var mouth_position: Vector2 = _get_mouth_global_position()
 	var mouth_to_bait: Vector2 = hook.global_position - mouth_position
 	var mouth_distance: float = mouth_to_bait.length()
 
-	# Yem gorulunce artik sinsi/yavas degil, agresif bir yaklasma var.
-	# Sadece son 185 px'de hafif fren yapar; tamamen surunmeye dusmez.
+	# Yem gorulunce agresif yaklasir; son mesafede sadece hafif fren yapar.
 	var speed_multiplier: float = 1.15
 	if mouth_distance < STALK_SLOW_RADIUS:
 		var near_t: float = clampf(inverse_lerp(BOSS_BITE_DISTANCE, STALK_SLOW_RADIUS, mouth_distance), 0.0, 1.0)
@@ -260,9 +258,8 @@ func _lock_mouth_to_hook(hook_global_position: Vector2) -> void:
 	if not is_instance_valid(_leviathan_sprite):
 		return
 
-	# Rotation/scale uygulandiktan sonra agzin gercek global konumunu bulup
-	# aradaki fark kadar tum sprite'i tasiyoruz. Boylece agiz-kanca temasi
-	# her frame korunuyor.
+	# Rotation/scale uygulandiktan sonra dislerin orta noktasinin gercek global
+	# konumunu bulup aradaki fark kadar tum sprite'i tasiyoruz.
 	var mouth_global: Vector2 = _get_mouth_global_position()
 	_leviathan_sprite.global_position += hook_global_position - mouth_global
 	_hunt_position = _leviathan_sprite.global_position
@@ -300,7 +297,7 @@ func _start_boss_fight(hook: Area2D) -> void:
 	if _boss_panel != null:
 		_boss_panel.visible = true
 
-	print("LEVIATHAN YEMI KAPTI! AGIZ KANCAYA KILITLENDI — DIRENC 100")
+	print("LEVIATHAN YEMI KAPTI! DISLER KANCAYA KILITLENDI — DIRENC 100")
 
 
 func _update_boss_fight(delta: float) -> void:
@@ -334,7 +331,7 @@ func _update_boss_fight(delta: float) -> void:
 		var secondary_rotation: float = sin(_boss_time * 3.4 + 0.8) * 0.012
 		_leviathan_sprite.rotation = _boss_base_rotation + struggle_rotation + secondary_rotation
 
-		# Agiz tam kancada kalirken kuyruk/govde savrulur.
+		# Dislerin orta noktasi tam kancada kalirken kuyruk/govde savrulur.
 		_lock_mouth_to_hook(hook.global_position)
 		_set_hunt_shader_state(true, 0.0, 1.30)
 		_update_hunt_glow(0.0)
