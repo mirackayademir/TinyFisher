@@ -1,23 +1,19 @@
-extends Node2D
+extends Node
 
 # Leviathan test runtime.
 # 6. madde: kabarcik + su izi.
-# V4: Efektler child Polygon/Line node'lari yerine dogrudan CanvasItem _draw() ile cizilir.
-# Bu, onceki gorunmeme sorununda z-index/child transform ihtimalini tamamen devreden cikarir.
+# V5: Efektler, oyunda teknenin kopugunde zaten calisan CPUParticles2D sistemiyle uretilir.
+# Boss/yem/UI sistemlerine dokunulmaz.
 
 const FISH_TYPE: String = "Abyssal Leviathan"
 const FISH_VALUE: int = 1250
 const FISH_TEXTURE_PATH: String = "res://assets/leviathan.webp"
 const FISH_SCENE: PackedScene = preload("res://scenes/fish.tscn")
+const FOAM_TEXTURE: Texture2D = preload("res://assets/foam_particle.svg")
 
 const TEST_BOAT_OFFSET_X: float = 850.0
 const TEST_DEPTH_Y: float = 600.0
 const RETRY_SECONDS: float = 0.5
-
-const TRAIL_SAMPLE_SECONDS: float = 0.045
-const TRAIL_MAX_POINTS: int = 24
-const BUBBLE_INTERVAL: float = 0.10
-const TAIL_VISUAL_FACTOR: float = 0.38
 
 var _texture: Texture2D = null
 var _world: Node2D = null
@@ -27,24 +23,19 @@ var _sprite: Sprite2D = null
 var _retry_timer: float = 0.0
 var _spawned: bool = false
 
-var _effect_time: float = 0.0
-var _trail_timer: float = 0.0
-var _bubble_timer: float = 0.0
-var _trail_points: Array[Vector2] = []
-var _bubbles: Array[Dictionary] = []
+var _wake_particles: CPUParticles2D = null
+var _bubble_particles: CPUParticles2D = null
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	z_index = 200
 	_try_load_texture()
 	_try_setup_and_spawn()
 
 
 func _process(delta: float) -> void:
 	if _spawned:
-		_update_direct_effects(delta)
-		queue_redraw()
+		_update_particle_effects()
 		return
 
 	_retry_timer -= delta
@@ -55,14 +46,6 @@ func _process(delta: float) -> void:
 	if _texture == null:
 		_try_load_texture()
 	_try_setup_and_spawn()
-
-
-func _draw() -> void:
-	if not _spawned or not is_instance_valid(_leviathan) or not is_instance_valid(_sprite):
-		return
-
-	_draw_wake()
-	_draw_bubbles()
 
 
 func _try_load_texture() -> void:
@@ -122,20 +105,11 @@ func _spawn_test_leviathan() -> void:
 
 	_leviathan = fish
 	_sprite = fish.get_node_or_null("FishSprite") as Sprite2D
+	_setup_particle_effects()
 	_spawned = true
 
-	_trail_points.clear()
-	var first_tail: Vector2 = _tail_draw_position()
-	for i in range(7):
-		_trail_points.append(first_tail + Vector2(float(i) * 5.0, 0.0))
-
-	# Ilk karede de gorunur kabarcik olsun.
-	for i in range(6):
-		_spawn_bubble(float(i) * 0.08)
-
-	queue_redraw()
 	print("LEVIATHAN TEST SPAWN OK: ", fish.global_position)
-	print("LEVIATHAN EFFECT 6 V4 ACTIVE: DIRECT CANVAS DRAW")
+	print("LEVIATHAN EFFECT 6 V5 ACTIVE: CPU PARTICLES")
 
 
 func _configure_visual(fish: Area2D) -> void:
@@ -168,120 +142,75 @@ func _configure_visual(fish: Area2D) -> void:
 			rect.size = Vector2(560.0, 170.0)
 
 
-func _update_direct_effects(delta: float) -> void:
-	if not is_instance_valid(_leviathan) or not is_instance_valid(_sprite):
+func _setup_particle_effects() -> void:
+	if not is_instance_valid(_leviathan):
 		return
 
-	_effect_time += delta
-	_trail_timer -= delta
-	_bubble_timer -= delta
+	# Ana su/kopuk izi. Teknedeki calisan sistemle ayni temel yapi.
+	_wake_particles = CPUParticles2D.new()
+	_wake_particles.name = "LeviathanWakeParticles"
+	_wake_particles.z_index = -1
+	_wake_particles.emitting = true
+	_wake_particles.amount = 52
+	_wake_particles.lifetime = 0.95
+	_wake_particles.randomness = 0.58
+	_wake_particles.local_coords = false
+	_wake_particles.texture = FOAM_TEXTURE
+	_wake_particles.spread = 20.0
+	_wake_particles.gravity = Vector2(0.0, -3.0)
+	_wake_particles.initial_velocity_min = 30.0
+	_wake_particles.initial_velocity_max = 68.0
+	_wake_particles.scale_amount_min = 0.70
+	_wake_particles.scale_amount_max = 1.75
+	_wake_particles.color = Color(0.84, 0.97, 1.0, 0.90)
+	_leviathan.add_child(_wake_particles)
 
-	if _trail_timer <= 0.0:
-		_trail_timer = TRAIL_SAMPLE_SECONDS
-		var point: Vector2 = _tail_draw_position()
-		if not _trail_points.is_empty() and _trail_points[_trail_points.size() - 1].distance_to(point) > 350.0:
-			_trail_points.clear()
-		_trail_points.append(point)
-		while _trail_points.size() > TRAIL_MAX_POINTS:
-			_trail_points.remove_at(0)
+	# Daha seyrek ve yukari cikan kabarcik/kopuk parcaciklari.
+	_bubble_particles = CPUParticles2D.new()
+	_bubble_particles.name = "LeviathanBubbleParticles"
+	_bubble_particles.z_index = -1
+	_bubble_particles.emitting = true
+	_bubble_particles.amount = 28
+	_bubble_particles.lifetime = 1.55
+	_bubble_particles.randomness = 0.72
+	_bubble_particles.local_coords = false
+	_bubble_particles.texture = FOAM_TEXTURE
+	_bubble_particles.spread = 28.0
+	_bubble_particles.gravity = Vector2(0.0, -14.0)
+	_bubble_particles.initial_velocity_min = 16.0
+	_bubble_particles.initial_velocity_max = 34.0
+	_bubble_particles.scale_amount_min = 0.32
+	_bubble_particles.scale_amount_max = 0.92
+	_bubble_particles.color = Color(0.72, 0.93, 1.0, 0.72)
+	_leviathan.add_child(_bubble_particles)
 
-	if _bubble_timer <= 0.0:
-		var speed_value: float = absf(float(_leviathan.get("current_swim_velocity_x")))
-		var speed_ratio: float = clampf(speed_value / 30.0, 0.65, 1.55)
-		_bubble_timer = BUBBLE_INTERVAL / speed_ratio
-		_spawn_bubble(0.0)
-		if speed_ratio > 1.05 and randf() < 0.55:
-			_spawn_bubble(0.0)
-
-	_update_bubbles(delta)
+	_update_particle_effects()
 
 
-func _tail_draw_position() -> Vector2:
-	if not is_instance_valid(_leviathan) or not is_instance_valid(_sprite) or _sprite.texture == null:
-		return Vector2.ZERO
+func _update_particle_effects() -> void:
+	if not is_instance_valid(_leviathan) or not is_instance_valid(_sprite):
+		return
+	if not is_instance_valid(_wake_particles) or not is_instance_valid(_bubble_particles):
+		return
+	if _sprite.texture == null:
+		return
 
-	# Texture boyutundan kuyruk noktasini hesapliyoruz; sabit piksel tahmini kullanmiyoruz.
+	# Gorselin dogal halinde kafa solda, kuyruk sagda.
+	# flip_h oldugunda kuyruk sola gecer.
+	var tail_side: float = -1.0 if _sprite.flip_h else 1.0
 	var visual_width: float = float(_sprite.texture.get_width()) * absf(_sprite.scale.x)
-	var tail_offset_x: float = visual_width * TAIL_VISUAL_FACTOR
-	var side: float = -1.0 if _sprite.flip_h else 1.0
-	var world_tail: Vector2 = _leviathan.global_position + Vector2(
-		tail_offset_x * side,
-		8.0 + sin(_effect_time * 2.1) * 4.0
-	)
-	return to_local(world_tail)
+	var tail_x: float = visual_width * 0.47 * tail_side
+	var tail_y: float = 8.0
 
+	_wake_particles.position = Vector2(tail_x, tail_y)
+	_bubble_particles.position = Vector2(tail_x, tail_y - 2.0)
 
-func _spawn_bubble(age_offset: float) -> void:
-	if not is_instance_valid(_leviathan) or not is_instance_valid(_sprite):
-		return
+	# Parcalar kuyruktan geriye dogru akar.
+	_wake_particles.direction = Vector2(tail_side, 0.03)
+	_bubble_particles.direction = Vector2(tail_side * 0.28, -1.0).normalized()
 
-	var tail_pos: Vector2 = _tail_draw_position()
-	var velocity_x: float = float(_leviathan.get("current_swim_velocity_x"))
-	var back_sign: float = -signf(velocity_x)
-	if is_zero_approx(back_sign):
-		back_sign = -1.0 if not _sprite.flip_h else 1.0
-
-	var life: float = randf_range(1.0, 1.55)
-	var bubble := {
-		"pos": tail_pos + Vector2(randf_range(-10.0, 10.0), randf_range(-16.0, 18.0)),
-		"vel": Vector2(back_sign * randf_range(18.0, 42.0), -randf_range(34.0, 64.0)),
-		"life": maxf(0.15, life - age_offset),
-		"max_life": life,
-		"radius": randf_range(3.5, 7.5)
-	}
-	_bubbles.append(bubble)
-
-
-func _update_bubbles(delta: float) -> void:
-	for i in range(_bubbles.size() - 1, -1, -1):
-		var bubble: Dictionary = _bubbles[i]
-		var pos: Vector2 = bubble["pos"]
-		var vel: Vector2 = bubble["vel"]
-		var life: float = float(bubble["life"])
-
-		pos += vel * delta
-		vel.x += sin(_effect_time * 4.0 + float(i)) * 5.0 * delta
-		life -= delta
-
-		if life <= 0.0:
-			_bubbles.remove_at(i)
-			continue
-
-		bubble["pos"] = pos
-		bubble["vel"] = vel
-		bubble["life"] = life
-		_bubbles[i] = bubble
-
-
-func _draw_wake() -> void:
-	if _trail_points.size() < 2:
-		return
-
-	var points := PackedVector2Array(_trail_points)
-
-	# Genis mavi su izi.
-	draw_polyline(points, Color(0.25, 0.82, 1.0, 0.42), 18.0, true)
-	# Ortadaki parlak kopuk cizgisi.
-	draw_polyline(points, Color(0.82, 0.97, 1.0, 0.86), 5.0, true)
-
-	# Eski noktalarda dagilan kopuk adaciklari.
-	for i in range(_trail_points.size()):
-		if i % 2 != 0:
-			continue
-		var age_ratio: float = float(i + 1) / float(_trail_points.size())
-		var radius: float = lerpf(3.0, 8.5, age_ratio)
-		var wobble := Vector2(0.0, sin(_effect_time * 5.0 + float(i)) * 4.0)
-		draw_circle(_trail_points[i] + wobble, radius, Color(0.72, 0.94, 1.0, 0.18 + age_ratio * 0.34))
-
-
-func _draw_bubbles() -> void:
-	for bubble in _bubbles:
-		var pos: Vector2 = bubble["pos"]
-		var life: float = float(bubble["life"])
-		var max_life: float = maxf(float(bubble["max_life"]), 0.001)
-		var radius: float = float(bubble["radius"])
-		var alpha: float = clampf(life / max_life, 0.0, 1.0)
-
-		# Dis halka + minik beyaz yansima.
-		draw_circle(pos, radius, Color(0.82, 0.97, 1.0, 0.88 * alpha), false, 2.2, true)
-		draw_circle(pos + Vector2(-radius * 0.30, -radius * 0.30), maxf(1.0, radius * 0.18), Color(1.0, 1.0, 1.0, 0.95 * alpha))
+	# Balik hizlandikca kopuk biraz yogunlasir.
+	var speed_value: float = absf(float(_leviathan.get("current_swim_velocity_x")))
+	var speed_ratio: float = clampf(speed_value / 30.0, 0.55, 1.55)
+	_wake_particles.speed_scale = lerpf(0.80, 1.35, (speed_ratio - 0.55) / 1.0)
+	_bubble_particles.speed_scale = lerpf(0.78, 1.18, (speed_ratio - 0.55) / 1.0)
