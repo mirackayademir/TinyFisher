@@ -1,41 +1,46 @@
 extends Node
 
-# Balık görsel düzeltmeleri + Leviathan test köprüsü.
-# Onaylı WebP dosyaları şu an bozuk olduğu için Godot başlangıçta decode hatası veriyordu.
-# Test sürecinde hatasız eski SVG texture'lara güvenli geri dönüş yapıyoruz.
-# Leviathan autoload yerelde eksik olsa bile bu çalışan autoload üzerinden runtime başlatılır.
+# Balik gorsel duzeltmeleri + Leviathan test gorseli.
+# Onayli WebP dosyalari bozuk oldugu icin mevcut SVG'lere guvenli geri donus yapilir.
+# Leviathan testi ise dogrudan Sprite2D olarak denize eklenir; fish.gd/autoload/boss
+# mantigina bagli degildir. Boylece once gorselin oyunda kesin gorundugunu dogrulariz.
 
 const KILIC_OLD: String = "res://assets/kilic_baligi.svg"
 const KOPEK_OLD: String = "res://assets/kopekbaligi.svg"
 const FENER_OLD: String = "res://assets/fener_baligi.svg"
+const LEVIATHAN_TEXTURE_PATH: String = "res://assets/leviathan.webp"
 
 const SCAN_INTERVAL: float = 0.10
 const BAIT_SCALE: Vector2 = Vector2(0.72, 0.72)
 const BAIT_HOOK_OFFSET: Vector2 = Vector2(3.5, 7.0)
 
-const LEVIATHAN_RUNTIME_SCRIPT: Script = preload("res://scenes/abyssal_leviathan_runtime.gd")
-const LEVIATHAN_TEST_MODE: bool = true
-const LEVIATHAN_TEST_DEPTH_Y: float = 600.0
-const LEVIATHAN_TEST_BOAT_OFFSET_X: float = 850.0
+# TEST: Baslangicta teknenin sol-alt tarafinda, ekranda gorunecek konum.
+const LEVIATHAN_TEST_OFFSET: Vector2 = Vector2(-360.0, 250.0)
+const LEVIATHAN_TEST_SCALE: Vector2 = Vector2(0.20, 0.20)
 
 var _scan_timer: float = 0.0
+var _time: float = 0.0
 var _kilic_approved: Texture2D = null
 var _kopek_approved: Texture2D = null
 var _fener_approved: Texture2D = null
+var _leviathan_texture: Texture2D = null
+var _leviathan_sprite: Sprite2D = null
+var _leviathan_origin: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	process_priority = 100
 	_load_safe_textures()
-	_ensure_leviathan_runtime()
+	_load_leviathan_texture()
 	_apply_to_current_scene()
 	_align_bait_to_hook()
 
 
 func _process(delta: float) -> void:
-	_ensure_leviathan_runtime()
-	_place_leviathan_for_test()
+	_time += delta
+	_ensure_leviathan_test()
+	_animate_leviathan_test()
 	_align_bait_to_hook()
 
 	_scan_timer -= delta
@@ -46,57 +51,72 @@ func _process(delta: float) -> void:
 
 
 func _load_safe_textures() -> void:
-	# Geçici güvenli fallback: bozuk WebP dosyalarını decode etmeye çalışma.
 	_kilic_approved = load(KILIC_OLD) as Texture2D
 	_kopek_approved = load(KOPEK_OLD) as Texture2D
 	_fener_approved = load(FENER_OLD) as Texture2D
 
 
-func _ensure_leviathan_runtime() -> void:
-	# project.godot yerelde eski kaldıysa RareFishSystem autoload olmayabilir.
-	# Böyle durumda bu autoload runtime'ı kendi altında tek kez başlatır.
-	var singleton: Node = get_node_or_null("/root/RareFishSystem")
-	if singleton != null:
+func _load_leviathan_texture() -> void:
+	if _leviathan_texture != null:
 		return
-	if get_node_or_null("LeviathanRuntime") != null:
+	if not ResourceLoader.exists(LEVIATHAN_TEXTURE_PATH):
+		push_error("LEVIATHAN TEST: texture bulunamadi: " + LEVIATHAN_TEXTURE_PATH)
 		return
 
-	var runtime: Node = Node.new()
-	runtime.name = "LeviathanRuntime"
-	runtime.set_script(LEVIATHAN_RUNTIME_SCRIPT)
-	add_child(runtime)
-	print("LEVIATHAN RUNTIME TEST ICIN AKTIF")
-
-
-func _place_leviathan_for_test() -> void:
-	if not LEVIATHAN_TEST_MODE:
+	_leviathan_texture = load(LEVIATHAN_TEXTURE_PATH) as Texture2D
+	if _leviathan_texture == null:
+		push_error("LEVIATHAN TEST: texture yuklenemedi: " + LEVIATHAN_TEXTURE_PATH)
 		return
-	var root: Node = get_tree().current_scene
+
+	print("LEVIATHAN TEST TEXTURE HAZIR: ", LEVIATHAN_TEXTURE_PATH)
+
+
+func _ensure_leviathan_test() -> void:
+	if is_instance_valid(_leviathan_sprite):
+		return
+
+	if _leviathan_texture == null:
+		_load_leviathan_texture()
+		if _leviathan_texture == null:
+			return
+
+	var root: Node2D = get_tree().current_scene as Node2D
 	if root == null:
 		return
 
-	var leviathan: Node2D = _find_node_recursive(root, "AbyssalLeviathan") as Node2D
-	if leviathan == null or leviathan.has_meta("shallow_test_placed"):
+	var boat: Node2D = root.get_node_or_null("Boat") as Node2D
+	if boat == null:
 		return
 
-	var boat: Node2D = root.get_node_or_null("Boat") as Node2D
-	var target_x: float = 1400.0
-	if boat != null:
-		target_x = boat.global_position.x + LEVIATHAN_TEST_BOAT_OFFSET_X
+	var existing: Sprite2D = root.get_node_or_null("LeviathanVisualTest") as Sprite2D
+	if existing != null:
+		_leviathan_sprite = existing
+		_leviathan_origin = existing.global_position
+		return
 
-	leviathan.global_position = Vector2(target_x, LEVIATHAN_TEST_DEPTH_Y)
-	leviathan.set_meta("shallow_test_placed", true)
-	print("LEVIATHAN TEST KONUMUNA TASINDI: ", leviathan.global_position)
+	var sprite: Sprite2D = Sprite2D.new()
+	sprite.name = "LeviathanVisualTest"
+	sprite.texture = _leviathan_texture
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.scale = LEVIATHAN_TEST_SCALE
+	sprite.z_index = 3
+	sprite.global_position = boat.global_position + LEVIATHAN_TEST_OFFSET
+	root.add_child(sprite)
+
+	_leviathan_sprite = sprite
+	_leviathan_origin = sprite.global_position
+	print("LEVIATHAN TEST DENIZE EKLENDI: ", _leviathan_origin)
 
 
-func _find_node_recursive(node: Node, target_name: String) -> Node:
-	if node.name == target_name:
-		return node
-	for child: Node in node.get_children():
-		var found: Node = _find_node_recursive(child, target_name)
-		if found != null:
-			return found
-	return null
+func _animate_leviathan_test() -> void:
+	if not is_instance_valid(_leviathan_sprite):
+		return
+
+	var wave_x: float = sin(_time * 0.55) * 120.0
+	var wave_y: float = sin(_time * 1.10) * 8.0
+	_leviathan_sprite.global_position = _leviathan_origin + Vector2(wave_x, wave_y)
+	_leviathan_sprite.rotation = sin(_time * 0.85) * 0.015
+	_leviathan_sprite.flip_h = cos(_time * 0.55) < 0.0
 
 
 func get_texture_for_fish(fish_type: String) -> Texture2D:
