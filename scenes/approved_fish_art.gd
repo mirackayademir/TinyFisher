@@ -16,7 +16,7 @@ const BAIT_HOOK_OFFSET: Vector2 = Vector2(3.5, 7.0)
 
 # TEST: Baslangicta teknenin sol-alt tarafinda, ekranda gorunecek konum.
 const LEVIATHAN_TEST_OFFSET: Vector2 = Vector2(-360.0, 250.0)
-const LEVIATHAN_TEST_SCALE: Vector2 = Vector2(0.20, 0.20)
+const LEVIATHAN_TEST_SCALE: Vector2 = Vector2(0.75, 0.75)
 
 var _scan_timer: float = 0.0
 var _time: float = 0.0
