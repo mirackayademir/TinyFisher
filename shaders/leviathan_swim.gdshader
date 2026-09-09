@@ -27,7 +27,14 @@ void fragment() {
 	// Hafif yatay sikisma/acilma; duz karton hissini azaltir.
 	warped_uv.x += cos(phase * 0.62 + x * 6.0) * 0.006 * tail_mask;
 
-	vec4 tex = texture(TEXTURE, warped_uv);
+	// KRITIK FIX: UV sinir disina cikinca texture diger kenardan tekrar etmesin.
+	// Onceki durumda kuyruk x>1.0 oldugunda kafa/fenerdeki kirmizi pikseller
+	// kuyruk ucunda tekrar gorunup sahte bir kirmizi parlama olusturuyordu.
+	float inside_x = step(0.0, warped_uv.x) * step(warped_uv.x, 1.0);
+	float inside_y = step(0.0, warped_uv.y) * step(warped_uv.y, 1.0);
+	float inside = inside_x * inside_y;
+	vec2 safe_uv = clamp(warped_uv, vec2(0.001), vec2(0.999));
+	vec4 tex = texture(TEXTURE, safe_uv) * inside;
 
 	float shimmer = 0.97 + 0.03 * sin(TIME * 1.7 + SCREEN_UV.y * 31.0 + SCREEN_UV.x * 11.0);
 	float depth_tint = clamp((SCREEN_UV.y - 0.38) * 0.30, 0.0, 0.14);
