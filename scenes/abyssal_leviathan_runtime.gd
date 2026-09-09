@@ -21,6 +21,14 @@ const STOP_DISTANCE: float = 135.0
 const STALK_SLOW_RADIUS: float = 260.0
 const RETURN_SPEED: float = 115.0
 
+# ApprovedFishArt'taki gercek kafa uzerindeki isik oranlari.
+# Sprite2D.flip_h cocuk node'lari aynalamadigi icin av modunda bunlari
+# gorunen kafa yonune gore burada zorla dogru tarafa tasiyoruz.
+const LEVIATHAN_LURE_X_RATIO: float = 0.466
+const LEVIATHAN_LURE_Y_RATIO: float = -0.047
+const LEVIATHAN_EYE_X_RATIO: float = 0.248
+const LEVIATHAN_EYE_Y_RATIO: float = -0.095
+
 var _leviathan_sprite: Sprite2D = null
 var _retry_timer: float = 0.0
 var _material_applied: bool = false
@@ -35,7 +43,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# ApprovedFishArt priority=100. Biz sonra calisip gorunen sprite'a son hareketi uygulariz.
 	process_priority = 200
-	print("LEVIATHAN CONTROLLER V10: STEP 8B STALKING POLISH")
+	print("LEVIATHAN CONTROLLER V11: STEP 8B GLOW HEAD SYNC FIX")
 
 
 func _process(delta: float) -> void:
@@ -66,7 +74,7 @@ func _find_visible_leviathan() -> void:
 	_hunt_override_active = false
 	_detected_bait = ""
 	_hunt_time = 0.0
-	print("LEVIATHAN V10 HEDEF BULUNDU: ", _leviathan_sprite.get_path())
+	print("LEVIATHAN V11 HEDEF BULUNDU: ", _leviathan_sprite.get_path())
 	_apply_visible_leviathan_material()
 
 
@@ -82,7 +90,7 @@ func _apply_visible_leviathan_material() -> void:
 
 	_leviathan_sprite.material = material
 	_material_applied = true
-	print("LEVIATHAN V10 ANIMASYON GORUNEN SPRITE'A UYGULANDI")
+	print("LEVIATHAN V11 ANIMASYON GORUNEN SPRITE'A UYGULANDI")
 
 
 func _update_bait_detection(delta: float) -> void:
@@ -136,7 +144,7 @@ func _update_bait_detection(delta: float) -> void:
 
 	_hunt_time += delta
 
-	# Sinsi yaklasma: uzakta kontrollu, orta mesafede kararlı,
+	# Sinsi yaklasma: uzakta kontrollu, orta mesafede kararli,
 	# son 260 px'de belirgin sekilde yavaslayarak yemi suzer.
 	var speed_multiplier: float = 0.76
 	if distance < STALK_SLOW_RADIUS:
@@ -189,7 +197,7 @@ func _return_to_patrol(delta: float) -> void:
 		_detected_bait = ""
 		_hunt_time = 0.0
 		_set_hunt_shader_state(false, 9999.0)
-		print("LEVIATHAN YEMI KAYBETTI: DEVRİYEYE DONDU")
+		print("LEVIATHAN YEMI KAYBETTI: DEVRIYEYE DONDU")
 
 
 func _get_detection_radius(bait: String) -> float:
@@ -234,11 +242,27 @@ func _update_hunt_glow(distance: float) -> void:
 	if not is_instance_valid(_leviathan_sprite):
 		return
 
-	# ApprovedFishArt her frame normal fener/göz nabzini yazar; biz sadece av modunda
-	# onun uzerine son dokunusu yapiyoruz. Boylece mevcut isik sistemi bozulmaz.
+	# ApprovedFishArt av disinda isiklari gunceller. Av modunda ise runtime sprite'i
+	# yeme gore flip_h ile cevirdigi icin cocuk glow node'lari otomatik aynalanmaz.
+	# Bu nedenle fener ve goz isiklarini her av frame'inde GERCEK GORUNEN KAFA tarafina sabitleriz.
 	var lure: Sprite2D = _leviathan_sprite.get_node_or_null("LeviathanLureGlow") as Sprite2D
 	var eye: Sprite2D = _leviathan_sprite.get_node_or_null("LeviathanEyeGlow") as Sprite2D
 	var close_factor: float = 1.0 - clampf(inverse_lerp(STOP_DISTANCE, 430.0, distance), 0.0, 1.0)
+
+	if _leviathan_sprite.texture != null:
+		var texture_size: Vector2 = _leviathan_sprite.texture.get_size()
+		# Kaynak gorselde kafa solda. flip_h=true oldugunda gorunen kafa saga gecer.
+		var head_sign: float = 1.0 if _leviathan_sprite.flip_h else -1.0
+		if lure != null:
+			lure.position = Vector2(
+				texture_size.x * LEVIATHAN_LURE_X_RATIO * head_sign,
+				texture_size.y * LEVIATHAN_LURE_Y_RATIO
+			)
+		if eye != null:
+			eye.position = Vector2(
+				texture_size.x * LEVIATHAN_EYE_X_RATIO * head_sign,
+				texture_size.y * LEVIATHAN_EYE_Y_RATIO
+			)
 
 	if lure != null:
 		var pulse: float = 0.5 + 0.5 * sin(_hunt_time * lerpf(3.0, 5.2, close_factor))
