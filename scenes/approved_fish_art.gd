@@ -18,6 +18,12 @@ const BAIT_HOOK_OFFSET: Vector2 = Vector2(3.5, 7.0)
 const LEVIATHAN_TEST_OFFSET: Vector2 = Vector2(-360.0, 250.0)
 const LEVIATHAN_TEST_SCALE: Vector2 = Vector2(0.75, 0.75)
 
+# Leviathan doğal yüzüş ayarları.
+const LEVIATHAN_SWIM_RANGE_X: float = 170.0
+const LEVIATHAN_SWIM_CYCLE_SPEED: float = 0.42
+const LEVIATHAN_BOB_HEIGHT: float = 10.0
+const LEVIATHAN_TURN_SPEED_THRESHOLD: float = 7.0
+
 var _scan_timer: float = 0.0
 var _time: float = 0.0
 var _kilic_approved: Texture2D = null
@@ -26,6 +32,7 @@ var _fener_approved: Texture2D = null
 var _leviathan_texture: Texture2D = null
 var _leviathan_sprite: Sprite2D = null
 var _leviathan_origin: Vector2 = Vector2.ZERO
+var _leviathan_facing_right: bool = true
 
 
 func _ready() -> void:
@@ -112,12 +119,42 @@ func _animate_leviathan_test() -> void:
 	if not is_instance_valid(_leviathan_sprite):
 		return
 
-	var wave_x: float = sin(_time * 0.55) * 120.0
-	var wave_y: float = sin(_time * 1.10) * 8.0
+	# Ana yüzüş: sinüs eğrisi dönüş noktalarında doğal olarak yavaşlar.
+	var swim_phase: float = _time * LEVIATHAN_SWIM_CYCLE_SPEED
+	var wave_x: float = sin(swim_phase) * LEVIATHAN_SWIM_RANGE_X
+	var velocity_x: float = cos(swim_phase) * LEVIATHAN_SWIM_RANGE_X * LEVIATHAN_SWIM_CYCLE_SPEED
+
+	# İki farklı frekans üst üste bindirilerek mekanik tekdüze salınım kırılır.
+	var wave_y: float = sin(_time * 0.72) * LEVIATHAN_BOB_HEIGHT
+	wave_y += sin(_time * 1.47 + 0.65) * 2.5
+	var velocity_y: float = cos(_time * 0.72) * LEVIATHAN_BOB_HEIGHT * 0.72
+	velocity_y += cos(_time * 1.47 + 0.65) * 2.5 * 1.47
+
 	_leviathan_sprite.global_position = _leviathan_origin + Vector2(wave_x, wave_y)
-	_leviathan_sprite.rotation = sin(_time * 0.85) * 0.015
-	# Gorselin orijinal yonu test hareketine ters oldugu icin flip mantigi terslendi.
-	_leviathan_sprite.flip_h = cos(_time * 0.55) > 0.0
+
+	# Yön sadece belirgin yatay hareket varken değişir; dönüş anında titreşmez.
+	if velocity_x > LEVIATHAN_TURN_SPEED_THRESHOLD:
+		_leviathan_facing_right = true
+	elif velocity_x < -LEVIATHAN_TURN_SPEED_THRESHOLD:
+		_leviathan_facing_right = false
+	_leviathan_sprite.flip_h = _leviathan_facing_right
+
+	# Yukarı-aşağı hareket ederken kafa çok hafif eğilir.
+	var swim_pitch: float = clampf(velocity_y * 0.0021, -0.035, 0.035)
+	var body_roll: float = sin(_time * 0.95) * 0.008
+	_leviathan_sprite.rotation = swim_pitch + body_roll
+
+	# Tek parça sprite ile gövdenin suyu ittiği hissini veren çok hafif deformasyon.
+	var body_wave: float = sin(_time * 2.15)
+	var facing_sign: float = 1.0 if _leviathan_facing_right else -1.0
+	_leviathan_sprite.skew = body_wave * 0.026 * facing_sign
+
+	var stretch_x: float = 1.0 + absf(body_wave) * 0.012
+	var squash_y: float = 1.0 - absf(body_wave) * 0.008
+	_leviathan_sprite.scale = Vector2(
+		LEVIATHAN_TEST_SCALE.x * stretch_x,
+		LEVIATHAN_TEST_SCALE.y * squash_y
+	)
 
 
 func get_texture_for_fish(fish_type: String) -> Texture2D:
