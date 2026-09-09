@@ -2,7 +2,7 @@ extends Node
 
 # Leviathan test runtime.
 # 6. madde: kabarcik + su izi.
-# V5: Efektler, oyunda teknenin kopugunde zaten calisan CPUParticles2D sistemiyle uretilir.
+# V6: Parcaciklar texture'in tum canvasina gore degil, gorunen alpha sinirindaki gercek kuyruga baglanir.
 # Boss/yem/UI sistemlerine dokunulmaz.
 
 const FISH_TYPE: String = "Abyssal Leviathan"
@@ -14,6 +14,7 @@ const FOAM_TEXTURE: Texture2D = preload("res://assets/foam_particle.svg")
 const TEST_BOAT_OFFSET_X: float = 850.0
 const TEST_DEPTH_Y: float = 600.0
 const RETRY_SECONDS: float = 0.5
+const FALLBACK_TAIL_DISTANCE: float = 235.0
 
 var _texture: Texture2D = null
 var _world: Node2D = null
@@ -25,6 +26,8 @@ var _spawned: bool = false
 
 var _wake_particles: CPUParticles2D = null
 var _bubble_particles: CPUParticles2D = null
+var _tail_anchor_sprite_local: Vector2 = Vector2.ZERO
+var _tail_anchor_ready: bool = false
 
 
 func _ready() -> void:
@@ -109,7 +112,7 @@ func _spawn_test_leviathan() -> void:
 	_spawned = true
 
 	print("LEVIATHAN TEST SPAWN OK: ", fish.global_position)
-	print("LEVIATHAN EFFECT 6 V5 ACTIVE: CPU PARTICLES")
+	print("LEVIATHAN EFFECT 6 V6 ACTIVE: VISIBLE-TAIL ANCHOR")
 
 
 func _configure_visual(fish: Area2D) -> void:
@@ -122,6 +125,7 @@ func _configure_visual(fish: Area2D) -> void:
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.scale = Vector2(0.34, 0.34)
 	sprite.z_index = 0
+	_cache_tail_anchor(sprite)
 
 	# fish.gd bilinmeyen turu Sardalya gorseline cevirmesin.
 	fish.set("last_visual_type", FISH_TYPE)
@@ -140,6 +144,42 @@ func _configure_visual(fish: Area2D) -> void:
 		var rect: RectangleShape2D = collision.shape as RectangleShape2D
 		if rect != null:
 			rect.size = Vector2(560.0, 170.0)
+
+
+func _cache_tail_anchor(sprite: Sprite2D) -> void:
+	_tail_anchor_ready = false
+	_tail_anchor_sprite_local = Vector2.ZERO
+
+	if sprite.texture == null:
+		return
+
+	var image: Image = sprite.texture.get_image()
+	if image == null or image.is_empty():
+		return
+
+	# get_used_rect(), bos/transparent canvas'i atip sadece gorunen piksellerin sinirini verir.
+	# Leviathan gorselinin dogal halinde kafa solda, kuyruk sagda.
+	var used_rect: Rect2i = image.get_used_rect()
+	if used_rect.size.x <= 0 or used_rect.size.y <= 0:
+		return
+
+	var texture_size: Vector2 = Vector2(
+		float(sprite.texture.get_width()),
+		float(sprite.texture.get_height())
+	)
+
+	var tail_pixel: Vector2 = Vector2(
+		float(used_rect.position.x + used_rect.size.x - 1),
+		float(used_rect.position.y) + float(used_rect.size.y) * 0.52
+	)
+
+	if sprite.centered:
+		tail_pixel -= texture_size * 0.5
+
+	_tail_anchor_sprite_local = tail_pixel + sprite.offset
+	_tail_anchor_ready = true
+
+	print("LEVIATHAN GERCEK KUYRUK ANCHOR HAZIR: ", _tail_anchor_sprite_local)
 
 
 func _setup_particle_effects() -> void:
@@ -187,6 +227,30 @@ func _setup_particle_effects() -> void:
 	_update_particle_effects()
 
 
+func _get_tail_anchor_on_leviathan() -> Vector2:
+	if not is_instance_valid(_leviathan) or not is_instance_valid(_sprite):
+		return Vector2.ZERO
+
+	# Guvenli fallback: texture'in tum genisligini kullanma. Buyuk transparent canvas
+	# kabarcigi yuzlerce piksel oteye tasiyordu.
+	if not _tail_anchor_ready:
+		var fallback_side: float = -1.0 if _sprite.flip_h else 1.0
+		return Vector2(FALLBACK_TAIL_DISTANCE * fallback_side, 8.0)
+
+	var sprite_local_anchor: Vector2 = _tail_anchor_sprite_local
+
+	# Sprite2D.flip_h node transformunu degistirmez; goruntu cizimini aynalar.
+	# Bu yuzden kuyruk anchor'ini da elle aynaliyoruz.
+	if _sprite.flip_h:
+		sprite_local_anchor.x = -sprite_local_anchor.x
+	if _sprite.flip_v:
+		sprite_local_anchor.y = -sprite_local_anchor.y
+
+	# Sprite'in scale/rotation/position degerlerini hesaba katip gercek dunya noktasini bul.
+	var global_anchor: Vector2 = _sprite.to_global(sprite_local_anchor)
+	return _leviathan.to_local(global_anchor)
+
+
 func _update_particle_effects() -> void:
 	if not is_instance_valid(_leviathan) or not is_instance_valid(_sprite):
 		return
@@ -198,12 +262,10 @@ func _update_particle_effects() -> void:
 	# Gorselin dogal halinde kafa solda, kuyruk sagda.
 	# flip_h oldugunda kuyruk sola gecer.
 	var tail_side: float = -1.0 if _sprite.flip_h else 1.0
-	var visual_width: float = float(_sprite.texture.get_width()) * absf(_sprite.scale.x)
-	var tail_x: float = visual_width * 0.47 * tail_side
-	var tail_y: float = 8.0
+	var tail_anchor: Vector2 = _get_tail_anchor_on_leviathan()
 
-	_wake_particles.position = Vector2(tail_x, tail_y)
-	_bubble_particles.position = Vector2(tail_x, tail_y - 2.0)
+	_wake_particles.position = tail_anchor
+	_bubble_particles.position = tail_anchor + Vector2(0.0, -2.0)
 
 	# Parcalar kuyruktan geriye dogru akar.
 	_wake_particles.direction = Vector2(tail_side, 0.03)
