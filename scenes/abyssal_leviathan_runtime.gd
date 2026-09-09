@@ -1,8 +1,9 @@
 extends Node
 
 # Leviathan test runtime.
-# 6. madde: görünür kabarcık + su izi efekti.
-# Boss/yem/UI sistemlerine dokunmuyoruz.
+# 6. madde: kabarcik + su izi.
+# Efektleri artik dunya koordinatlarinda degil, direkt Leviathan'in cocugu olarak ciziyoruz.
+# Boylece kamera/z-index/koordinat kaynakli kaybolma ihtimali kalmiyor.
 
 const FISH_TYPE: String = "Abyssal Leviathan"
 const FISH_VALUE: int = 1250
@@ -13,13 +14,8 @@ const TEST_BOAT_OFFSET_X: float = 850.0
 const TEST_DEPTH_Y: float = 600.0
 const RETRY_SECONDS: float = 0.5
 
-# Leviathan görselinin doğal yönünde kafa solda, kuyruk sağda.
-# flip_h olduğunda kuyruk tarafı otomatik tersine döner.
-const TAIL_OFFSET_X: float = 145.0
-const TAIL_OFFSET_Y: float = 10.0
-
-const WAKE_INTERVAL: float = 0.055
-const BUBBLE_INTERVAL: float = 0.12
+const TAIL_X: float = 135.0
+const BUBBLE_INTERVAL: float = 0.11
 
 var _texture: Texture2D = null
 var _world: Node2D = null
@@ -28,10 +24,13 @@ var _leviathan: Area2D = null
 var _sprite: Sprite2D = null
 var _retry_timer: float = 0.0
 var _spawned: bool = false
-
-var _wake_timer: float = 0.0
-var _bubble_timer: float = 0.0
 var _effect_time: float = 0.0
+var _bubble_timer: float = 0.0
+
+var _wake_outer: Polygon2D = null
+var _wake_inner: Polygon2D = null
+var _foam_top: Line2D = null
+var _foam_bottom: Line2D = null
 
 
 func _ready() -> void:
@@ -42,7 +41,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if _spawned:
-		_update_water_effects(delta)
+		_update_visible_wake(delta)
 		return
 
 	_retry_timer -= delta
@@ -105,24 +104,22 @@ func _spawn_test_leviathan() -> void:
 		_boat.global_position.x + TEST_BOAT_OFFSET_X,
 		TEST_DEPTH_Y
 	)
-
-	# Efekt katmanlarını kesin biçimde suyun üstüne çıkarıyoruz.
 	fish.z_index = 15
+
 	_world.add_child(fish)
 	_configure_visual(fish)
 
 	_leviathan = fish
 	_sprite = fish.get_node_or_null("FishSprite") as Sprite2D
+	_setup_visible_wake_rig()
 	_spawned = true
 
-	# İlk karede bile efekt görülsün.
-	for i in range(6):
-		_spawn_wake_puff(float(i) * 10.0)
+	# Baslangicta bile kabarcik gorulsun.
 	for i in range(5):
-		_spawn_bubble(i)
+		_spawn_local_bubble(i)
 
 	print("LEVIATHAN TEST SPAWN OK: ", fish.global_position)
-	print("LEVIATHAN EFFECT 6 ACTIVE: wake + bubbles")
+	print("LEVIATHAN EFFECT 6 V3 ACTIVE: LOCAL WAKE RIG")
 
 
 func _configure_visual(fish: Area2D) -> void:
@@ -136,7 +133,7 @@ func _configure_visual(fish: Area2D) -> void:
 	sprite.scale = Vector2(0.34, 0.34)
 	sprite.z_index = 0
 
-	# fish.gd bilinmeyen turu Sardalya görseline çevirmesin.
+	# fish.gd bilinmeyen turu Sardalya gorseline cevirmesin.
 	fish.set("last_visual_type", FISH_TYPE)
 	fish.set("base_sprite_scale", Vector2(0.34, 0.34))
 	fish.set("swim_wave_speed", 1.2)
@@ -155,122 +152,140 @@ func _configure_visual(fish: Area2D) -> void:
 			rect.size = Vector2(560.0, 170.0)
 
 
-func _update_water_effects(delta: float) -> void:
-	if _world == null or not is_instance_valid(_leviathan) or not is_instance_valid(_sprite):
+func _setup_visible_wake_rig() -> void:
+	if not is_instance_valid(_leviathan):
+		return
+
+	_wake_outer = Polygon2D.new()
+	_wake_outer.name = "LeviathanWakeOuter"
+	_wake_outer.color = Color(0.20, 0.78, 1.0, 0.46)
+	_wake_outer.z_index = -3
+	_leviathan.add_child(_wake_outer)
+
+	_wake_inner = Polygon2D.new()
+	_wake_inner.name = "LeviathanWakeInner"
+	_wake_inner.color = Color(0.76, 0.96, 1.0, 0.72)
+	_wake_inner.z_index = -2
+	_leviathan.add_child(_wake_inner)
+
+	_foam_top = Line2D.new()
+	_foam_top.name = "LeviathanFoamTop"
+	_foam_top.width = 4.0
+	_foam_top.default_color = Color(0.90, 0.99, 1.0, 0.88)
+	_foam_top.antialiased = true
+	_foam_top.z_index = -1
+	_leviathan.add_child(_foam_top)
+
+	_foam_bottom = Line2D.new()
+	_foam_bottom.name = "LeviathanFoamBottom"
+	_foam_bottom.width = 3.0
+	_foam_bottom.default_color = Color(0.72, 0.94, 1.0, 0.72)
+	_foam_bottom.antialiased = true
+	_foam_bottom.z_index = -1
+	_leviathan.add_child(_foam_bottom)
+
+	_rebuild_wake_geometry()
+
+
+func _update_visible_wake(delta: float) -> void:
+	if not is_instance_valid(_leviathan) or not is_instance_valid(_sprite):
 		return
 
 	_effect_time += delta
-	_wake_timer -= delta
 	_bubble_timer -= delta
+	_rebuild_wake_geometry()
 
-	if _wake_timer <= 0.0:
-		_wake_timer = WAKE_INTERVAL
-		_spawn_wake_puff(0.0)
+	# Hiz arttikca iz biraz daha parlar.
+	var speed_value: float = absf(float(_leviathan.get("current_swim_velocity_x")))
+	var speed_ratio: float = clampf(speed_value / 30.0, 0.55, 1.45)
+	_wake_outer.modulate.a = 0.72 + (speed_ratio - 0.55) * 0.18
+	_wake_inner.modulate.a = 0.82 + (speed_ratio - 0.55) * 0.12
 
 	if _bubble_timer <= 0.0:
-		_bubble_timer = BUBBLE_INTERVAL
-		var count: int = 1
-		var speed_value: float = absf(float(_leviathan.get("current_swim_velocity_x")))
-		if speed_value > 24.0 and randf() < 0.55:
-			count = 2
-		for i in range(count):
-			_spawn_bubble(i)
+		_bubble_timer = BUBBLE_INTERVAL / speed_ratio
+		_spawn_local_bubble(0)
+		if speed_ratio > 1.05 and randf() < 0.55:
+			_spawn_local_bubble(1)
 
 
 func _tail_side_sign() -> float:
+	# Gorselin dogal halinde kuyruk sagda. flip_h olunca sola gecer.
 	if is_instance_valid(_sprite) and _sprite.flip_h:
 		return -1.0
 	return 1.0
 
 
-func _get_tail_global_position() -> Vector2:
-	if not is_instance_valid(_leviathan):
-		return Vector2.ZERO
-
-	var side: float = _tail_side_sign()
-	return _leviathan.global_position + Vector2(
-		TAIL_OFFSET_X * side,
-		TAIL_OFFSET_Y + sin(_effect_time * 2.0) * 5.0
-	)
-
-
-func _spawn_wake_puff(extra_back: float) -> void:
-	if _world == null or not is_instance_valid(_leviathan):
+func _rebuild_wake_geometry() -> void:
+	if _wake_outer == null or _wake_inner == null or _foam_top == null or _foam_bottom == null:
 		return
 
 	var side: float = _tail_side_sign()
-	var origin: Vector2 = _get_tail_global_position() + Vector2(side * extra_back, randf_range(-8.0, 8.0))
+	var wave_a: float = sin(_effect_time * 5.0) * 5.0
+	var wave_b: float = sin(_effect_time * 4.0 + 1.7) * 7.0
+	var tail_x: float = TAIL_X * side
+	var x1: float = (TAIL_X + 42.0) * side
+	var x2: float = (TAIL_X + 92.0) * side
+	var x3: float = (TAIL_X + 150.0) * side
 
-	# Dış, geniş su girdabı.
-	var outer := Polygon2D.new()
-	outer.name = "LeviathanWakePuff"
-	outer.polygon = _make_circle_polygon(10.0, 16)
-	outer.color = Color(0.42, 0.84, 0.97, randf_range(0.28, 0.40))
-	outer.z_index = 13
-	_world.add_child(outer)
-	outer.global_position = origin
-	outer.scale = Vector2(randf_range(1.5, 2.1), randf_range(0.42, 0.62))
+	_wake_outer.polygon = PackedVector2Array([
+		Vector2(tail_x, -8.0 + wave_a * 0.15),
+		Vector2(x1, -18.0 + wave_a),
+		Vector2(x2, -24.0 + wave_b),
+		Vector2(x3, -13.0 - wave_a),
+		Vector2(x3, 13.0 - wave_a),
+		Vector2(x2, 25.0 + wave_b),
+		Vector2(x1, 18.0 + wave_a),
+		Vector2(tail_x, 8.0 + wave_a * 0.15)
+	])
 
-	var outer_life: float = randf_range(0.65, 0.92)
-	var outer_target_pos: Vector2 = outer.position + Vector2(side * randf_range(52.0, 86.0), randf_range(-7.0, 7.0))
-	var outer_target_scale: Vector2 = Vector2(outer.scale.x * randf_range(1.8, 2.5), outer.scale.y * randf_range(1.15, 1.5))
-	var outer_tween: Tween = outer.create_tween()
-	outer_tween.set_parallel(true)
-	outer_tween.set_trans(Tween.TRANS_SINE)
-	outer_tween.set_ease(Tween.EASE_OUT)
-	outer_tween.tween_property(outer, "position", outer_target_pos, outer_life)
-	outer_tween.tween_property(outer, "scale", outer_target_scale, outer_life)
-	outer_tween.tween_property(outer, "modulate:a", 0.0, outer_life)
-	outer_tween.set_parallel(false)
-	outer_tween.tween_callback(outer.queue_free)
+	_wake_inner.polygon = PackedVector2Array([
+		Vector2(tail_x, -3.0),
+		Vector2(x1, -8.0 + wave_a * 0.55),
+		Vector2(x2, -10.0 + wave_b * 0.45),
+		Vector2(x3, -5.0),
+		Vector2(x3, 5.0),
+		Vector2(x2, 10.0 + wave_b * 0.45),
+		Vector2(x1, 8.0 + wave_a * 0.55),
+		Vector2(tail_x, 3.0)
+	])
 
-	# Ortada daha parlak kısa köpük şeridi.
-	if randf() < 0.72:
-		var inner := Polygon2D.new()
-		inner.name = "LeviathanWakeFoam"
-		inner.polygon = _make_circle_polygon(5.0, 12)
-		inner.color = Color(0.83, 0.97, 1.0, randf_range(0.48, 0.68))
-		inner.z_index = 14
-		_world.add_child(inner)
-		inner.global_position = origin + Vector2(side * randf_range(0.0, 8.0), randf_range(-5.0, 5.0))
-		inner.scale = Vector2(randf_range(1.2, 1.7), randf_range(0.35, 0.52))
-
-		var inner_life: float = randf_range(0.40, 0.64)
-		var inner_target_pos: Vector2 = inner.position + Vector2(side * randf_range(34.0, 58.0), randf_range(-5.0, 5.0))
-		var inner_tween: Tween = inner.create_tween()
-		inner_tween.set_parallel(true)
-		inner_tween.set_trans(Tween.TRANS_SINE)
-		inner_tween.set_ease(Tween.EASE_OUT)
-		inner_tween.tween_property(inner, "position", inner_target_pos, inner_life)
-		inner_tween.tween_property(inner, "scale", inner.scale * Vector2(1.8, 1.25), inner_life)
-		inner_tween.tween_property(inner, "modulate:a", 0.0, inner_life)
-		inner_tween.set_parallel(false)
-		inner_tween.tween_callback(inner.queue_free)
+	_foam_top.points = PackedVector2Array([
+		Vector2(tail_x, -5.0),
+		Vector2(x1, -12.0 + wave_a),
+		Vector2(x2, -14.0 + wave_b),
+		Vector2(x3, -8.0 - wave_a)
+	])
+	_foam_bottom.points = PackedVector2Array([
+		Vector2(tail_x, 6.0),
+		Vector2(x1, 13.0 - wave_a),
+		Vector2(x2, 15.0 - wave_b),
+		Vector2(x3, 9.0 + wave_a)
+	])
 
 
-func _spawn_bubble(index: int) -> void:
-	if _world == null or not is_instance_valid(_leviathan):
+func _spawn_local_bubble(index: int) -> void:
+	if not is_instance_valid(_leviathan):
 		return
 
 	var side: float = _tail_side_sign()
 	var bubble := Polygon2D.new()
 	bubble.name = "LeviathanBubble"
-	var radius: float = randf_range(3.0, 7.5)
+	var radius: float = randf_range(3.5, 7.5)
 	bubble.polygon = _make_circle_polygon(radius, 12)
-	bubble.color = Color(0.84, 0.97, 1.0, randf_range(0.58, 0.82))
-	bubble.z_index = 14
-	_world.add_child(bubble)
+	bubble.color = Color(0.88, 0.98, 1.0, randf_range(0.72, 0.94))
+	bubble.z_index = -1
+	_leviathan.add_child(bubble)
 
-	bubble.global_position = _get_tail_global_position() + Vector2(
-		side * (randf_range(8.0, 28.0) + float(index) * 8.0),
-		randf_range(-22.0, 22.0)
+	bubble.position = Vector2(
+		(TAIL_X + randf_range(18.0, 78.0) + float(index) * 12.0) * side,
+		randf_range(-20.0, 22.0)
 	)
-	bubble.scale = Vector2.ONE * randf_range(0.70, 1.12)
+	bubble.scale = Vector2.ONE * randf_range(0.8, 1.25)
 
-	var life: float = randf_range(0.85, 1.35)
+	var life: float = randf_range(0.8, 1.25)
 	var target_position: Vector2 = bubble.position + Vector2(
-		side * randf_range(18.0, 48.0),
-		-randf_range(42.0, 78.0)
+		side * randf_range(26.0, 58.0),
+		-randf_range(48.0, 82.0)
 	)
 	var target_scale: Vector2 = bubble.scale * randf_range(1.25, 1.65)
 
