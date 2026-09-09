@@ -24,6 +24,13 @@ const LEVIATHAN_SWIM_CYCLE_SPEED: float = 0.42
 const LEVIATHAN_BOB_HEIGHT: float = 10.0
 const LEVIATHAN_TURN_SPEED_THRESHOLD: float = 7.0
 
+# Görsel üzerindeki fener ve göz konumları texture boyutuna oranlı tutulur.
+# Böylece asset çözünürlüğü değişse bile ışıklar doğru bölgeye yakın kalır.
+const LEVIATHAN_LURE_X_RATIO: float = 0.466
+const LEVIATHAN_LURE_Y_RATIO: float = -0.047
+const LEVIATHAN_EYE_X_RATIO: float = 0.248
+const LEVIATHAN_EYE_Y_RATIO: float = -0.095
+
 var _scan_timer: float = 0.0
 var _time: float = 0.0
 var _kilic_approved: Texture2D = null
@@ -33,6 +40,9 @@ var _leviathan_texture: Texture2D = null
 var _leviathan_sprite: Sprite2D = null
 var _leviathan_origin: Vector2 = Vector2.ZERO
 var _leviathan_facing_right: bool = true
+var _leviathan_glow_texture: Texture2D = null
+var _leviathan_lure_glow: Sprite2D = null
+var _leviathan_eye_glow: Sprite2D = null
 
 
 func _ready() -> void:
@@ -47,7 +57,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_time += delta
 	_ensure_leviathan_test()
+	_ensure_leviathan_glows()
 	_animate_leviathan_test()
+	_update_leviathan_glows()
 	_align_bait_to_hook()
 
 	_scan_timer -= delta
@@ -155,6 +167,87 @@ func _animate_leviathan_test() -> void:
 		LEVIATHAN_TEST_SCALE.x * stretch_x,
 		LEVIATHAN_TEST_SCALE.y * squash_y
 	)
+
+
+func _ensure_leviathan_glows() -> void:
+	if not is_instance_valid(_leviathan_sprite):
+		return
+	if is_instance_valid(_leviathan_lure_glow) and is_instance_valid(_leviathan_eye_glow):
+		return
+
+	if _leviathan_glow_texture == null:
+		_leviathan_glow_texture = _create_radial_glow_texture(96)
+
+	var additive: CanvasItemMaterial = CanvasItemMaterial.new()
+	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+
+	var lure: Sprite2D = Sprite2D.new()
+	lure.name = "LeviathanLureGlow"
+	lure.texture = _leviathan_glow_texture
+	lure.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	lure.material = additive
+	lure.z_index = 2
+	lure.modulate = Color(1.0, 0.10, 0.035, 0.92)
+	_leviathan_sprite.add_child(lure)
+
+	var eye: Sprite2D = Sprite2D.new()
+	eye.name = "LeviathanEyeGlow"
+	eye.texture = _leviathan_glow_texture
+	eye.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	eye.material = additive
+	eye.z_index = 2
+	eye.modulate = Color(0.10, 0.92, 1.0, 0.88)
+	_leviathan_sprite.add_child(eye)
+
+	_leviathan_lure_glow = lure
+	_leviathan_eye_glow = eye
+	print("LEVIATHAN FENER + GOZ ISIGI AKTIF")
+
+
+func _update_leviathan_glows() -> void:
+	if not is_instance_valid(_leviathan_sprite):
+		return
+	if not is_instance_valid(_leviathan_lure_glow) or not is_instance_valid(_leviathan_eye_glow):
+		return
+	if _leviathan_texture == null:
+		return
+
+	var texture_size: Vector2 = _leviathan_texture.get_size()
+	var head_sign: float = 1.0 if _leviathan_facing_right else -1.0
+
+	# Sprite flip_h çocuk node'ları çevirmediği için ışık noktalarını yönle birlikte elle aynalarız.
+	_leviathan_lure_glow.position = Vector2(
+		texture_size.x * LEVIATHAN_LURE_X_RATIO * head_sign,
+		texture_size.y * LEVIATHAN_LURE_Y_RATIO
+	)
+	_leviathan_eye_glow.position = Vector2(
+		texture_size.x * LEVIATHAN_EYE_X_RATIO * head_sign,
+		texture_size.y * LEVIATHAN_EYE_Y_RATIO
+	)
+
+	# Fener ağır ve belirgin, göz ise daha küçük ve hızlı titreşen bir ışık verir.
+	var lure_pulse: float = 0.88 + sin(_time * 2.45) * 0.12
+	var lure_breathe: float = 0.52 + lure_pulse * 0.16
+	_leviathan_lure_glow.scale = Vector2.ONE * lure_breathe
+	_leviathan_lure_glow.modulate.a = 0.72 + lure_pulse * 0.20
+
+	var eye_pulse: float = 0.90 + sin(_time * 4.6 + 0.8) * 0.10
+	_leviathan_eye_glow.scale = Vector2.ONE * (0.24 + eye_pulse * 0.07)
+	_leviathan_eye_glow.modulate.a = 0.66 + eye_pulse * 0.24
+
+
+func _create_radial_glow_texture(size: int) -> Texture2D:
+	var image: Image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var center: Vector2 = Vector2(float(size - 1) * 0.5, float(size - 1) * 0.5)
+	var radius: float = float(size) * 0.5
+
+	for y: int in range(size):
+		for x: int in range(size):
+			var distance_ratio: float = Vector2(float(x), float(y)).distance_to(center) / radius
+			var alpha: float = pow(clampf(1.0 - distance_ratio, 0.0, 1.0), 2.25)
+			image.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
+
+	return ImageTexture.create_from_image(image)
 
 
 func get_texture_for_fish(fish_type: String) -> Texture2D:
