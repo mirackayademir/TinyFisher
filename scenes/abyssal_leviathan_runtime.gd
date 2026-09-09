@@ -15,11 +15,11 @@ const NATURAL_SPAWN_CHANCE: float = 0.018
 const RESPAWN_CHECK_SECONDS: float = 7.0
 const TEXTURE_RETRY_SECONDS: float = 1.0
 
-# 92-100 m civari derin deniz bolgesi.
+# TEST: Leviathan gecici olarak 12-17 m civari sig suda dogar.
 const SPAWN_MIN_X: float = 6500.0
 const SPAWN_MAX_X: float = 9800.0
-const SPAWN_MIN_Y: float = 3420.0
-const SPAWN_MAX_Y: float = 3710.0
+const SPAWN_MIN_Y: float = 520.0
+const SPAWN_MAX_Y: float = 700.0
 
 const LIVE_SARDINE: String = "Canlı Sardalya"
 const FISH_COLLISION_LAYER: int = 2
