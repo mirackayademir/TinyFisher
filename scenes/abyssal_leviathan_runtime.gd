@@ -1,11 +1,11 @@
 extends Node
 
 # Leviathan kontrolu ikinci bir balik spawn ETMEZ.
-# Ekranda gercekten gorunen LeviathanVisualTest Sprite2D'sini hedefler.
-# STEP 9A: Temel boss mucadelesi.
-# Leviathan yeme kadar yaklasir, yemi kapar ve ozel direnç bari acilir.
-# Sol tik / W ile sarildikca 100 direnç sifira iner; sifirda Leviathan yakalanir.
-# Misina kopmasi, fazlar ve ozel saldirilar sonraki adimlarda eklenecek.
+# Ekranda gorunen LeviathanVisualTest Sprite2D'sini hedefler.
+# STEP 9B: Boss yaklasma cilasi.
+# - Yem gorulunce agresif ve hizli yaklasir.
+# - Yaklasma hizi arttikca kuyruk animasyonu da hizlanir.
+# - Boss basladiginda Leviathan'in agzi kancaya kilitlenir.
 
 const LEVIATHAN_NODE_NAME: String = "LeviathanVisualTest"
 const LEVIATHAN_SWIM_SHADER: Shader = preload("res://shaders/leviathan_swim.gdshader")
@@ -16,22 +16,22 @@ const BAIT_LIVE_SARDINE: String = "Canlı Sardalya"
 
 const SHRIMP_DETECTION_RADIUS: float = 430.0
 const LIVE_SARDINE_DETECTION_RADIUS: float = 720.0
-const SHRIMP_HUNT_SPEED: float = 54.0
-const LIVE_SARDINE_HUNT_SPEED: float = 82.0
-const STOP_DISTANCE: float = 135.0
-const STALK_SLOW_RADIUS: float = 260.0
-const RETURN_SPEED: float = 115.0
+const SHRIMP_HUNT_SPEED: float = 175.0
+const LIVE_SARDINE_HUNT_SPEED: float = 230.0
+const STALK_SLOW_RADIUS: float = 185.0
+const RETURN_SPEED: float = 150.0
 
-const BOSS_BITE_DISTANCE: float = 145.0
+# Bu oranlar texture merkezine gore agzin gorunen ucunu hedefler.
+# Kaynak gorselde kafa solda; flip_h=true oldugunda kafa saga gecer.
+const LEVIATHAN_MOUTH_X_RATIO: float = 0.485
+const LEVIATHAN_MOUTH_Y_RATIO: float = 0.015
+const BOSS_BITE_DISTANCE: float = 16.0
+
 const BOSS_MAX_RESISTANCE: float = 100.0
 const BOSS_REEL_DAMAGE_PER_SECOND: float = 20.0
-const BOSS_STRUGGLE_X: float = 11.0
-const BOSS_STRUGGLE_Y: float = 7.0
 const BOSS_RESULT_SECONDS: float = 1.8
 
 # ApprovedFishArt'taki gercek kafa uzerindeki isik oranlari.
-# Sprite2D.flip_h cocuk node'lari aynalamadigi icin av modunda bunlari
-# gorunen kafa yonune gore burada zorla dogru tarafa tasiyoruz.
 const LEVIATHAN_LURE_X_RATIO: float = 0.466
 const LEVIATHAN_LURE_Y_RATIO: float = -0.047
 const LEVIATHAN_EYE_X_RATIO: float = 0.248
@@ -45,6 +45,7 @@ var _hunt_override_active: bool = false
 var _hunt_position: Vector2 = Vector2.ZERO
 var _detected_bait: String = ""
 var _hunt_time: float = 0.0
+var _hunt_speed_factor: float = 0.0
 
 var _boss_active: bool = false
 var _boss_caught: bool = false
@@ -53,6 +54,8 @@ var _boss_time: float = 0.0
 var _boss_hook_local_position: Vector2 = Vector2.ZERO
 var _boss_saved_collision_mask: int = 2
 var _boss_result_timer: float = 0.0
+var _boss_base_rotation: float = 0.0
+var _boss_facing_right: bool = true
 
 var _boss_panel: Panel = null
 var _boss_bar: ProgressBar = null
@@ -63,9 +66,9 @@ var _boss_fill_style: StyleBoxFlat = null
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	# ApprovedFishArt priority=100. Biz sonra calisip gorunen sprite'a son hareketi uygulariz.
+	# ApprovedFishArt priority=100. Biz sonra calisip son hareketi uygulariz.
 	process_priority = 200
-	print("LEVIATHAN CONTROLLER V12: STEP 9A BOSS FIGHT FOUNDATION")
+	print("LEVIATHAN CONTROLLER V13: STEP 9B FAST HUNT + MOUTH HOOK LOCK")
 
 
 func _process(delta: float) -> void:
@@ -104,11 +107,12 @@ func _find_visible_leviathan() -> void:
 	_hunt_override_active = false
 	_detected_bait = ""
 	_hunt_time = 0.0
+	_hunt_speed_factor = 0.0
 	_boss_active = false
 	_boss_caught = false
 	_boss_resistance = BOSS_MAX_RESISTANCE
 	_boss_result_timer = 0.0
-	print("LEVIATHAN V12 HEDEF BULUNDU: ", _leviathan_sprite.get_path())
+	print("LEVIATHAN V13 HEDEF BULUNDU: ", _leviathan_sprite.get_path())
 	_apply_visible_leviathan_material()
 
 
@@ -124,7 +128,7 @@ func _apply_visible_leviathan_material() -> void:
 
 	_leviathan_sprite.material = material
 	_material_applied = true
-	print("LEVIATHAN V12 ANIMASYON GORUNEN SPRITE'A UYGULANDI")
+	print("LEVIATHAN V13 ANIMASYON GORUNEN SPRITE'A UYGULANDI")
 
 
 func _update_bait_detection(delta: float) -> void:
@@ -156,12 +160,12 @@ func _update_bait_detection(delta: float) -> void:
 		return
 
 	var current_position: Vector2 = _hunt_position if _hunt_override_active else _leviathan_sprite.global_position
-	var to_bait: Vector2 = hook.global_position - current_position
-	var distance: float = to_bait.length()
+	var center_to_bait: Vector2 = hook.global_position - current_position
+	var center_distance: float = center_to_bait.length()
 
 	# Bir kez algiladiktan sonra yem sinirin biraz disina ciksa bile hemen vazgecmez.
 	var active_radius: float = detection_radius * (1.22 if _hunt_override_active else 1.0)
-	if distance > active_radius:
+	if center_distance > active_radius:
 		_return_to_patrol(delta)
 		return
 
@@ -170,7 +174,7 @@ func _update_bait_detection(delta: float) -> void:
 		_hunt_position = _leviathan_sprite.global_position
 		_detected_bait = selected_bait
 		_hunt_time = 0.0
-		print("LEVIATHAN YEM ALGILADI: ", selected_bait, " mesafe=", int(distance))
+		print("LEVIATHAN YEM ALGILADI: ", selected_bait, " mesafe=", int(center_distance))
 	elif _detected_bait != selected_bait:
 		_detected_bait = selected_bait
 		_hunt_time = 0.0
@@ -178,46 +182,90 @@ func _update_bait_detection(delta: float) -> void:
 
 	_hunt_time += delta
 
-	# Sinsi yaklasma: uzakta kontrollu, orta mesafede kararli,
-	# son 260 px'de belirgin sekilde yavaslayarak yemi suzer.
-	var speed_multiplier: float = 0.76
-	if distance < STALK_SLOW_RADIUS:
-		var near_t: float = clampf(inverse_lerp(STOP_DISTANCE, STALK_SLOW_RADIUS, distance), 0.0, 1.0)
-		speed_multiplier = lerpf(0.18, 0.72, near_t)
-	elif distance < detection_radius * 0.72:
-		speed_multiplier = 0.92
+	# Once kafayi yeme cevir. Agiz noktasi bu yonde hesaplanacak.
+	var facing_vector: Vector2 = hook.global_position - _hunt_position
+	if absf(facing_vector.x) > 3.0:
+		_leviathan_sprite.flip_h = facing_vector.x > 0.0
 
-	if distance > STOP_DISTANCE:
-		var hunt_speed: float = base_hunt_speed * speed_multiplier
-		var travel: float = minf(hunt_speed * delta, distance - STOP_DISTANCE)
-		_hunt_position += to_bait.normalized() * travel
+	_leviathan_sprite.global_position = _hunt_position
+	var aim_rotation: float = clampf(facing_vector.y * 0.00072, -0.085, 0.085)
+	_leviathan_sprite.rotation = aim_rotation
 
-	var final_to_bait: Vector2 = hook.global_position - _hunt_position
-	var final_distance: float = final_to_bait.length()
+	# Merkez yerine agiz ile kanca arasindaki mesafeyi baz aliyoruz.
+	# Boylece balik kancanin onunde durmaz; gercekten agzina kadar gelir.
+	var mouth_position: Vector2 = _get_mouth_global_position()
+	var mouth_to_bait: Vector2 = hook.global_position - mouth_position
+	var mouth_distance: float = mouth_to_bait.length()
 
-	# Yaklasirken cok hafif avci salinimi. Merkez konumu bozmaz; sadece ekranda
-	# canli, temkinli bir yuzme hissi verir. Yeme cok yakinda salinim azalir.
-	var stalk_amount: float = clampf(inverse_lerp(STOP_DISTANCE, 320.0, final_distance), 0.0, 1.0)
-	var stalk_offset_y: float = sin(_hunt_time * 1.35) * 4.5 * stalk_amount
+	# Yem gorulunce artik sinsi/yavas degil, agresif bir yaklasma var.
+	# Sadece son 185 px'de hafif fren yapar; tamamen surunmeye dusmez.
+	var speed_multiplier: float = 1.15
+	if mouth_distance < STALK_SLOW_RADIUS:
+		var near_t: float = clampf(inverse_lerp(BOSS_BITE_DISTANCE, STALK_SLOW_RADIUS, mouth_distance), 0.0, 1.0)
+		speed_multiplier = lerpf(0.72, 1.05, near_t)
+	elif center_distance < detection_radius * 0.60:
+		speed_multiplier = 1.08
+
+	_hunt_speed_factor = speed_multiplier
+	var hunt_speed: float = base_hunt_speed * speed_multiplier
+
+	if mouth_distance > BOSS_BITE_DISTANCE:
+		var travel: float = minf(hunt_speed * delta, mouth_distance - BOSS_BITE_DISTANCE)
+		if mouth_distance > 0.001:
+			_hunt_position += mouth_to_bait.normalized() * travel
+
+	# Hareketten sonra sprite'i yeni konuma al ve hafif avci salinimi ekle.
+	var new_center_to_bait: Vector2 = hook.global_position - _hunt_position
+	if absf(new_center_to_bait.x) > 3.0:
+		_leviathan_sprite.flip_h = new_center_to_bait.x > 0.0
+
+	var close_amount: float = 1.0 - clampf(inverse_lerp(BOSS_BITE_DISTANCE, 320.0, mouth_distance), 0.0, 1.0)
+	var stalk_offset_y: float = sin(_hunt_time * 2.2) * 2.8 * (1.0 - close_amount)
 	_leviathan_sprite.global_position = _hunt_position + Vector2(0.0, stalk_offset_y)
 
-	# Kafayi yeme cevir.
-	if absf(final_to_bait.x) > 3.0:
-		_leviathan_sprite.flip_h = final_to_bait.x > 0.0
+	var final_center_to_bait: Vector2 = hook.global_position - _leviathan_sprite.global_position
+	var predatory_nod: float = sin(_hunt_time * 2.4) * 0.008 * (1.0 - close_amount)
+	_leviathan_sprite.rotation = clampf(final_center_to_bait.y * 0.00072, -0.085, 0.085) + predatory_nod
 
-	# Yeme dogru kafa egimi. Son mesafede biraz daha belirgin olur.
-	var aim_rotation: float = clampf(final_to_bait.y * 0.00082, -0.095, 0.095)
-	var predatory_nod: float = sin(_hunt_time * 1.10) * 0.010 * (1.0 - stalk_amount)
-	_leviathan_sprite.rotation = aim_rotation + predatory_nod
+	var final_mouth_position: Vector2 = _get_mouth_global_position()
+	var final_mouth_distance: float = final_mouth_position.distance_to(hook.global_position)
 
-	# Av modunda kuyruk/govde daha canli; fener ise yeme yaklastikca daha guclu nabiz atar.
-	_set_hunt_shader_state(true, final_distance)
-	_update_hunt_glow(final_distance)
+	# Hiz arttikca kuyruk da gercekten daha hizli calisir.
+	_set_hunt_shader_state(true, final_mouth_distance, speed_multiplier)
+	_update_hunt_glow(final_mouth_distance)
 
-	# STEP 9A: Leviathan yemin dibine geldiginde normal balik sistemi yerine
-	# kendi boss mucadelesini baslatir.
-	if final_distance <= BOSS_BITE_DISTANCE:
+	if final_mouth_distance <= BOSS_BITE_DISTANCE:
 		_start_boss_fight(hook)
+
+
+func _get_mouth_local_position() -> Vector2:
+	if not is_instance_valid(_leviathan_sprite) or _leviathan_sprite.texture == null:
+		return Vector2.ZERO
+
+	var texture_size: Vector2 = _leviathan_sprite.texture.get_size()
+	var head_sign: float = 1.0 if _leviathan_sprite.flip_h else -1.0
+	return Vector2(
+		texture_size.x * LEVIATHAN_MOUTH_X_RATIO * head_sign,
+		texture_size.y * LEVIATHAN_MOUTH_Y_RATIO
+	)
+
+
+func _get_mouth_global_position() -> Vector2:
+	if not is_instance_valid(_leviathan_sprite):
+		return Vector2.ZERO
+	return _leviathan_sprite.to_global(_get_mouth_local_position())
+
+
+func _lock_mouth_to_hook(hook_global_position: Vector2) -> void:
+	if not is_instance_valid(_leviathan_sprite):
+		return
+
+	# Rotation/scale uygulandiktan sonra agzin gercek global konumunu bulup
+	# aradaki fark kadar tum sprite'i tasiyoruz. Boylece agiz-kanca temasi
+	# her frame korunuyor.
+	var mouth_global: Vector2 = _get_mouth_global_position()
+	_leviathan_sprite.global_position += hook_global_position - mouth_global
+	_hunt_position = _leviathan_sprite.global_position
 
 
 func _start_boss_fight(hook: Area2D) -> void:
@@ -229,11 +277,16 @@ func _start_boss_fight(hook: Area2D) -> void:
 	_boss_time = 0.0
 	_boss_hook_local_position = hook.position
 	_boss_saved_collision_mask = hook.collision_mask
+	_boss_base_rotation = _leviathan_sprite.rotation if is_instance_valid(_leviathan_sprite) else 0.0
+	_boss_facing_right = _leviathan_sprite.flip_h if is_instance_valid(_leviathan_sprite) else true
 
 	# Boss sirasinda oltanin normal baliklara temas etmesini gecici kapat.
-	# Hook scriptini degistirmeden mevcut olta noktasini burada sabit tutuyoruz.
 	hook.collision_mask = 0
 	hook.set("deployed", true)
+
+	if is_instance_valid(_leviathan_sprite):
+		_leviathan_sprite.flip_h = _boss_facing_right
+		_lock_mouth_to_hook(hook.global_position)
 
 	var root: Node = get_tree().current_scene
 	if root != null:
@@ -247,7 +300,7 @@ func _start_boss_fight(hook: Area2D) -> void:
 	if _boss_panel != null:
 		_boss_panel.visible = true
 
-	print("LEVIATHAN YEMI KAPTI! BOSS MUCadeLESI BASLADI — DIRENC 100")
+	print("LEVIATHAN YEMI KAPTI! AGIZ KANCAYA KILITLENDI — DIRENC 100")
 
 
 func _update_boss_fight(delta: float) -> void:
@@ -262,9 +315,11 @@ func _update_boss_fight(delta: float) -> void:
 		return
 
 	_boss_time += delta
+	_hunt_time += delta
+	_hunt_speed_factor = 1.30
 
 	# Hook.gd normal inis/cikis hesabini yapmaya devam etse bile boss aktifken
-	# her frame yakalandigi noktaya sabitlenir. Boylece mevcut olta sistemi bozulmaz.
+	# her frame yakalandigi noktaya sabitlenir.
 	hook.set("deployed", true)
 	hook.position = _boss_hook_local_position
 
@@ -272,28 +327,17 @@ func _update_boss_fight(delta: float) -> void:
 	if reeling:
 		_boss_resistance = maxf(0.0, _boss_resistance - BOSS_REEL_DAMAGE_PER_SECOND * delta)
 
-	# Ilk prototipte Leviathan sadece yemin cevresinde guclu sekilde cirpinir.
-	# Sonraki adimlarda bu bolum fazlar, ani kacislar ve ip gerilimi ile genisletilecek.
 	if is_instance_valid(_leviathan_sprite):
-		var to_hook: Vector2 = hook.global_position - _hunt_position
-		if to_hook.length() > STOP_DISTANCE:
-			_hunt_position = _hunt_position.move_toward(
-				hook.global_position - to_hook.normalized() * STOP_DISTANCE,
-				90.0 * delta
-			)
+		# Yon sabit kalir; govde agiz noktasinin etrafinda cirpinir.
+		_leviathan_sprite.flip_h = _boss_facing_right
+		var struggle_rotation: float = sin(_boss_time * 7.2) * 0.030
+		var secondary_rotation: float = sin(_boss_time * 3.4 + 0.8) * 0.012
+		_leviathan_sprite.rotation = _boss_base_rotation + struggle_rotation + secondary_rotation
 
-		var struggle: Vector2 = Vector2(
-			sin(_boss_time * 6.2) * BOSS_STRUGGLE_X,
-			sin(_boss_time * 8.1 + 0.7) * BOSS_STRUGGLE_Y
-		)
-		_leviathan_sprite.global_position = _hunt_position + struggle
-
-		var final_to_hook: Vector2 = hook.global_position - _leviathan_sprite.global_position
-		if absf(final_to_hook.x) > 2.0:
-			_leviathan_sprite.flip_h = final_to_hook.x > 0.0
-		_leviathan_sprite.rotation = clampf(final_to_hook.y * 0.0009, -0.11, 0.11) + sin(_boss_time * 7.0) * 0.018
-		_set_hunt_shader_state(true, STOP_DISTANCE)
-		_update_hunt_glow(STOP_DISTANCE)
+		# Agiz tam kancada kalirken kuyruk/govde savrulur.
+		_lock_mouth_to_hook(hook.global_position)
+		_set_hunt_shader_state(true, 0.0, 1.30)
+		_update_hunt_glow(0.0)
 
 	_update_boss_hud()
 
@@ -472,11 +516,10 @@ func _return_to_patrol(delta: float) -> void:
 		return
 
 	if not _hunt_override_active or not is_instance_valid(_leviathan_sprite):
-		_set_hunt_shader_state(false, 9999.0)
+		_set_hunt_shader_state(false, 9999.0, 0.0)
 		return
 
 	# ApprovedFishArt bu frame normal devriye konumunu zaten hesaplayip sprite'a yazdi.
-	# O konumu hedef alip av modundan yumusakca cikiyoruz.
 	var patrol_position: Vector2 = _leviathan_sprite.global_position
 	_hunt_position = _hunt_position.move_toward(patrol_position, RETURN_SPEED * delta)
 	_leviathan_sprite.global_position = _hunt_position
@@ -485,7 +528,8 @@ func _return_to_patrol(delta: float) -> void:
 		_hunt_override_active = false
 		_detected_bait = ""
 		_hunt_time = 0.0
-		_set_hunt_shader_state(false, 9999.0)
+		_hunt_speed_factor = 0.0
+		_set_hunt_shader_state(false, 9999.0, 0.0)
 		print("LEVIATHAN YEMI KAYBETTI: DEVRIYEYE DONDU")
 
 
@@ -509,7 +553,7 @@ func _get_hunt_speed(bait: String) -> float:
 			return 0.0
 
 
-func _set_hunt_shader_state(hunting: bool, distance: float) -> void:
+func _set_hunt_shader_state(hunting: bool, distance: float, speed_factor: float = 1.0) -> void:
 	if not is_instance_valid(_leviathan_sprite):
 		return
 	var material: ShaderMaterial = _leviathan_sprite.material as ShaderMaterial
@@ -517,10 +561,11 @@ func _set_hunt_shader_state(hunting: bool, distance: float) -> void:
 		return
 
 	if hunting:
-		var close_factor: float = 1.0 - clampf(inverse_lerp(STOP_DISTANCE, 420.0, distance), 0.0, 1.0)
-		material.set_shader_parameter("tail_strength", lerpf(0.066, 0.078, close_factor))
-		material.set_shader_parameter("tail_speed", lerpf(3.55, 4.35, close_factor))
-		material.set_shader_parameter("body_strength", lerpf(0.019, 0.023, close_factor))
+		var close_factor: float = 1.0 - clampf(inverse_lerp(BOSS_BITE_DISTANCE, 420.0, distance), 0.0, 1.0)
+		var speed_t: float = clampf(inverse_lerp(0.70, 1.30, speed_factor), 0.0, 1.0)
+		material.set_shader_parameter("tail_strength", lerpf(0.070, 0.092, speed_t) + close_factor * 0.006)
+		material.set_shader_parameter("tail_speed", lerpf(4.2, 7.2, speed_t))
+		material.set_shader_parameter("body_strength", lerpf(0.020, 0.027, speed_t) + close_factor * 0.002)
 	else:
 		material.set_shader_parameter("tail_strength", 0.060)
 		material.set_shader_parameter("tail_speed", 3.0)
@@ -531,16 +576,12 @@ func _update_hunt_glow(distance: float) -> void:
 	if not is_instance_valid(_leviathan_sprite):
 		return
 
-	# ApprovedFishArt av disinda isiklari gunceller. Av modunda ise runtime sprite'i
-	# yeme gore flip_h ile cevirdigi icin cocuk glow node'lari otomatik aynalanmaz.
-	# Bu nedenle fener ve goz isiklarini her av frame'inde GERCEK GORUNEN KAFA tarafina sabitleriz.
 	var lure: Sprite2D = _leviathan_sprite.get_node_or_null("LeviathanLureGlow") as Sprite2D
 	var eye: Sprite2D = _leviathan_sprite.get_node_or_null("LeviathanEyeGlow") as Sprite2D
-	var close_factor: float = 1.0 - clampf(inverse_lerp(STOP_DISTANCE, 430.0, distance), 0.0, 1.0)
+	var close_factor: float = 1.0 - clampf(inverse_lerp(BOSS_BITE_DISTANCE, 430.0, distance), 0.0, 1.0)
 
 	if _leviathan_sprite.texture != null:
 		var texture_size: Vector2 = _leviathan_sprite.texture.get_size()
-		# Kaynak gorselde kafa solda. flip_h=true oldugunda gorunen kafa saga gecer.
 		var head_sign: float = 1.0 if _leviathan_sprite.flip_h else -1.0
 		if lure != null:
 			lure.position = Vector2(
@@ -554,12 +595,13 @@ func _update_hunt_glow(distance: float) -> void:
 			)
 
 	if lure != null:
-		var pulse: float = 0.5 + 0.5 * sin(_hunt_time * lerpf(3.0, 5.2, close_factor))
-		var lure_scale: float = lerpf(0.66, 0.86, close_factor) + pulse * lerpf(0.035, 0.075, close_factor)
+		var pulse_speed: float = lerpf(3.2, 6.2, clampf(_hunt_speed_factor, 0.0, 1.30) / 1.30)
+		var pulse: float = 0.5 + 0.5 * sin(_hunt_time * pulse_speed)
+		var lure_scale: float = lerpf(0.66, 0.88, close_factor) + pulse * lerpf(0.035, 0.080, close_factor)
 		lure.scale = Vector2.ONE * lure_scale
 		lure.modulate.a = clampf(0.82 + close_factor * 0.14 + pulse * 0.04, 0.0, 1.0)
 
 	if eye != null:
-		var eye_pulse: float = 0.5 + 0.5 * sin(_hunt_time * 5.8 + 0.7)
+		var eye_pulse: float = 0.5 + 0.5 * sin(_hunt_time * 6.2 + 0.7)
 		eye.scale = Vector2.ONE * (0.30 + close_factor * 0.045 + eye_pulse * 0.018)
 		eye.modulate.a = clampf(0.78 + close_factor * 0.14 + eye_pulse * 0.04, 0.0, 1.0)
