@@ -1,13 +1,13 @@
 extends Node
 
 # Abyssal Leviathan boss sistemi.
-# Oyuncunun onayladigi PNG dosyasi birebir su yoldan kullanilir:
-# res://assets/rare/abyssal_leviathan.png
+# Oyuncunun onayladigi texture dosyasi birebir su yoldan kullanilir:
+# res://assets/leviathan.webp
 # Dosya henuz repoda yoksa autoload projeyi bozmaz; asset geldiginde runtime aktif olur.
 
 const FISH_TYPE: String = "Abyssal Leviathan"
 const FISH_VALUE: int = 1250
-const FISH_TEXTURE_PATH: String = "res://assets/rare/abyssal_leviathan.png"
+const FISH_TEXTURE_PATH: String = "res://assets/leviathan.webp"
 const FISH_SCENE: PackedScene = preload("res://scenes/fish.tscn")
 
 const TEST_GUARANTEED_SPAWN: bool = true
@@ -181,7 +181,7 @@ func _configure_visual(fish: Area2D) -> void:
 	if sprite == null or _texture == null:
 		return
 
-	# PNG yeniden cizilmez veya filtrelenmez; ayni raster asset kullanilir.
+	# Raster asset yeniden cizilmez veya filtrelenmez; ayni texture kullanilir.
 	sprite.texture = _texture
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.scale = Vector2(0.34, 0.34)
@@ -472,7 +472,10 @@ func _update_ui() -> void:
 		if _discovered:
 			_rare_book_icon.modulate = Color.WHITE
 			_rare_book_name.text = FISH_TYPE
-			_rare_book_detail.text = "★ BOSS / NADİR\nDeğer: $1250\nDerinlik: 92–100 m\nYem: Canlı Sardalya"
+			_rare_book_detail.text = "★ BOSS / NADİR\
+Değer: $1250\
+Derinlik: 92–100 m\
+Yem: Canlı Sardalya"
 		else:
 			_rare_book_icon.modulate = Color(0.025, 0.035, 0.055, 1.0)
 			_rare_book_name.text = "???"
