@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 ApprovedFishArt="*res://scenes/approved_fish_art.gd"
 DeepSeaAtmosphere="*res://scenes/deep_sea_atmosphere.gd"
+RareFishSystem="*res://scenes/abyssal_leviathan_runtime.gd"
 
 [display]
 
