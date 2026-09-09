@@ -116,7 +116,8 @@ func _animate_leviathan_test() -> void:
 	var wave_y: float = sin(_time * 1.10) * 8.0
 	_leviathan_sprite.global_position = _leviathan_origin + Vector2(wave_x, wave_y)
 	_leviathan_sprite.rotation = sin(_time * 0.85) * 0.015
-	_leviathan_sprite.flip_h = cos(_time * 0.55) < 0.0
+	# Gorselin orijinal yonu test hareketine ters oldugu icin flip mantigi terslendi.
+	_leviathan_sprite.flip_h = cos(_time * 0.55) > 0.0
 
 
 func get_texture_for_fish(fish_type: String) -> Texture2D:
