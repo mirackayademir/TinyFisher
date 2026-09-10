@@ -3,7 +3,7 @@ extends Node
 # Environment runtime destegi.
 # 7/36 surface_foam_01.png: hareketli ana dalgaya baglanir.
 # 8/36 sun_rays_01.png: tek, duzenli bir gunes huzmesi kumesi olarak kullanilir.
-# 9/36 shallow_rock_01.png: 18-20 m bandinda dogal kaya cikintilari.
+# 9/36 shallow_rock_01.png: liman/kayi tarafindan suya uzanan sig resif duvari.
 
 const FOAM_TEXTURE: Texture2D = preload("res://assets/environment/surface/surface_foam_01.png")
 const SUN_RAYS_TEXTURE: Texture2D = preload("res://assets/environment/surface/sun_rays_01.png")
@@ -14,7 +14,6 @@ const SUN_X: float = 1060.0
 const SUN_TARGET_SIZE: float = 175.0
 const SUN_RAYS_WIDTH: float = 1450.0
 const SUN_RAYS_DEPTH_HEIGHT: float = 540.0
-const SHALLOW_BOTTOM_Y: float = 1030.0
 
 var _bound_line: Line2D = null
 var _ray_root: Node2D = null
@@ -25,7 +24,7 @@ var _scene_id: int = 0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("ENV RUNTIME: 7/36 kopuk + 8/36 huzme + 9/36 sig kaya hazir")
+	print("ENV RUNTIME: 7/36 kopuk + 8/36 huzme + 9/36 kiyi resifi hazir")
 
 
 func _process(_delta: float) -> void:
@@ -210,7 +209,7 @@ func _ensure_sun_rays(_current_scene: Node) -> void:
 
 
 # -----------------------------------------------------------------------------
-# 9 / 36 - SHALLOW ROCK 01
+# 9 / 36 - SHALLOW ROCK 01 / KIYI RESIFI
 # -----------------------------------------------------------------------------
 
 func _ensure_shallow_rock(current_scene: Node) -> void:
@@ -236,14 +235,15 @@ func _ensure_shallow_rock(current_scene: Node) -> void:
 	_rock_root.name = "ShallowRock01Art"
 	decor_layer.add_child(_rock_root)
 
-	# Ayni asset duvar kagidi gibi tekrarlanmaz. Dunya boyunca seyrek ve farkli
-	# boylarda kaya cikintilari var; hepsinin tabani 18-20m bandina gomulur.
+	# Eski surumde kayalar acik denizde tek basina durdugu icin havada asili gorunuyordu.
+	# Artik sadece liman/kayi tarafinda, birbirinin ustune binen bir resif duvari kuruyoruz.
+	# Buyuk kutle solda dunya disina tasar; kucuk kutleler saga-yukariya dogru seyreklesir.
+	# Boylece gorunen alt kenarlar birbirine gomulur ve kaya "denizin ortasinda" durmaz.
 	var placements: Array[Vector3] = [
-		Vector3(1450.0, 1025.0, 0.66),
-		Vector3(3350.0, 1005.0, 0.50),
-		Vector3(5600.0, 1035.0, 0.76),
-		Vector3(8150.0, 1015.0, 0.58),
-		Vector3(10350.0, 1030.0, 0.69)
+		Vector3(-40.0, 1045.0, 1.12),
+		Vector3(205.0, 955.0, 0.92),
+		Vector3(390.0, 845.0, 0.72),
+		Vector3(525.0, 735.0, 0.56)
 	]
 
 	for i: int in range(placements.size()):
@@ -252,12 +252,12 @@ func _ensure_shallow_rock(current_scene: Node) -> void:
 		var scaled_height: float = texture_size.y * scale_value
 
 		var sprite: Sprite2D = Sprite2D.new()
-		sprite.name = "ShallowRock01_%02d" % i
+		sprite.name = "ShallowReefRock_%02d" % i
 		sprite.texture = SHALLOW_ROCK_TEXTURE
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		sprite.position = Vector2(placement.x, placement.y - scaled_height * 0.5)
 		sprite.scale = Vector2(-scale_value if i % 2 == 1 else scale_value, scale_value)
-		sprite.modulate = Color(0.86, 0.95, 1.0, 0.92)
+		sprite.modulate = Color(0.84, 0.94, 1.0, 0.94)
 		_rock_root.add_child(sprite)
 
-	print("SHALLOW ROCK: 9/36 18-20m bandina dogal kaya cikintilari eklendi")
+	print("SHALLOW ROCK: 9/36 acik denizden kaldirildi; liman tarafinda kiyi resifi kuruldu")
