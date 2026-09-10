@@ -2,7 +2,7 @@ extends Node
 
 # TinyFisher katmanli dunya altyapisi.
 # 36 environment gorseli TEK TEK eklenecek.
-# Aktif: 1) sky_base_01.png  2) sun_01_TEMP.png  3) horizon_land_01.png
+# Aktif: 1) sky_base_01.png  2) sun_01_TEMP.png  3) horizon_land_01.png  4) ocean_surface_base_01.png
 
 const ENV_ROOT_NAME: String = "EnvironmentLayers"
 const DECOR_SEED: int = 9042026
@@ -17,6 +17,7 @@ const SKY_WATER_OVERLAP_PX: float = 42.0
 
 # Siralama: eski shader gokyuzu en arkada, yeni sky onun ustunde,
 # Horizon sky'in ustunde fakat Water'in arkasinda kalir.
+# OceanSurface ise mevcut Water'in ustunde sadece ince, yari saydam bir yuzey dokusudur.
 const Z_LEGACY_SKY: int = -11
 const Z_SKY_BASE: int = -10
 const Z_SUN: int = -7
@@ -40,6 +41,7 @@ const ZONE_ABYSS: String = "abyss"
 const SKY_TEXTURE_PATH: String = "res://assets/environment/surface/sky_base_01.png"
 const SUN_TEXTURE_PATH: String = "res://assets/environment/surface/sun_01_TEMP.png"
 const HORIZON_TEXTURE_PATH: String = "res://assets/environment/surface/horizon_land_01.png"
+const OCEAN_SURFACE_TEXTURE_PATH: String = "res://assets/environment/surface/ocean_surface_base_01.png"
 
 var _scene_id: int = 0
 var _world: Node2D = null
@@ -51,7 +53,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V8: HORIZON 25 PX ASAGI ALINDI")
+	print("ENVIRONMENT LAYERS V9: GORSEL 4/36 OCEAN SURFACE EKLENDI")
 
 
 func _process(_delta: float) -> void:
@@ -87,7 +89,8 @@ func _ensure_environment_layers() -> void:
 	_build_sky_only()
 	_build_sun_only()
 	_build_horizon_only()
-	print("ENVIRONMENT: SKY + SUN + HORIZON aktif - 3/36")
+	_build_ocean_surface_only()
+	print("ENVIRONMENT: SKY + SUN + HORIZON + OCEAN SURFACE aktif - 4/36")
 
 
 func _prepare_base_layer_order() -> void:
@@ -249,6 +252,65 @@ func _build_horizon_only() -> void:
 		sprite.position = Vector2(x, center_y)
 		sprite.scale = Vector2.ONE * scale_factor
 		sprite.modulate = Color(0.78, 0.80, 0.92, 0.82)
+		root.add_child(sprite)
+
+		x += tile_width - 1.0
+		tile_index += 1
+
+
+# -----------------------------------------------------------------------------
+# GORSEL 4 / 36 - OCEAN SURFACE BASE
+# -----------------------------------------------------------------------------
+
+func _build_ocean_surface_only() -> void:
+	var layer: Node2D = get_layer("OceanSurfaceLayer")
+	if layer == null or layer.get_node_or_null("OceanSurfaceArt") != null:
+		return
+
+	var texture: Texture2D = _load_texture(OCEAN_SURFACE_TEXTURE_PATH)
+	if texture == null:
+		return
+
+	var texture_size: Vector2 = texture.get_size()
+	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+		return
+
+	var root: Node2D = Node2D.new()
+	root.name = "OceanSurfaceArt"
+	layer.add_child(root)
+
+	# Bu asset yeni bir deniz tabani gibi kullanilmaz.
+	# Mevcut ocean shader korunur; gorsel sadece yuzeyin ilk 118 px'ine hafif doku verir.
+	# Alt kenar shader ile sifira fade olur, boylece suyun ortasinda duz bir ek yeri olusmaz.
+	var fade_shader: Shader = Shader.new()
+	fade_shader.code = (
+		"shader_type canvas_item;\n"
+		+ "uniform float opacity = 0.30;\n"
+		+ "void fragment() {\n"
+		+ "    vec4 tex = texture(TEXTURE, UV);\n"
+		+ "    float bottom_fade = 1.0 - smoothstep(0.46, 1.0, UV.y);\n"
+		+ "    COLOR = vec4(tex.rgb, tex.a * bottom_fade * opacity);\n"
+		+ "}\n"
+	)
+
+	var fade_material: ShaderMaterial = ShaderMaterial.new()
+	fade_material.shader = fade_shader
+
+	var target_height: float = 118.0
+	var scale_factor: float = target_height / texture_size.y
+	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
+	var center_y: float = WATER_SURFACE_Y + (target_height * 0.5) + 2.0
+	var x: float = WORLD_LEFT_X + tile_width * 0.5
+	var tile_index: int = 0
+
+	while x < WORLD_RIGHT_X + tile_width * 0.5:
+		var sprite: Sprite2D = Sprite2D.new()
+		sprite.name = "Tile_%02d" % tile_index
+		sprite.texture = texture
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.material = fade_material
+		sprite.position = Vector2(x, center_y)
+		sprite.scale = Vector2.ONE * scale_factor
 		root.add_child(sprite)
 
 		x += tile_width - 1.0
