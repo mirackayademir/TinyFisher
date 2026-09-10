@@ -1,29 +1,33 @@
 extends Node
 
-# TinyFisher 20-100 m tek-parca dunya terrain temeli.
-# Terrain kameraya kilitlenmez: dogrudan World koordinatlarina oturur.
-# 20 m -> 100 m = 80 m * 34.5 px = 2760 px.
-# Yatay map: World/Water rect'i, mevcut durumda -1000 -> 11000 = 12000 px.
-# Collision YOK; balik, kanca ve environment assetleri terrain'in onunde kalir.
+# TinyFisher 20-100 m underwater canyon terrain.
+# Accepted PNG is placed as one world-anchored Sprite2D, with exact map/depth scaling.
+# No camera-following, no procedural mountain, no collision, no duplicate terrain layers.
 
-const TERRAIN_NODE_NAME: String = "UnderwaterReefTerrain20To100"
-const LAYOUT_VERSION: int = 12
+const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To100"
+const TERRAIN_TEXTURE_PATH: String = "res://assets/environment/terrain/underwater_canyon_20_100.png"
+const LAYOUT_VERSION: int = 13
 
 const TERRAIN_TOP_DEPTH_METERS: float = 20.0
 const TERRAIN_BOTTOM_DEPTH_METERS: float = 100.0
 
+# Accepted/cropped asset dimensions measured from the actual alpha bounds.
+const SOURCE_WIDTH: float = 976.0
+const SOURCE_HEIGHT: float = 1405.0
+
 const FALLBACK_WORLD_LEFT_X: float = -1000.0
 const FALLBACK_WORLD_RIGHT_X: float = 11000.0
-const REFERENCE_MAP_WIDTH: float = 12000.0
-const REFERENCE_BAND_HEIGHT: float = 2760.0
+const FALLBACK_PIXELS_PER_METER: float = 34.5
+const FALLBACK_HOOK_ZERO_WORLD_Y: float = 392.6
 
-# Water=-9, yeni environment BackgroundDecor=-6.
-# Terrain'in TAMAMI -7'de kalir: suyun onunde, tum dekorlarin arkasinda.
+# Water is -9 and underwater decor begins at -6.
+# Terrain stays entirely at -7 so it is above water and behind all later decor assets.
 const TERRAIN_Z_INDEX: int = -7
 
 var _scene_id: int = 0
 var _world: Node2D = null
 var _terrain_root: Node2D = null
+var _terrain_sprite: Sprite2D = null
 
 var _last_left_x: float = INF
 var _last_map_width: float = INF
@@ -33,7 +37,7 @@ var _last_band_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V12: WORLD-ANCHORED 20-100m / SINGLE Z / COLLISION OFF")
+	print("UNDERWATER TERRAIN V13: ACCEPTED PNG / EXACT WORLD FIT / COLLISION OFF")
 
 
 func _process(_delta: float) -> void:
@@ -47,6 +51,7 @@ func _process(_delta: float) -> void:
 		_scene_id = current_id
 		_world = current_scene as Node2D
 		_terrain_root = null
+		_terrain_sprite = null
 		_last_left_x = INF
 		_last_map_width = INF
 		_last_top_y = INF
@@ -63,6 +68,7 @@ func _reset_refs() -> void:
 	_scene_id = 0
 	_world = null
 	_terrain_root = null
+	_terrain_sprite = null
 	_last_left_x = INF
 	_last_map_width = INF
 	_last_top_y = INF
@@ -70,10 +76,24 @@ func _reset_refs() -> void:
 
 
 func _ensure_terrain() -> void:
-	if is_instance_valid(_terrain_root):
+	if is_instance_valid(_terrain_root) and is_instance_valid(_terrain_sprite):
 		return
 
-	_remove_old_terrain()
+	_remove_all_terrain_variants()
+
+	var source_texture: Texture2D = load(TERRAIN_TEXTURE_PATH) as Texture2D
+	if source_texture == null:
+		push_error("Terrain texture bulunamadi: " + TERRAIN_TEXTURE_PATH)
+		return
+
+	var texture_size: Vector2 = source_texture.get_size()
+	if not is_equal_approx(texture_size.x, SOURCE_WIDTH) or not is_equal_approx(texture_size.y, SOURCE_HEIGHT):
+		push_error(
+			"Terrain texture olcusu beklenenden farkli. Beklenen: "
+			+ str(Vector2(SOURCE_WIDTH, SOURCE_HEIGHT))
+			+ " gelen: " + str(texture_size)
+		)
+		return
 
 	_terrain_root = Node2D.new()
 	_terrain_root.name = TERRAIN_NODE_NAME
@@ -82,152 +102,45 @@ func _ensure_terrain() -> void:
 	_terrain_root.set_meta("layout_version", LAYOUT_VERSION)
 	_terrain_root.set_meta("collisionless", true)
 	_terrain_root.set_meta("camera_locked", false)
+	_terrain_root.set_meta("source_size", Vector2(SOURCE_WIDTH, SOURCE_HEIGHT))
 	_terrain_root.set_meta("depth_top_m", TERRAIN_TOP_DEPTH_METERS)
 	_terrain_root.set_meta("depth_bottom_m", TERRAIN_BOTTOM_DEPTH_METERS)
 	_world.add_child(_terrain_root)
 
-	var profile: PackedVector2Array = _terrain_profile()
-
-	# Kenarlarda kayalik duvarlar erken baslar; merkezde taban yalnizca Abyss'e iner.
-	# Boylece 20-80 m ortasinda havada duran duz bir deniz tabani olusmaz.
-	_add_mass_layer(
-		"RockMassBase",
-		_build_mass_polygon(profile, 0.0),
-		Color(0.095, 0.145, 0.225, 0.985)
-	)
-	_add_mass_layer(
-		"RockMassMidShadow",
-		_build_mass_polygon(profile, 116.0),
-		Color(0.058, 0.094, 0.158, 0.82)
-	)
-	_add_mass_layer(
-		"RockMassDeepShadow",
-		_build_mass_polygon(profile, 336.0),
-		Color(0.030, 0.050, 0.098, 0.88)
-	)
-
-	_add_profile_line(
-		"RockRim",
-		profile,
-		12.0,
-		Color(0.235, 0.335, 0.445, 0.96)
-	)
-	_add_profile_line(
-		"RockInnerRim",
-		_offset_profile(profile, 88.0),
-		7.0,
-		Color(0.125, 0.205, 0.305, 0.88)
-	)
+	_terrain_sprite = Sprite2D.new()
+	_terrain_sprite.name = "AcceptedCanyonSprite"
+	_terrain_sprite.texture = source_texture
+	_terrain_sprite.centered = false
+	_terrain_sprite.position = Vector2.ZERO
+	# Child remains Z-relative to the root: effective terrain Z is exactly -7.
+	_terrain_sprite.z_as_relative = true
+	_terrain_sprite.z_index = 0
+	_terrain_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_terrain_root.add_child(_terrain_sprite)
 
 	_sync_terrain_to_world(true)
 
 	var bounds: Vector2 = _get_world_horizontal_bounds()
 	var top_y: float = _world_y_for_depth(TERRAIN_TOP_DEPTH_METERS)
 	var bottom_y: float = _world_y_for_depth(TERRAIN_BOTTOM_DEPTH_METERS)
+	var expected_scale_x: float = (bounds.y - bounds.x) / SOURCE_WIDTH
+	var expected_scale_y: float = (bottom_y - top_y) / SOURCE_HEIGHT
+
 	print(
-		"UNDERWATER TERRAIN V12 OK | x=", bounds.x, "..", bounds.y,
-		" | width=", bounds.y - bounds.x,
+		"UNDERWATER TERRAIN V13 OK | x=", bounds.x, "..", bounds.y,
+		" | map_width=", bounds.y - bounds.x,
 		" | y20=", top_y,
 		" | y100=", bottom_y,
-		" | height=", bottom_y - top_y,
+		" | band_height=", bottom_y - top_y,
+		" | source=", Vector2(SOURCE_WIDTH, SOURCE_HEIGHT),
+		" | scale=", Vector2(expected_scale_x, expected_scale_y),
 		" | z=", TERRAIN_Z_INDEX,
 		" | collision=OFF | camera_lock=OFF"
 	)
 
 
-func _terrain_profile() -> PackedVector2Array:
-	# Referans alan: 12000 x 2760 px.
-	# Tek U-sekilli kara kutlesi: sol/sag kayalik duvarlar + derin Abyss tabani.
-	return PackedVector2Array([
-		Vector2(0.0, 220.0),
-		Vector2(360.0, 264.0),
-		Vector2(760.0, 360.0),
-		Vector2(1200.0, 520.0),
-		Vector2(1680.0, 740.0),
-		Vector2(2160.0, 1012.0),
-		Vector2(2640.0, 1320.0),
-		Vector2(3160.0, 1600.0),
-		Vector2(3680.0, 1872.0),
-		Vector2(4200.0, 2108.0),
-		Vector2(4720.0, 2260.0),
-		Vector2(5240.0, 2372.0),
-		Vector2(5760.0, 2448.0),
-		Vector2(6280.0, 2420.0),
-		Vector2(6800.0, 2352.0),
-		Vector2(7320.0, 2240.0),
-		Vector2(7840.0, 2100.0),
-		Vector2(8360.0, 1880.0),
-		Vector2(8840.0, 1620.0),
-		Vector2(9320.0, 1380.0),
-		Vector2(9760.0, 1140.0),
-		Vector2(10200.0, 920.0),
-		Vector2(10600.0, 748.0),
-		Vector2(11000.0, 588.0),
-		Vector2(11400.0, 428.0),
-		Vector2(11720.0, 308.0),
-		Vector2(12000.0, 248.0)
-	])
-
-
-func _build_mass_polygon(profile: PackedVector2Array, inset_y: float) -> PackedVector2Array:
-	var polygon: PackedVector2Array = PackedVector2Array()
-	for point: Vector2 in profile:
-		polygon.append(
-			Vector2(
-				point.x,
-				minf(point.y + inset_y, REFERENCE_BAND_HEIGHT - 8.0)
-			)
-		)
-
-	polygon.append(Vector2(REFERENCE_MAP_WIDTH, REFERENCE_BAND_HEIGHT))
-	polygon.append(Vector2(0.0, REFERENCE_BAND_HEIGHT))
-	return polygon
-
-
-func _offset_profile(profile: PackedVector2Array, offset_y: float) -> PackedVector2Array:
-	var result: PackedVector2Array = PackedVector2Array()
-	for point: Vector2 in profile:
-		result.append(
-			Vector2(
-				point.x,
-				minf(point.y + offset_y, REFERENCE_BAND_HEIGHT - 8.0)
-			)
-		)
-	return result
-
-
-func _add_mass_layer(
-	layer_name: String,
-	polygon_points: PackedVector2Array,
-	layer_color: Color
-) -> void:
-	var polygon: Polygon2D = Polygon2D.new()
-	polygon.name = layer_name
-	polygon.polygon = polygon_points
-	polygon.color = layer_color
-	# Ayni Z: sirayi child draw order belirler; environment Z katmanlarina cikmaz.
-	polygon.z_index = 0
-	_terrain_root.add_child(polygon)
-
-
-func _add_profile_line(
-	line_name: String,
-	line_points: PackedVector2Array,
-	line_width: float,
-	line_color: Color
-) -> void:
-	var line: Line2D = Line2D.new()
-	line.name = line_name
-	line.points = line_points
-	line.width = line_width
-	line.default_color = line_color
-	line.z_index = 0
-	line.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_terrain_root.add_child(line)
-
-
 func _sync_terrain_to_world(force: bool = false) -> void:
-	if not is_instance_valid(_terrain_root) or _world == null:
+	if not is_instance_valid(_terrain_root) or not is_instance_valid(_terrain_sprite) or _world == null:
 		return
 
 	var bounds: Vector2 = _get_world_horizontal_bounds()
@@ -247,17 +160,23 @@ func _sync_terrain_to_world(force: bool = false) -> void:
 	):
 		return
 
-	# X kamera konumundan GELMEZ. Terrain mapin kendi dunya koordinatinda sabittir.
+	# Exact fit:
+	# X: full Water map width (-1000..11000 currently = 12000 px)
+	# Y: exact 20m..100m fishing band (currently 2760 px)
 	_terrain_root.global_position = Vector2(left_x, top_y)
 	_terrain_root.scale = Vector2(
-		map_width / REFERENCE_MAP_WIDTH,
-		band_height / REFERENCE_BAND_HEIGHT
+		map_width / SOURCE_WIDTH,
+		band_height / SOURCE_HEIGHT
 	)
 
 	_terrain_root.set_meta("map_left_x", left_x)
 	_terrain_root.set_meta("map_right_x", bounds.y)
 	_terrain_root.set_meta("world_y_20m", top_y)
 	_terrain_root.set_meta("world_y_100m", bottom_y)
+	_terrain_root.set_meta("map_width", map_width)
+	_terrain_root.set_meta("band_height", band_height)
+	_terrain_root.set_meta("scale_x", map_width / SOURCE_WIDTH)
+	_terrain_root.set_meta("scale_y", band_height / SOURCE_HEIGHT)
 
 	_last_left_x = left_x
 	_last_map_width = map_width
@@ -266,7 +185,7 @@ func _sync_terrain_to_world(force: bool = false) -> void:
 
 
 func _get_world_horizontal_bounds() -> Vector2:
-	# World/Water rect map genisliginin tek kaynagi; gelecekte boyut degisirse terrain de otomatik uyar.
+	# World/Water is the authoritative map-width source.
 	var water: Control = _world.get_node_or_null("Water") as Control
 	if water != null:
 		var left_x: float = water.position.x
@@ -280,47 +199,67 @@ func _get_world_horizontal_bounds() -> Vector2:
 func _pixels_per_meter() -> float:
 	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
 	if hook == null:
-		return 34.5
+		return FALLBACK_PIXELS_PER_METER
 
 	var max_depth_pixels: float = float(hook.get("max_depth"))
 	var max_depth_meters: float = float(hook.get("max_depth_meters"))
 	if max_depth_pixels <= 0.0 or max_depth_meters <= 0.0:
-		return 34.5
+		return FALLBACK_PIXELS_PER_METER
 
 	return max_depth_pixels / max_depth_meters
 
 
-func _world_y_for_depth(depth_meters: float) -> float:
+func _hook_zero_world_y() -> float:
 	var boat: Node2D = _world.get_node_or_null("Boat") as Node2D
 	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
 	if boat == null or hook == null:
-		return 392.6 + depth_meters * 34.5
+		return FALLBACK_HOOK_ZERO_WORLD_Y
 
-	var hook_start_y: float = hook.position.y
+	var local_start_y: float = hook.position.y
 	var start_variant: Variant = hook.get("start_position")
 	if start_variant is Vector2:
-		hook_start_y = (start_variant as Vector2).y
+		var stored_start: Vector2 = start_variant as Vector2
+		# During the first frame start_position may still be Vector2.ZERO.
+		if not is_zero_approx(stored_start.y) or is_zero_approx(hook.position.y):
+			local_start_y = stored_start.y
 
-	return boat.global_position.y + hook_start_y + depth_meters * _pixels_per_meter()
+	return boat.global_position.y + local_start_y
 
 
-func _remove_old_terrain() -> void:
-	# V10/V11 ve daha eski kamera-kilitli terrain kalintilarini temizle.
-	var old_direct: Node = _world.get_node_or_null(TERRAIN_NODE_NAME)
-	if old_direct != null:
-		_world.remove_child(old_direct)
-		old_direct.queue_free()
+func _world_y_for_depth(depth_meters: float) -> float:
+	return _hook_zero_world_y() + depth_meters * _pixels_per_meter()
+
+
+func _hide_and_remove(node: Node) -> void:
+	if node == null:
+		return
+	if node is CanvasItem:
+		(node as CanvasItem).visible = false
+	var parent_node: Node = node.get_parent()
+	if parent_node != null:
+		parent_node.remove_child(node)
+	node.queue_free()
+
+
+func _remove_all_terrain_variants() -> void:
+	# Remove every previous runtime terrain implementation before creating V13.
+	# This guarantees there is never a procedural mountain underneath/over the accepted PNG.
+	var terrain_names: Array[String] = [
+		"UnderwaterReefTerrain20To100",
+		"UnderwaterTerrainFoundation",
+		"UnderwaterCanyonTerrain20To100"
+	]
+
+	for terrain_name: String in terrain_names:
+		var direct_node: Node = _world.get_node_or_null(terrain_name)
+		if direct_node != null:
+			_hide_and_remove(direct_node)
 
 	var background_layer: Node = _world.get_node_or_null(
 		"EnvironmentLayers/UnderwaterLayers/BackgroundDecorLayer"
 	)
 	if background_layer != null:
-		var old_background: Node = background_layer.get_node_or_null(TERRAIN_NODE_NAME)
-		if old_background != null:
-			background_layer.remove_child(old_background)
-			old_background.queue_free()
-
-		var old_foundation: Node = background_layer.get_node_or_null("UnderwaterTerrainFoundation")
-		if old_foundation != null:
-			background_layer.remove_child(old_foundation)
-			old_foundation.queue_free()
+		for terrain_name: String in terrain_names:
+			var background_node: Node = background_layer.get_node_or_null(terrain_name)
+			if background_node != null:
+				_hide_and_remove(background_node)
