@@ -1,8 +1,8 @@
 extends Node
 
 # TinyFisher katmanli dunya altyapisi.
-# 36 parcalik environment seti bu autoload tarafindan katmanlara yerlestirilir.
-# Her sey gorseldir; balik, kanca, tekne ve liman oynanisina fizik eklemez.
+# 36 environment gorseli TEK TEK eklenecek.
+# Su an sadece 1. gorsel aktif: sky_base_01.png
 
 const ENV_ROOT_NAME: String = "EnvironmentLayers"
 const DECOR_SEED: int = 9042026
@@ -10,8 +10,8 @@ const WATER_SURFACE_Y: float = 360.0
 const WORLD_LEFT_X: float = -1000.0
 const WORLD_RIGHT_X: float = 11000.0
 
-# World.tscn icindeki Sky=-10 ve Water=-9. Yeni cizimler bunlarin ustunde,
-# baliklarin (z=0) ve teknenin (z=2) arkasinda kalir.
+# World.tscn Sky=-10, Water=-9. Gokyuzu yeni tabanin ustunde,
+# su/oynanis elemanlarinin arkasinda kalir.
 const Z_SKY_BASE: int = -8
 const Z_SUN: int = -7
 const Z_HORIZON: int = -6
@@ -31,7 +31,7 @@ const ZONE_OPEN_BLUE: String = "open_blue"
 const ZONE_DEEP: String = "deep"
 const ZONE_ABYSS: String = "abyss"
 
-const SURFACE_PATH: String = "res://assets/environment/surface/"
+const SKY_TEXTURE_PATH: String = "res://assets/environment/surface/sky_base_01.png"
 
 var _scene_id: int = 0
 var _world: Node2D = null
@@ -43,7 +43,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V2: 36 ASSET KATMAN SISTEMI HAZIR")
+	print("ENVIRONMENT LAYERS V3: TEK TEK YERLESTIRME MODU")
 
 
 func _process(_delta: float) -> void:
@@ -74,8 +74,8 @@ func _ensure_environment_layers() -> void:
 		_world.add_child(_environment_root)
 
 	_build_layer_tree()
-	_build_surface_art()
-	print("ENVIRONMENT LAYERS: katmanlar + yuzey seti kuruldu")
+	_build_sky_only()
+	print("ENVIRONMENT: sadece SKY 1/36 aktif")
 
 
 func _build_layer_tree() -> void:
@@ -106,104 +106,15 @@ func _build_layer_tree() -> void:
 
 
 # -----------------------------------------------------------------------------
-# 1/6 - SURFACE (8 GORSEL)
+# GORSEL 1 / 36 - SKY
 # -----------------------------------------------------------------------------
 
-func _build_surface_art() -> void:
-	# 1) Ana gokyuzu. Yatayda tekrar eder; mevcut sunset shader bosluklarda taban olur.
-	_add_horizontal_strip(
-		"SkyBaseLayer",
-		"SkyBaseArt",
-		SURFACE_PATH + "sky_base_01.png",
-		-70.0,
-		860.0,
-		Color.WHITE
-	)
-
-	# 2) Gunes. Ufuk cizgisinin ustunde ve limandan biraz ileride gorunur.
-	_add_fitted_sprite(
-		"SunLayer",
-		"SunArt",
-		SURFACE_PATH + "sun_01_TEMP.png",
-		Vector2(2350.0, 95.0),
-		Vector2(190.0, 190.0),
-		Color(1.0, 1.0, 1.0, 0.96)
-	)
-
-	# 3) Uzak kara silueti. Su cizgisine oturur ve parallax katmaninda kalir.
-	_add_horizontal_strip(
-		"HorizonLandLayer",
-		"HorizonLandArt",
-		SURFACE_PATH + "horizon_land_01.png",
-		305.0,
-		150.0,
-		Color(0.88, 0.92, 1.0, 0.92)
-	)
-
-	# 4) Deniz yuzeyi tabani. Sadece ust su bolgesini kaplar; derinlik shaderi altta devam eder.
-	_add_horizontal_strip(
-		"OceanSurfaceLayer",
-		"OceanSurfaceArt",
-		SURFACE_PATH + "ocean_surface_base_01.png",
-		535.0,
-		350.0,
-		Color(1.0, 1.0, 1.0, 0.90)
-	)
-
-	# 5) Arkadaki dalga sirasi.
-	_add_horizontal_strip(
-		"WaveBackLayer",
-		"WaveBackArt",
-		SURFACE_PATH + "wave_back_01.png",
-		354.0,
-		58.0,
-		Color(1.0, 1.0, 1.0, 0.82)
-	)
-
-	# 6) Ondeki dalga sirasi.
-	_add_horizontal_strip(
-		"WaveFrontLayer",
-		"WaveFrontArt",
-		SURFACE_PATH + "wave_front_01.png",
-		371.0,
-		72.0,
-		Color(1.0, 1.0, 1.0, 0.92)
-	)
-
-	# 7) Kopuk. Teknenin ve baliklarin arkasinda, su cizgisinin hemen altinda.
-	_add_horizontal_strip(
-		"SurfaceFoamLayer",
-		"SurfaceFoamArt",
-		SURFACE_PATH + "surface_foam_01.png",
-		382.0,
-		42.0,
-		Color(1.0, 1.0, 1.0, 0.74)
-	)
-
-	# 8) Gunes huzmeleri. Yuzeyden sig suya dogru yumusak gecis verir.
-	_add_horizontal_strip(
-		"SunRaysLayer",
-		"SunRaysArt",
-		SURFACE_PATH + "sun_rays_01.png",
-		650.0,
-		560.0,
-		Color(1.0, 1.0, 1.0, 0.34)
-	)
-
-
-func _add_horizontal_strip(
-	layer_name: String,
-	root_name: String,
-	texture_path: String,
-	center_y: float,
-	target_height: float,
-	tint: Color
-) -> void:
-	var layer: Node2D = get_layer(layer_name)
-	if layer == null or layer.get_node_or_null(root_name) != null:
+func _build_sky_only() -> void:
+	var layer: Node2D = get_layer("SkyBaseLayer")
+	if layer == null or layer.get_node_or_null("SkyBaseArt") != null:
 		return
 
-	var texture: Texture2D = _load_texture(texture_path)
+	var texture: Texture2D = _load_texture(SKY_TEXTURE_PATH)
 	if texture == null:
 		return
 
@@ -212,9 +123,13 @@ func _add_horizontal_strip(
 		return
 
 	var root: Node2D = Node2D.new()
-	root.name = root_name
+	root.name = "SkyBaseArt"
 	layer.add_child(root)
 
+	# Gokyuzu sadece su cizgisinin ustunu doldurur.
+	# Diger 7 surface gorselinin hicbiri burada eklenmez.
+	var target_height: float = 860.0
+	var center_y: float = -70.0
 	var scale_factor: float = target_height / texture_size.y
 	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
 	var x: float = WORLD_LEFT_X + tile_width * 0.5
@@ -227,46 +142,10 @@ func _add_horizontal_strip(
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		sprite.position = Vector2(x, center_y)
 		sprite.scale = Vector2.ONE * scale_factor
-		sprite.modulate = tint
 		root.add_child(sprite)
 
 		x += tile_width - 1.0
 		tile_index += 1
-
-
-func _add_fitted_sprite(
-	layer_name: String,
-	node_name: String,
-	texture_path: String,
-	world_position: Vector2,
-	max_size: Vector2,
-	tint: Color
-) -> void:
-	var layer: Node2D = get_layer(layer_name)
-	if layer == null or layer.get_node_or_null(node_name) != null:
-		return
-
-	var texture: Texture2D = _load_texture(texture_path)
-	if texture == null:
-		return
-
-	var texture_size: Vector2 = texture.get_size()
-	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
-		return
-
-	var fit_scale: float = minf(
-		max_size.x / texture_size.x,
-		max_size.y / texture_size.y
-	)
-
-	var sprite: Sprite2D = Sprite2D.new()
-	sprite.name = node_name
-	sprite.texture = texture
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	sprite.position = world_position
-	sprite.scale = Vector2.ONE * fit_scale
-	sprite.modulate = tint
-	layer.add_child(sprite)
 
 
 func _load_texture(path: String) -> Texture2D:
@@ -360,7 +239,6 @@ func make_deterministic_rng(salt: int = 0) -> RandomNumberGenerator:
 
 
 func get_safe_horizontal_spawn_range() -> Vector2:
-	# Liman cevresine RNG dekor sokmuyoruz. Ilk 1400 px elle tasarlanacak.
 	return Vector2(1400.0, WORLD_RIGHT_X - 300.0)
 
 
