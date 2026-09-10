@@ -48,7 +48,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V10: OCEAN SURFACE GORUNUR ALAN KIRPILDI")
+	print("ENVIRONMENT LAYERS V11: OCEAN SURFACE TEKRARSIZ")
 
 
 func _process(_delta: float) -> void:
@@ -219,44 +219,28 @@ func _build_ocean_surface_only() -> void:
 	if layer == null or layer.get_node_or_null("OceanSurfaceArt") != null:
 		return
 
-	var source_texture: Texture2D = _load_texture(OCEAN_SURFACE_TEXTURE_PATH)
-	if source_texture == null:
+	var texture: Texture2D = _load_texture(OCEAN_SURFACE_TEXTURE_PATH)
+	if texture == null:
 		return
 
-	# PNG 2048x256 bir tuval fakat asil dalga dokusu bunun sadece bir bolumunu kullaniyor.
-	# Eski kod tum tuvali olceklendirdigi icin ekranda tek bir dikdortgen yama gorunuyordu.
-	# Burada PNG'nin gercek, alfa iceren bolgesini otomatik bulup yalniz onu tekrarliyoruz.
-	var source_image: Image = source_texture.get_image()
-	if source_image == null or source_image.is_empty():
-		return
-
-	var used_rect: Rect2i = source_image.get_used_rect()
-	if used_rect.size.x <= 0 or used_rect.size.y <= 0:
-		return
-
-	var cropped_texture: AtlasTexture = AtlasTexture.new()
-	cropped_texture.atlas = source_texture
-	cropped_texture.region = Rect2(
-		Vector2(used_rect.position),
-		Vector2(used_rect.size)
-	)
-
-	var visible_size: Vector2 = cropped_texture.get_size()
-	if visible_size.x <= 0.0 or visible_size.y <= 0.0:
+	var texture_size: Vector2 = texture.get_size()
+	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
 		return
 
 	var root: Node2D = Node2D.new()
 	root.name = "OceanSurfaceArt"
 	layer.add_child(root)
 
+	# Bu gorsel tile edilmez. Tek bir uzun yuzey bandi olarak tum dunya genisligine yayilir.
+	# Boylece onceki surumde olusan kutu kutu tekrar ve dikey ek yerleri tamamen kalkar.
 	var fade_shader: Shader = Shader.new()
 	fade_shader.code = (
 		"shader_type canvas_item;\n"
-		+ "uniform float opacity = 0.22;\n"
+		+ "uniform float opacity = 0.14;\n"
 		+ "void fragment() {\n"
 		+ "    vec4 tex = texture(TEXTURE, UV);\n"
-		+ "    float top_soft = smoothstep(0.0, 0.10, UV.y);\n"
-		+ "    float bottom_soft = 1.0 - smoothstep(0.60, 1.0, UV.y);\n"
+		+ "    float top_soft = smoothstep(0.00, 0.12, UV.y);\n"
+		+ "    float bottom_soft = 1.0 - smoothstep(0.48, 1.00, UV.y);\n"
 		+ "    COLOR = vec4(tex.rgb, tex.a * top_soft * bottom_soft * opacity);\n"
 		+ "}\n"
 	)
@@ -264,13 +248,17 @@ func _build_ocean_surface_only() -> void:
 	var fade_material: ShaderMaterial = ShaderMaterial.new()
 	fade_material.shader = fade_shader
 
-	# Doku dalga cizgisinin hemen altinda ince bir bant olarak butun dunyaya yayilir.
-	var target_height: float = 76.0
-	var scale_factor: float = target_height / visible_size.y
-	var center_y: float = WATER_SURFACE_Y + 9.0 + target_height * 0.5
+	var world_width: float = WORLD_RIGHT_X - WORLD_LEFT_X
+	var target_height: float = 44.0
 
-	# Hafif bindirme, tile sinirlarinda bosluk olusmasini engeller.
-	_add_tiled_strip(root, cropped_texture, scale_factor, center_y, fade_material, 10.0)
+	var sprite: Sprite2D = Sprite2D.new()
+	sprite.name = "OceanSurfaceSingleStrip"
+	sprite.texture = texture
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.material = fade_material
+	sprite.position = Vector2(WORLD_LEFT_X + world_width * 0.5, WATER_SURFACE_Y + target_height * 0.5)
+	sprite.scale = Vector2(world_width / texture_size.x, target_height / texture_size.y)
+	root.add_child(sprite)
 
 
 func _add_tiled_strip(
