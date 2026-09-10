@@ -112,7 +112,6 @@ func _ensure_terrain() -> void:
 	_terrain_sprite.texture = source_texture
 	_terrain_sprite.centered = false
 	_terrain_sprite.position = Vector2.ZERO
-	# Child remains Z-relative to the root: effective terrain Z is exactly -7.
 	_terrain_sprite.z_as_relative = true
 	_terrain_sprite.z_index = 0
 	_terrain_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -160,9 +159,6 @@ func _sync_terrain_to_world(force: bool = false) -> void:
 	):
 		return
 
-	# Exact fit:
-	# X: full Water map width (-1000..11000 currently = 12000 px)
-	# Y: exact 20m..100m fishing band (currently 2760 px)
 	_terrain_root.global_position = Vector2(left_x, top_y)
 	_terrain_root.scale = Vector2(
 		map_width / SOURCE_WIDTH,
@@ -185,7 +181,6 @@ func _sync_terrain_to_world(force: bool = false) -> void:
 
 
 func _get_world_horizontal_bounds() -> Vector2:
-	# World/Water is the authoritative map-width source.
 	var water: Control = _world.get_node_or_null("Water") as Control
 	if water != null:
 		var left_x: float = water.position.x
@@ -219,7 +214,6 @@ func _hook_zero_world_y() -> float:
 	var start_variant: Variant = hook.get("start_position")
 	if start_variant is Vector2:
 		var stored_start: Vector2 = start_variant as Vector2
-		# During the first frame start_position may still be Vector2.ZERO.
 		if not is_zero_approx(stored_start.y) or is_zero_approx(hook.position.y):
 			local_start_y = stored_start.y
 
@@ -242,8 +236,6 @@ func _hide_and_remove(node: Node) -> void:
 
 
 func _remove_all_terrain_variants() -> void:
-	# Remove every previous runtime terrain implementation before creating V13.
-	# This guarantees there is never a procedural mountain underneath/over the accepted PNG.
 	var terrain_names: Array[String] = [
 		"UnderwaterReefTerrain20To100",
 		"UnderwaterTerrainFoundation",
