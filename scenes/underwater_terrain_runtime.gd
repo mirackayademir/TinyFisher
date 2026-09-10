@@ -11,7 +11,6 @@ const LAYOUT_VERSION: int = 13
 const TERRAIN_TOP_DEPTH_METERS: float = 20.0
 const TERRAIN_BOTTOM_DEPTH_METERS: float = 100.0
 
-# Accepted/cropped asset dimensions measured from the actual alpha bounds.
 const SOURCE_WIDTH: float = 976.0
 const SOURCE_HEIGHT: float = 1405.0
 
@@ -19,9 +18,6 @@ const FALLBACK_WORLD_LEFT_X: float = -1000.0
 const FALLBACK_WORLD_RIGHT_X: float = 11000.0
 const FALLBACK_PIXELS_PER_METER: float = 34.5
 const FALLBACK_HOOK_ZERO_WORLD_Y: float = 392.6
-
-# Water is -9 and underwater decor begins at -6.
-# Terrain stays entirely at -7 so it is above water and behind all later decor assets.
 const TERRAIN_Z_INDEX: int = -7
 
 var _scene_id: int = 0
@@ -88,11 +84,7 @@ func _ensure_terrain() -> void:
 
 	var texture_size: Vector2 = source_texture.get_size()
 	if not is_equal_approx(texture_size.x, SOURCE_WIDTH) or not is_equal_approx(texture_size.y, SOURCE_HEIGHT):
-		push_error(
-			"Terrain texture olcusu beklenenden farkli. Beklenen: "
-			+ str(Vector2(SOURCE_WIDTH, SOURCE_HEIGHT))
-			+ " gelen: " + str(texture_size)
-		)
+		push_error("Terrain texture olcusu beklenenden farkli: " + str(texture_size))
 		return
 
 	_terrain_root = Node2D.new()
@@ -102,9 +94,6 @@ func _ensure_terrain() -> void:
 	_terrain_root.set_meta("layout_version", LAYOUT_VERSION)
 	_terrain_root.set_meta("collisionless", true)
 	_terrain_root.set_meta("camera_locked", false)
-	_terrain_root.set_meta("source_size", Vector2(SOURCE_WIDTH, SOURCE_HEIGHT))
-	_terrain_root.set_meta("depth_top_m", TERRAIN_TOP_DEPTH_METERS)
-	_terrain_root.set_meta("depth_bottom_m", TERRAIN_BOTTOM_DEPTH_METERS)
 	_world.add_child(_terrain_root)
 
 	_terrain_sprite = Sprite2D.new()
@@ -122,18 +111,11 @@ func _ensure_terrain() -> void:
 	var bounds: Vector2 = _get_world_horizontal_bounds()
 	var top_y: float = _world_y_for_depth(TERRAIN_TOP_DEPTH_METERS)
 	var bottom_y: float = _world_y_for_depth(TERRAIN_BOTTOM_DEPTH_METERS)
-	var expected_scale_x: float = (bounds.y - bounds.x) / SOURCE_WIDTH
-	var expected_scale_y: float = (bottom_y - top_y) / SOURCE_HEIGHT
-
 	print(
-		"UNDERWATER TERRAIN V13 OK | x=", bounds.x, "..", bounds.y,
-		" | map_width=", bounds.y - bounds.x,
+		"UNDERWATER TERRAIN V13 OK | map_width=", bounds.y - bounds.x,
 		" | y20=", top_y,
 		" | y100=", bottom_y,
-		" | band_height=", bottom_y - top_y,
-		" | source=", Vector2(SOURCE_WIDTH, SOURCE_HEIGHT),
-		" | scale=", Vector2(expected_scale_x, expected_scale_y),
-		" | z=", TERRAIN_Z_INDEX,
+		" | scale=", Vector2((bounds.y - bounds.x) / SOURCE_WIDTH, (bottom_y - top_y) / SOURCE_HEIGHT),
 		" | collision=OFF | camera_lock=OFF"
 	)
 
@@ -145,7 +127,6 @@ func _sync_terrain_to_world(force: bool = false) -> void:
 	var bounds: Vector2 = _get_world_horizontal_bounds()
 	var left_x: float = bounds.x
 	var map_width: float = maxf(bounds.y - bounds.x, 1.0)
-
 	var top_y: float = _world_y_for_depth(TERRAIN_TOP_DEPTH_METERS)
 	var bottom_y: float = _world_y_for_depth(TERRAIN_BOTTOM_DEPTH_METERS)
 	var band_height: float = maxf(bottom_y - top_y, 1.0)
@@ -160,19 +141,7 @@ func _sync_terrain_to_world(force: bool = false) -> void:
 		return
 
 	_terrain_root.global_position = Vector2(left_x, top_y)
-	_terrain_root.scale = Vector2(
-		map_width / SOURCE_WIDTH,
-		band_height / SOURCE_HEIGHT
-	)
-
-	_terrain_root.set_meta("map_left_x", left_x)
-	_terrain_root.set_meta("map_right_x", bounds.y)
-	_terrain_root.set_meta("world_y_20m", top_y)
-	_terrain_root.set_meta("world_y_100m", bottom_y)
-	_terrain_root.set_meta("map_width", map_width)
-	_terrain_root.set_meta("band_height", band_height)
-	_terrain_root.set_meta("scale_x", map_width / SOURCE_WIDTH)
-	_terrain_root.set_meta("scale_y", band_height / SOURCE_HEIGHT)
+	_terrain_root.scale = Vector2(map_width / SOURCE_WIDTH, band_height / SOURCE_HEIGHT)
 
 	_last_left_x = left_x
 	_last_map_width = map_width
@@ -187,7 +156,6 @@ func _get_world_horizontal_bounds() -> Vector2:
 		var right_x: float = water.position.x + water.size.x
 		if right_x - left_x >= 1280.0:
 			return Vector2(left_x, right_x)
-
 	return Vector2(FALLBACK_WORLD_LEFT_X, FALLBACK_WORLD_RIGHT_X)
 
 
@@ -195,12 +163,10 @@ func _pixels_per_meter() -> float:
 	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
 	if hook == null:
 		return FALLBACK_PIXELS_PER_METER
-
 	var max_depth_pixels: float = float(hook.get("max_depth"))
 	var max_depth_meters: float = float(hook.get("max_depth_meters"))
 	if max_depth_pixels <= 0.0 or max_depth_meters <= 0.0:
 		return FALLBACK_PIXELS_PER_METER
-
 	return max_depth_pixels / max_depth_meters
 
 
@@ -216,7 +182,6 @@ func _hook_zero_world_y() -> float:
 		var stored_start: Vector2 = start_variant as Vector2
 		if not is_zero_approx(stored_start.y) or is_zero_approx(hook.position.y):
 			local_start_y = stored_start.y
-
 	return boat.global_position.y + local_start_y
 
 
@@ -247,9 +212,7 @@ func _remove_all_terrain_variants() -> void:
 		if direct_node != null:
 			_hide_and_remove(direct_node)
 
-	var background_layer: Node = _world.get_node_or_null(
-		"EnvironmentLayers/UnderwaterLayers/BackgroundDecorLayer"
-	)
+	var background_layer: Node = _world.get_node_or_null("EnvironmentLayers/UnderwaterLayers/BackgroundDecorLayer")
 	if background_layer != null:
 		for terrain_name: String in terrain_names:
 			var background_node: Node = background_layer.get_node_or_null(terrain_name)
