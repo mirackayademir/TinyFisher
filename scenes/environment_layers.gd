@@ -16,11 +16,11 @@ const SKY_BOTTOM_CROP_PX: float = 14.0
 const SKY_WATER_OVERLAP_PX: float = 42.0
 
 # Siralama: eski shader gokyuzu en arkada, yeni sky onun ustunde,
-# Water ise ikisinin de ustunde. Boylece sky denizin ustune tasmaz.
+# Horizon sky'in ustunde fakat Water'in arkasinda kalir.
 const Z_LEGACY_SKY: int = -11
 const Z_SKY_BASE: int = -10
 const Z_SUN: int = -7
-const Z_HORIZON: int = -6
+const Z_HORIZON: int = -10
 const Z_OCEAN_SURFACE: int = -8
 const Z_WAVE_BACK: int = -7
 const Z_SUN_RAYS: int = -7
@@ -51,7 +51,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V7: GORSEL 3/36 UFUK KARASI EKLENDI")
+	print("ENVIRONMENT LAYERS V8: HORIZON 25 PX ASAGI ALINDI")
 
 
 func _process(_delta: float) -> void:
@@ -232,12 +232,12 @@ func _build_horizon_only() -> void:
 	root.name = "HorizonLandArt"
 	layer.add_child(root)
 
-	# Uzak kara yalnizca ince bir ufuk silueti olarak kullanilir.
-	# Alt kenar su cizgisine oturur; denizin icine sarkmaz.
+	# Uzak karanin tabani su cizgisinin 22 px altina iner.
+	# Horizon Water'in arkasinda oldugu icin alt kisim su tarafindan temizce ortulur.
 	var target_height: float = 72.0
 	var scale_factor: float = target_height / texture_size.y
 	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
-	var center_y: float = WATER_SURFACE_Y - (target_height * 0.5) - 3.0
+	var center_y: float = WATER_SURFACE_Y - (target_height * 0.5) + 22.0
 	var x: float = WORLD_LEFT_X + tile_width * 0.5
 	var tile_index: int = 0
 
