@@ -10,12 +10,15 @@ const WATER_SURFACE_Y: float = 360.0
 const WORLD_LEFT_X: float = -1000.0
 const WORLD_RIGHT_X: float = 11000.0
 
-# Sky assetinin en altindaki sert turuncu piksel bandini kullanmiyoruz.
+# Sky assetinin en altindaki sert bant kirpilir; kalan ufuk bandi da
+# denizin arkasina sokularak su cizgisinin altinda gizlenir.
 const SKY_BOTTOM_CROP_PX: float = 14.0
+const SKY_WATER_OVERLAP_PX: float = 42.0
 
-# World.tscn Sky=-10, Water=-9. Gokyuzu yeni tabanin ustunde,
-# su/oynanis elemanlarinin arkasinda kalir.
-const Z_SKY_BASE: int = -8
+# Siralama: eski shader gokyuzu en arkada, yeni sky onun ustunde,
+# Water ise ikisinin de ustunde. Boylece sky denizin ustune tasmaz.
+const Z_LEGACY_SKY: int = -11
+const Z_SKY_BASE: int = -10
 const Z_SUN: int = -7
 const Z_HORIZON: int = -6
 const Z_OCEAN_SURFACE: int = -8
@@ -46,7 +49,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V4: SKY ALT KENAR KIRPILDI")
+	print("ENVIRONMENT LAYERS V5: SKY UFUK BANDI SU ALTINA GIZLENDI")
 
 
 func _process(_delta: float) -> void:
@@ -70,6 +73,8 @@ func _ensure_environment_layers() -> void:
 	if _world == null:
 		return
 
+	_prepare_base_layer_order()
+
 	_environment_root = _world.get_node_or_null(ENV_ROOT_NAME) as Node2D
 	if _environment_root == null:
 		_environment_root = Node2D.new()
@@ -78,7 +83,19 @@ func _ensure_environment_layers() -> void:
 
 	_build_layer_tree()
 	_build_sky_only()
-	print("ENVIRONMENT: sadece SKY 1/36 aktif - alt kenar temiz")
+	print("ENVIRONMENT: sadece SKY 1/36 aktif - ufuk bandi su arkasinda")
+
+
+func _prepare_base_layer_order() -> void:
+	# Eski shader gokyuzu fallback olarak en arkada kalir.
+	var legacy_sky: CanvasItem = _world.get_node_or_null("Sky") as CanvasItem
+	if legacy_sky != null:
+		legacy_sky.z_index = Z_LEGACY_SKY
+
+	# Water mevcut z=-9 degerinde kalir ve yeni sky'i orter.
+	var water: CanvasItem = _world.get_node_or_null("Water") as CanvasItem
+	if water != null:
+		water.z_index = -9
 
 
 func _build_layer_tree() -> void:
@@ -125,8 +142,6 @@ func _build_sky_only() -> void:
 	if source_size.x <= 0.0 or source_size.y <= SKY_BOTTOM_CROP_PX:
 		return
 
-	# Assetin en altindaki duz turuncu bant AtlasTexture ile gercekten kirpilir.
-	# Sprite'i sadece yukari tasimiyoruz; sorunlu pikseller hic cizilmiyor.
 	var cropped_texture: AtlasTexture = AtlasTexture.new()
 	cropped_texture.atlas = source_texture
 	cropped_texture.region = Rect2(
@@ -144,11 +159,12 @@ func _build_sky_only() -> void:
 	root.name = "SkyBaseArt"
 	layer.add_child(root)
 
-	# Kirpilmis gokyuzunun alt kenari tam su cizgisine oturur.
-	# Diger 7 surface gorselinin hicbiri burada eklenmez.
 	var target_height: float = 860.0
-	var center_y: float = WATER_SURFACE_Y - (target_height * 0.5)
 	var scale_factor: float = target_height / texture_size.y
+
+	# Sky'in alt 42 ekran-piksellik kismi Water'in arkasina girer.
+	# Asset icindeki duz turuncu ufuk bandi artik suyun ustunde gorunemez.
+	var center_y: float = WATER_SURFACE_Y + SKY_WATER_OVERLAP_PX - (target_height * 0.5)
 	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
 	var x: float = WORLD_LEFT_X + tile_width * 0.5
 	var tile_index: int = 0
