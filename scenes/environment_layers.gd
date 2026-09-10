@@ -10,14 +10,9 @@ const WATER_SURFACE_Y: float = 360.0
 const WORLD_LEFT_X: float = -1000.0
 const WORLD_RIGHT_X: float = 11000.0
 
-# Sky assetinin en altindaki sert bant kirpilir; kalan ufuk bandi da
-# denizin arkasina sokularak su cizgisinin altinda gizlenir.
 const SKY_BOTTOM_CROP_PX: float = 14.0
 const SKY_WATER_OVERLAP_PX: float = 42.0
 
-# Siralama: eski shader gokyuzu en arkada, yeni sky onun ustunde,
-# Horizon sky'in ustunde fakat Water'in arkasinda kalir.
-# OceanSurface ise mevcut Water'in ustunde sadece ince, yari saydam bir yuzey dokusudur.
 const Z_LEGACY_SKY: int = -11
 const Z_SKY_BASE: int = -10
 const Z_SUN: int = -7
@@ -53,7 +48,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V9: GORSEL 4/36 OCEAN SURFACE EKLENDI")
+	print("ENVIRONMENT LAYERS V10: OCEAN SURFACE GORUNUR ALAN KIRPILDI")
 
 
 func _process(_delta: float) -> void:
@@ -90,7 +85,7 @@ func _ensure_environment_layers() -> void:
 	_build_sun_only()
 	_build_horizon_only()
 	_build_ocean_surface_only()
-	print("ENVIRONMENT: SKY + SUN + HORIZON + OCEAN SURFACE aktif - 4/36")
+	print("ENVIRONMENT: 4/36 aktif")
 
 
 func _prepare_base_layer_order() -> void:
@@ -125,9 +120,7 @@ func _build_layer_tree() -> void:
 	_register_layer("LandmarkDecorLayer", _ensure_node2d(underwater_layers, "LandmarkDecorLayer", Z_LANDMARK_DECOR))
 	_register_layer("ForegroundDecorLayer", _ensure_node2d(underwater_layers, "ForegroundDecorLayer", Z_FOREGROUND_DECOR))
 	_register_layer("ParticleLayer", _ensure_node2d(underwater_layers, "ParticleLayer", Z_PARTICLES))
-
-	var runtime_decor: Node2D = _ensure_node2d(_environment_root, "RuntimeDecor", 0)
-	_register_layer("RuntimeDecor", runtime_decor)
+	_register_layer("RuntimeDecor", _ensure_node2d(_environment_root, "RuntimeDecor", 0))
 
 
 # -----------------------------------------------------------------------------
@@ -149,39 +142,17 @@ func _build_sky_only() -> void:
 
 	var cropped_texture: AtlasTexture = AtlasTexture.new()
 	cropped_texture.atlas = source_texture
-	cropped_texture.region = Rect2(
-		0.0,
-		0.0,
-		source_size.x,
-		source_size.y - SKY_BOTTOM_CROP_PX
-	)
+	cropped_texture.region = Rect2(0.0, 0.0, source_size.x, source_size.y - SKY_BOTTOM_CROP_PX)
 
 	var texture_size: Vector2 = cropped_texture.get_size()
-	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
-		return
-
 	var root: Node2D = Node2D.new()
 	root.name = "SkyBaseArt"
 	layer.add_child(root)
 
 	var target_height: float = 860.0
 	var scale_factor: float = target_height / texture_size.y
-	var center_y: float = WATER_SURFACE_Y + SKY_WATER_OVERLAP_PX - (target_height * 0.5)
-	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
-	var x: float = WORLD_LEFT_X + tile_width * 0.5
-	var tile_index: int = 0
-
-	while x < WORLD_RIGHT_X + tile_width * 0.5:
-		var sprite: Sprite2D = Sprite2D.new()
-		sprite.name = "Tile_%02d" % tile_index
-		sprite.texture = cropped_texture
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		sprite.position = Vector2(x, center_y)
-		sprite.scale = Vector2.ONE * scale_factor
-		root.add_child(sprite)
-
-		x += tile_width - 1.0
-		tile_index += 1
+	var center_y: float = WATER_SURFACE_Y + SKY_WATER_OVERLAP_PX - target_height * 0.5
+	_add_tiled_strip(root, cropped_texture, scale_factor, center_y, null, 1.0)
 
 
 # -----------------------------------------------------------------------------
@@ -201,9 +172,7 @@ func _build_sun_only() -> void:
 	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
 		return
 
-	var max_size: Vector2 = Vector2(120.0, 120.0)
-	var fit_scale: float = minf(max_size.x / texture_size.x, max_size.y / texture_size.y)
-
+	var fit_scale: float = minf(120.0 / texture_size.x, 120.0 / texture_size.y)
 	var sprite: Sprite2D = Sprite2D.new()
 	sprite.name = "SunArt"
 	sprite.texture = texture
@@ -235,27 +204,10 @@ func _build_horizon_only() -> void:
 	root.name = "HorizonLandArt"
 	layer.add_child(root)
 
-	# Uzak karanin tabani su cizgisinin 22 px altina iner.
-	# Horizon Water'in arkasinda oldugu icin alt kisim su tarafindan temizce ortulur.
 	var target_height: float = 72.0
 	var scale_factor: float = target_height / texture_size.y
-	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
-	var center_y: float = WATER_SURFACE_Y - (target_height * 0.5) + 22.0
-	var x: float = WORLD_LEFT_X + tile_width * 0.5
-	var tile_index: int = 0
-
-	while x < WORLD_RIGHT_X + tile_width * 0.5:
-		var sprite: Sprite2D = Sprite2D.new()
-		sprite.name = "Tile_%02d" % tile_index
-		sprite.texture = texture
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		sprite.position = Vector2(x, center_y)
-		sprite.scale = Vector2.ONE * scale_factor
-		sprite.modulate = Color(0.78, 0.80, 0.92, 0.82)
-		root.add_child(sprite)
-
-		x += tile_width - 1.0
-		tile_index += 1
+	var center_y: float = WATER_SURFACE_Y - target_height * 0.5 + 22.0
+	_add_tiled_strip(root, texture, scale_factor, center_y, null, 1.0, Color(0.78, 0.80, 0.92, 0.82))
 
 
 # -----------------------------------------------------------------------------
@@ -267,53 +219,91 @@ func _build_ocean_surface_only() -> void:
 	if layer == null or layer.get_node_or_null("OceanSurfaceArt") != null:
 		return
 
-	var texture: Texture2D = _load_texture(OCEAN_SURFACE_TEXTURE_PATH)
-	if texture == null:
+	var source_texture: Texture2D = _load_texture(OCEAN_SURFACE_TEXTURE_PATH)
+	if source_texture == null:
 		return
 
-	var texture_size: Vector2 = texture.get_size()
-	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+	# PNG 2048x256 bir tuval fakat asil dalga dokusu bunun sadece bir bolumunu kullaniyor.
+	# Eski kod tum tuvali olceklendirdigi icin ekranda tek bir dikdortgen yama gorunuyordu.
+	# Burada PNG'nin gercek, alfa iceren bolgesini otomatik bulup yalniz onu tekrarliyoruz.
+	var source_image: Image = source_texture.get_image()
+	if source_image == null or source_image.is_empty():
+		return
+
+	var used_rect: Rect2i = source_image.get_used_rect()
+	if used_rect.size.x <= 0 or used_rect.size.y <= 0:
+		return
+
+	var cropped_texture: AtlasTexture = AtlasTexture.new()
+	cropped_texture.atlas = source_texture
+	cropped_texture.region = Rect2(
+		Vector2(used_rect.position),
+		Vector2(used_rect.size)
+	)
+
+	var visible_size: Vector2 = cropped_texture.get_size()
+	if visible_size.x <= 0.0 or visible_size.y <= 0.0:
 		return
 
 	var root: Node2D = Node2D.new()
 	root.name = "OceanSurfaceArt"
 	layer.add_child(root)
 
-	# Bu asset yeni bir deniz tabani gibi kullanilmaz.
-	# Mevcut ocean shader korunur; gorsel sadece yuzeyin ilk 118 px'ine hafif doku verir.
-	# Alt kenar shader ile sifira fade olur, boylece suyun ortasinda duz bir ek yeri olusmaz.
 	var fade_shader: Shader = Shader.new()
 	fade_shader.code = (
 		"shader_type canvas_item;\n"
-		+ "uniform float opacity = 0.30;\n"
+		+ "uniform float opacity = 0.22;\n"
 		+ "void fragment() {\n"
 		+ "    vec4 tex = texture(TEXTURE, UV);\n"
-		+ "    float bottom_fade = 1.0 - smoothstep(0.46, 1.0, UV.y);\n"
-		+ "    COLOR = vec4(tex.rgb, tex.a * bottom_fade * opacity);\n"
+		+ "    float top_soft = smoothstep(0.0, 0.10, UV.y);\n"
+		+ "    float bottom_soft = 1.0 - smoothstep(0.60, 1.0, UV.y);\n"
+		+ "    COLOR = vec4(tex.rgb, tex.a * top_soft * bottom_soft * opacity);\n"
 		+ "}\n"
 	)
 
 	var fade_material: ShaderMaterial = ShaderMaterial.new()
 	fade_material.shader = fade_shader
 
-	var target_height: float = 118.0
-	var scale_factor: float = target_height / texture_size.y
+	# Doku dalga cizgisinin hemen altinda ince bir bant olarak butun dunyaya yayilir.
+	var target_height: float = 76.0
+	var scale_factor: float = target_height / visible_size.y
+	var center_y: float = WATER_SURFACE_Y + 9.0 + target_height * 0.5
+
+	# Hafif bindirme, tile sinirlarinda bosluk olusmasini engeller.
+	_add_tiled_strip(root, cropped_texture, scale_factor, center_y, fade_material, 10.0)
+
+
+func _add_tiled_strip(
+	root: Node2D,
+	texture: Texture2D,
+	scale_factor: float,
+	center_y: float,
+	material: Material = null,
+	overlap_px: float = 1.0,
+	tint: Color = Color.WHITE
+) -> void:
+	var texture_size: Vector2 = texture.get_size()
+	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+		return
+
 	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
-	var center_y: float = WATER_SURFACE_Y + (target_height * 0.5) + 2.0
+	var step_width: float = maxf(tile_width - overlap_px, 1.0)
 	var x: float = WORLD_LEFT_X + tile_width * 0.5
 	var tile_index: int = 0
 
-	while x < WORLD_RIGHT_X + tile_width * 0.5:
+	while x < WORLD_RIGHT_X + tile_width:
 		var sprite: Sprite2D = Sprite2D.new()
 		sprite.name = "Tile_%02d" % tile_index
 		sprite.texture = texture
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		sprite.material = fade_material
 		sprite.position = Vector2(x, center_y)
 		sprite.scale = Vector2.ONE * scale_factor
+		sprite.modulate = tint
+		if material != null:
+			sprite.material = material
 		root.add_child(sprite)
 
-		x += tile_width - 1.0
+		x += step_width
 		tile_index += 1
 
 
