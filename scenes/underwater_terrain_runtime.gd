@@ -1,220 +1,216 @@
 extends Node
 
-# TinyFisher 20-100 m underwater canyon terrain.
-# Accepted PNG is placed as one world-anchored Sprite2D, with exact map/depth scaling.
-# No camera-following, no procedural mountain, no collision, no duplicate terrain layers.
+# Accepted 20-100 m canyon. Art is rebuilt from repo-safe WebP base64 chunks.
+const TERRAIN_NODE_NAME := "UnderwaterCanyonTerrain20To100"
+const LAYOUT_VERSION := 14
+const TOP_M := 20.0
+const BOTTOM_M := 100.0
+const SOURCE_SIZE := Vector2(965.0, 722.0)
+const EXPECTED_B64 := 74540
+const EXPECTED_BYTES := 55904
+const EXPECTED_SHA256 := "44d51db26db819b7ca6c950bf4cc67b1074a41da859272337ef1a2b2763395f4"
+const DATA_PARTS := [
+	"res://assets/environment/terrain/runtime_data/canyon_20_100_part0.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_20_100_part1.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_20_100_part2.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_20_100_part3.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_20_100_part4.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_20_100_part5.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_20_100_part6.txt"
+]
+const FALLBACK_LEFT := -1000.0
+const FALLBACK_RIGHT := 11000.0
+const FALLBACK_PPM := 34.5
+const FALLBACK_ZERO_Y := 392.6
+const TERRAIN_Z := -7
 
-const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To100"
-const TERRAIN_TEXTURE_PATH: String = "res://assets/environment/terrain/underwater_canyon_20_100.png"
-const LAYOUT_VERSION: int = 13
-
-const TERRAIN_TOP_DEPTH_METERS: float = 20.0
-const TERRAIN_BOTTOM_DEPTH_METERS: float = 100.0
-
-const SOURCE_WIDTH: float = 976.0
-const SOURCE_HEIGHT: float = 1405.0
-
-const FALLBACK_WORLD_LEFT_X: float = -1000.0
-const FALLBACK_WORLD_RIGHT_X: float = 11000.0
-const FALLBACK_PIXELS_PER_METER: float = 34.5
-const FALLBACK_HOOK_ZERO_WORLD_Y: float = 392.6
-const TERRAIN_Z_INDEX: int = -7
-
-var _scene_id: int = 0
-var _world: Node2D = null
-var _terrain_root: Node2D = null
-var _terrain_sprite: Sprite2D = null
-
-var _last_left_x: float = INF
-var _last_map_width: float = INF
-var _last_top_y: float = INF
-var _last_band_height: float = INF
+var _scene_id := 0
+var _world: Node2D
+var _root: Node2D
+var _sprite: Sprite2D
+var _attempted := false
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V13: ACCEPTED PNG / EXACT WORLD FIT / COLLISION OFF")
+	print("UNDERWATER TERRAIN V14: VERIFIED CANYON DATA / EXACT WORLD FIT")
 
 
 func _process(_delta: float) -> void:
-	var current_scene: Node = get_tree().current_scene
-	if current_scene == null:
-		_reset_refs()
+	var scene := get_tree().current_scene
+	if scene == null:
+		_reset()
 		return
-
-	var current_id: int = current_scene.get_instance_id()
-	if current_id != _scene_id:
-		_scene_id = current_id
-		_world = current_scene as Node2D
-		_terrain_root = null
-		_terrain_sprite = null
-		_last_left_x = INF
-		_last_map_width = INF
-		_last_top_y = INF
-		_last_band_height = INF
-
+	if scene.get_instance_id() != _scene_id:
+		_scene_id = scene.get_instance_id()
+		_world = scene as Node2D
+		_root = null
+		_sprite = null
+		_attempted = false
 	if _world == null:
 		return
-
 	_ensure_terrain()
-	_sync_terrain_to_world()
+	_fit_to_world()
 
 
-func _reset_refs() -> void:
+func _reset() -> void:
 	_scene_id = 0
 	_world = null
-	_terrain_root = null
-	_terrain_sprite = null
-	_last_left_x = INF
-	_last_map_width = INF
-	_last_top_y = INF
-	_last_band_height = INF
+	_root = null
+	_sprite = null
+	_attempted = false
 
 
 func _ensure_terrain() -> void:
-	if is_instance_valid(_terrain_root) and is_instance_valid(_terrain_sprite):
+	if is_instance_valid(_root) and is_instance_valid(_sprite):
+		return
+	if _attempted:
+		return
+	_attempted = true
+	_remove_old_terrain()
+
+	var texture := _build_texture()
+	if texture == null:
+		push_error("UNDERWATER TERRAIN V14: canyon texture build failed")
 		return
 
-	_remove_all_terrain_variants()
+	_root = Node2D.new()
+	_root.name = TERRAIN_NODE_NAME
+	_root.z_as_relative = false
+	_root.z_index = TERRAIN_Z
+	_root.set_meta("layout_version", LAYOUT_VERSION)
+	_root.set_meta("collisionless", true)
+	_root.set_meta("camera_locked", false)
+	_root.set_meta("source_sha256", EXPECTED_SHA256)
+	_world.add_child(_root)
 
-	var source_texture: Texture2D = load(TERRAIN_TEXTURE_PATH) as Texture2D
-	if source_texture == null:
-		push_error("Terrain texture bulunamadi: " + TERRAIN_TEXTURE_PATH)
+	_sprite = Sprite2D.new()
+	_sprite.name = "AcceptedCanyonSprite"
+	_sprite.texture = texture
+	_sprite.centered = false
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_root.add_child(_sprite)
+	_fit_to_world()
+
+	var bounds := _world_bounds()
+	var y20 := _depth_y(TOP_M)
+	var y100 := _depth_y(BOTTOM_M)
+	print("UNDERWATER TERRAIN V14 OK | x=", bounds.x, "..", bounds.y,
+		" | y20=", y20, " | y100=", y100,
+		" | scale=", Vector2((bounds.y - bounds.x) / SOURCE_SIZE.x, (y100 - y20) / SOURCE_SIZE.y),
+		" | bytes=", EXPECTED_BYTES, " SHA256=OK | z=", TERRAIN_Z,
+		" | collision=OFF | camera_lock=OFF")
+
+
+func _build_texture() -> Texture2D:
+	var encoded := ""
+	for path: String in DATA_PARTS:
+		if not FileAccess.file_exists(path):
+			push_error("UNDERWATER TERRAIN V14 missing: " + path)
+			return null
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			push_error("UNDERWATER TERRAIN V14 cannot open: " + path)
+			return null
+		encoded += file.get_as_text().strip_edges()
+
+	if encoded.length() != EXPECTED_B64:
+		push_error("UNDERWATER TERRAIN V14 base64 mismatch: " + str(encoded.length()))
+		return null
+	var bytes := Marshalls.base64_to_raw(encoded)
+	if bytes.size() != EXPECTED_BYTES:
+		push_error("UNDERWATER TERRAIN V14 byte mismatch: " + str(bytes.size()))
+		return null
+
+	var hashing := HashingContext.new()
+	if hashing.start(HashingContext.HASH_SHA256) != OK:
+		push_error("UNDERWATER TERRAIN V14 SHA256 init failed")
+		return null
+	hashing.update(bytes)
+	if hashing.finish().hex_encode() != EXPECTED_SHA256:
+		push_error("UNDERWATER TERRAIN V14 SHA256 mismatch")
+		return null
+
+	var image := Image.new()
+	var err := image.load_webp_from_buffer(bytes)
+	if err != OK:
+		push_error("UNDERWATER TERRAIN V14 WebP decode failed: " + str(err))
+		return null
+	if Vector2(image.get_width(), image.get_height()) != SOURCE_SIZE:
+		push_error("UNDERWATER TERRAIN V14 image size mismatch: " + str(image.get_size()))
+		return null
+	return ImageTexture.create_from_image(image)
+
+
+func _fit_to_world() -> void:
+	if not is_instance_valid(_root) or not is_instance_valid(_sprite) or _world == null:
 		return
-
-	var texture_size: Vector2 = source_texture.get_size()
-	if not is_equal_approx(texture_size.x, SOURCE_WIDTH) or not is_equal_approx(texture_size.y, SOURCE_HEIGHT):
-		push_error("Terrain texture olcusu beklenenden farkli: " + str(texture_size))
-		return
-
-	_terrain_root = Node2D.new()
-	_terrain_root.name = TERRAIN_NODE_NAME
-	_terrain_root.z_as_relative = false
-	_terrain_root.z_index = TERRAIN_Z_INDEX
-	_terrain_root.set_meta("layout_version", LAYOUT_VERSION)
-	_terrain_root.set_meta("collisionless", true)
-	_terrain_root.set_meta("camera_locked", false)
-	_world.add_child(_terrain_root)
-
-	_terrain_sprite = Sprite2D.new()
-	_terrain_sprite.name = "AcceptedCanyonSprite"
-	_terrain_sprite.texture = source_texture
-	_terrain_sprite.centered = false
-	_terrain_sprite.position = Vector2.ZERO
-	_terrain_sprite.z_as_relative = true
-	_terrain_sprite.z_index = 0
-	_terrain_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_terrain_root.add_child(_terrain_sprite)
-
-	_sync_terrain_to_world(true)
-
-	var bounds: Vector2 = _get_world_horizontal_bounds()
-	var top_y: float = _world_y_for_depth(TERRAIN_TOP_DEPTH_METERS)
-	var bottom_y: float = _world_y_for_depth(TERRAIN_BOTTOM_DEPTH_METERS)
-	print(
-		"UNDERWATER TERRAIN V13 OK | map_width=", bounds.y - bounds.x,
-		" | y20=", top_y,
-		" | y100=", bottom_y,
-		" | scale=", Vector2((bounds.y - bounds.x) / SOURCE_WIDTH, (bottom_y - top_y) / SOURCE_HEIGHT),
-		" | collision=OFF | camera_lock=OFF"
-	)
+	var bounds := _world_bounds()
+	var width := maxf(bounds.y - bounds.x, 1.0)
+	var y20 := _depth_y(TOP_M)
+	var y100 := _depth_y(BOTTOM_M)
+	var height := maxf(y100 - y20, 1.0)
+	_root.global_position = Vector2(bounds.x, y20)
+	_root.scale = Vector2(width / SOURCE_SIZE.x, height / SOURCE_SIZE.y)
+	_root.set_meta("map_left_x", bounds.x)
+	_root.set_meta("map_right_x", bounds.y)
+	_root.set_meta("world_y_20m", y20)
+	_root.set_meta("world_y_100m", y100)
 
 
-func _sync_terrain_to_world(force: bool = false) -> void:
-	if not is_instance_valid(_terrain_root) or not is_instance_valid(_terrain_sprite) or _world == null:
-		return
-
-	var bounds: Vector2 = _get_world_horizontal_bounds()
-	var left_x: float = bounds.x
-	var map_width: float = maxf(bounds.y - bounds.x, 1.0)
-	var top_y: float = _world_y_for_depth(TERRAIN_TOP_DEPTH_METERS)
-	var bottom_y: float = _world_y_for_depth(TERRAIN_BOTTOM_DEPTH_METERS)
-	var band_height: float = maxf(bottom_y - top_y, 1.0)
-
-	if (
-		not force
-		and is_equal_approx(left_x, _last_left_x)
-		and is_equal_approx(map_width, _last_map_width)
-		and is_equal_approx(top_y, _last_top_y)
-		and is_equal_approx(band_height, _last_band_height)
-	):
-		return
-
-	_terrain_root.global_position = Vector2(left_x, top_y)
-	_terrain_root.scale = Vector2(map_width / SOURCE_WIDTH, band_height / SOURCE_HEIGHT)
-
-	_last_left_x = left_x
-	_last_map_width = map_width
-	_last_top_y = top_y
-	_last_band_height = band_height
-
-
-func _get_world_horizontal_bounds() -> Vector2:
-	var water: Control = _world.get_node_or_null("Water") as Control
+func _world_bounds() -> Vector2:
+	var water := _world.get_node_or_null("Water") as Control
 	if water != null:
-		var left_x: float = water.position.x
-		var right_x: float = water.position.x + water.size.x
-		if right_x - left_x >= 1280.0:
-			return Vector2(left_x, right_x)
-	return Vector2(FALLBACK_WORLD_LEFT_X, FALLBACK_WORLD_RIGHT_X)
+		var left := water.position.x
+		var right := water.position.x + water.size.x
+		if right - left >= 1280.0:
+			return Vector2(left, right)
+	return Vector2(FALLBACK_LEFT, FALLBACK_RIGHT)
 
 
 func _pixels_per_meter() -> float:
-	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
+	var hook := _world.get_node_or_null("Boat/Hook") as Node2D
 	if hook == null:
-		return FALLBACK_PIXELS_PER_METER
-	var max_depth_pixels: float = float(hook.get("max_depth"))
-	var max_depth_meters: float = float(hook.get("max_depth_meters"))
-	if max_depth_pixels <= 0.0 or max_depth_meters <= 0.0:
-		return FALLBACK_PIXELS_PER_METER
-	return max_depth_pixels / max_depth_meters
+		return FALLBACK_PPM
+	var pixels := float(hook.get("max_depth"))
+	var meters := float(hook.get("max_depth_meters"))
+	return pixels / meters if pixels > 0.0 and meters > 0.0 else FALLBACK_PPM
 
 
-func _hook_zero_world_y() -> float:
-	var boat: Node2D = _world.get_node_or_null("Boat") as Node2D
-	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
+func _hook_zero_y() -> float:
+	var boat := _world.get_node_or_null("Boat") as Node2D
+	var hook := _world.get_node_or_null("Boat/Hook") as Node2D
 	if boat == null or hook == null:
-		return FALLBACK_HOOK_ZERO_WORLD_Y
-
-	var local_start_y: float = hook.position.y
-	var start_variant: Variant = hook.get("start_position")
-	if start_variant is Vector2:
-		var stored_start: Vector2 = start_variant as Vector2
-		if not is_zero_approx(stored_start.y) or is_zero_approx(hook.position.y):
-			local_start_y = stored_start.y
-	return boat.global_position.y + local_start_y
-
-
-func _world_y_for_depth(depth_meters: float) -> float:
-	return _hook_zero_world_y() + depth_meters * _pixels_per_meter()
+		return FALLBACK_ZERO_Y
+	var start_y := hook.position.y
+	var stored = hook.get("start_position")
+	if stored is Vector2:
+		var p := stored as Vector2
+		if not is_zero_approx(p.y) or is_zero_approx(hook.position.y):
+			start_y = p.y
+	return boat.global_position.y + start_y
 
 
-func _hide_and_remove(node: Node) -> void:
+func _depth_y(meters: float) -> float:
+	return _hook_zero_y() + meters * _pixels_per_meter()
+
+
+func _remove_node(node: Node) -> void:
 	if node == null:
 		return
 	if node is CanvasItem:
 		(node as CanvasItem).visible = false
-	var parent_node: Node = node.get_parent()
-	if parent_node != null:
-		parent_node.remove_child(node)
+	var parent := node.get_parent()
+	if parent != null:
+		parent.remove_child(node)
 	node.queue_free()
 
 
-func _remove_all_terrain_variants() -> void:
-	var terrain_names: Array[String] = [
-		"UnderwaterReefTerrain20To100",
-		"UnderwaterTerrainFoundation",
-		"UnderwaterCanyonTerrain20To100"
-	]
-
-	for terrain_name: String in terrain_names:
-		var direct_node: Node = _world.get_node_or_null(terrain_name)
-		if direct_node != null:
-			_hide_and_remove(direct_node)
-
-	var background_layer: Node = _world.get_node_or_null("EnvironmentLayers/UnderwaterLayers/BackgroundDecorLayer")
-	if background_layer != null:
-		for terrain_name: String in terrain_names:
-			var background_node: Node = background_layer.get_node_or_null(terrain_name)
-			if background_node != null:
-				_hide_and_remove(background_node)
+func _remove_old_terrain() -> void:
+	var names := ["UnderwaterReefTerrain20To100", "UnderwaterTerrainFoundation", TERRAIN_NODE_NAME]
+	for terrain_name: String in names:
+		_remove_node(_world.get_node_or_null(terrain_name))
+	var layer := _world.get_node_or_null("EnvironmentLayers/UnderwaterLayers/BackgroundDecorLayer")
+	if layer != null:
+		for terrain_name: String in names:
+			_remove_node(layer.get_node_or_null(terrain_name))
