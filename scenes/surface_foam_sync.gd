@@ -384,7 +384,8 @@ func _ensure_underwater_terrain(current_scene: Node) -> void:
 
 	_terrain_root = Node2D.new()
 	_terrain_root.name = "UnderwaterReefTerrain20To100"
-	_terrain_root.z_index = -3
+	# BackgroundDecorLayer zaten -6'da. Ekstra negatif z vermek reef'i Water(-9) arkasina atiyordu.
+	_terrain_root.z_index = 0
 	_terrain_root.set_meta("collisionless", true)
 	decor_layer.add_child(_terrain_root)
 
@@ -406,8 +407,9 @@ func _ensure_underwater_terrain(current_scene: Node) -> void:
 		terrain_height / texture_size.y
 	)
 	# Baliklar ve kanca on planda net kalsin diye hafif soluk.
-	sprite.modulate = Color(0.76, 0.84, 0.90, 0.68)
-	sprite.z_index = -3
+	sprite.modulate = Color(0.76, 0.84, 0.90, 0.72)
+	# Parent BackgroundDecorLayer'in z'sini kullan; Water'in ustunde, gameplay'in arkasinda kalir.
+	sprite.z_index = 0
 	_terrain_root.add_child(sprite)
 
-	print("REEF TERRAIN: 20-100m sabit PNG, runtime Image.load, collision yok")
+	print("REEF TERRAIN: gorunur z duzeltildi; texture=%s size=%s collision yok" % [TERRAIN_TEXTURE_PATH, texture_size])
