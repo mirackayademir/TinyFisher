@@ -7,7 +7,7 @@ extends Node
 
 const TERRAIN_TEXTURE_PATH: String = "res://assets/environment/terrain/underwater_terrain_20_100.png"
 const TERRAIN_NODE_NAME: String = "UnderwaterReefTerrain20To100"
-const LAYOUT_VERSION: int = 3
+const LAYOUT_VERSION: int = 4
 
 const WORLD_LEFT_X: float = -1000.0
 const WORLD_RIGHT_X: float = 11000.0
@@ -25,7 +25,7 @@ var _cropped_texture: Texture2D = null
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V3: 20-100m sabit hucre sistemi hazir")
+	print("UNDERWATER TERRAIN V4: 20-100m sabit hucre sistemi hazir")
 
 
 func _process(_delta: float) -> void:
@@ -64,6 +64,7 @@ func _ensure_terrain() -> void:
 		var version: int = int(existing.get_meta("layout_version", 0))
 		if version == LAYOUT_VERSION:
 			_terrain_root = existing
+			_ensure_surface_sync_proxy()
 			return
 		_world.remove_child(existing)
 		existing.queue_free()
@@ -136,8 +137,11 @@ func _ensure_terrain() -> void:
 			x += TARGET_TILE_WIDTH
 			tile_index += 1
 
+	# Eski SurfaceFoamSync terrain fonksiyonunun tekrar devreye girmesini engeller.
+	_ensure_surface_sync_proxy()
+
 	print(
-		"UNDERWATER TERRAIN V3: texture=", source_size,
+		"UNDERWATER TERRAIN V4: texture=", source_size,
 		" tile=", Vector2(TARGET_TILE_WIDTH, tile_height),
 		" rows=", row_count,
 		" y=", Vector2(y_start, y_end),
@@ -158,7 +162,7 @@ func _remove_legacy_terrain_nodes() -> void:
 	)
 	if background_layer != null:
 		var old_named: Node = background_layer.get_node_or_null(TERRAIN_NODE_NAME)
-		if old_named != null:
+		if old_named != null and not bool(old_named.get_meta("terrain_proxy", false)):
 			background_layer.remove_child(old_named)
 			old_named.queue_free()
 
@@ -166,6 +170,28 @@ func _remove_legacy_terrain_nodes() -> void:
 		if old_foundation != null:
 			background_layer.remove_child(old_foundation)
 			old_foundation.queue_free()
+
+
+func _ensure_surface_sync_proxy() -> void:
+	var background_layer: Node2D = _world.get_node_or_null(
+		"EnvironmentLayers/UnderwaterLayers/BackgroundDecorLayer"
+	) as Node2D
+	if background_layer == null:
+		return
+
+	var existing: Node = background_layer.get_node_or_null(TERRAIN_NODE_NAME)
+	if existing != null:
+		if bool(existing.get_meta("terrain_proxy", false)):
+			return
+		background_layer.remove_child(existing)
+		existing.queue_free()
+
+	var proxy: Node2D = Node2D.new()
+	proxy.name = TERRAIN_NODE_NAME
+	proxy.visible = false
+	proxy.set_meta("terrain_proxy", true)
+	proxy.set_meta("collisionless", true)
+	background_layer.add_child(proxy)
 
 
 func _load_terrain_texture() -> Texture2D:
