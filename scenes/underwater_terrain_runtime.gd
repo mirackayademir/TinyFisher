@@ -1,48 +1,37 @@
 extends Node
 
-# TinyFisher 20-100m fake-3D arka-plan terrain.
-# Bu surumde ekranda YALNIZCA TEK Sprite2D vardir.
-# Crop / parca / tile / tekrar / ani visible pop-in yoktur.
-# Terrain kaynak verisi text parcalari halinde saklanir ve runtime'da tek texture'a donusturulur.
-# 418x690 pixel-art kaynak 4x nearest ile 1672x2760 olur.
-# 2760 px = oyunun 20m -> 100m fiziksel derinlik araligi.
-# Collision yoktur; baliklar ve kanca terrain'in onunden gecer.
+# TinyFisher 20-100 m tek-parca dunya terrain temeli.
+# Bu surum terrain'i kameraya kilitlemez: dogrudan World koordinatlarina oturur.
+# 20 m -> 100 m fiziksel bant, mevcut olta olceginde 80 m * 34.5 px = 2760 px.
+# Yatayda World/Water rect'i esas alinir: mevcut map -1000 -> 11000 = 12000 px.
+# Collision YOK; balik, kanca ve gelecek 36 environment asset terrain'in onunde calisir.
 
 const TERRAIN_NODE_NAME: String = "UnderwaterReefTerrain20To100"
-const LAYOUT_VERSION: int = 10
+const LAYOUT_VERSION: int = 11
+
 const TERRAIN_TOP_DEPTH_METERS: float = 20.0
+const TERRAIN_BOTTOM_DEPTH_METERS: float = 100.0
 
-const SOURCE_WIDTH: int = 418
-const SOURCE_HEIGHT: int = 690
-const PALETTE_COUNT: int = 128
-const DISPLAY_SCALE: float = 4.0
-const DISPLAY_WIDTH: float = 1672.0
-const DISPLAY_HEIGHT: float = 2760.0
-const RAW_DATA_SIZE: int = 288938
+const FALLBACK_WORLD_LEFT_X: float = -1000.0
+const FALLBACK_WORLD_RIGHT_X: float = 11000.0
+const REFERENCE_MAP_WIDTH: float = 12000.0
+const REFERENCE_BAND_HEIGHT: float = 2760.0
 
-const DATA_PART_PATHS: Array[String] = [
-	"res://assets/environment/terrain/runtime_data/terrain_20_100_part0.txt",
-	"res://assets/environment/terrain/runtime_data/terrain_20_100_part1.txt",
-	"res://assets/environment/terrain/runtime_data/terrain_20_100_part2.txt",
-	"res://assets/environment/terrain/runtime_data/terrain_20_100_part3.txt",
-	"res://assets/environment/terrain/runtime_data/terrain_20_100_part4.txt",
-	"res://assets/environment/terrain/runtime_data/terrain_20_100_part5.txt",
-	"res://assets/environment/terrain/runtime_data/terrain_20_100_part6.txt"
-]
+const TERRAIN_Z_INDEX: int = -7
 
 var _scene_id: int = 0
 var _world: Node2D = null
-var _camera: Camera2D = null
 var _terrain_root: Node2D = null
-var _terrain_sprite: Sprite2D = null
-var _terrain_texture: Texture2D = null
-var _load_failed: bool = false
-var _terrain_top_y: float = 0.0
+
+var _last_left_x: float = INF
+var _last_map_width: float = INF
+var _last_top_y: float = INF
+var _last_band_height: float = INF
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V10: single exact 20-100m texture / crop OFF / tile OFF")
+	print("UNDERWATER TERRAIN V11: WORLD-ANCHORED 20-100m / CAMERA LOCK OFF / COLLISION OFF")
 
 
 func _process(_delta: float) -> void:
@@ -55,161 +44,243 @@ func _process(_delta: float) -> void:
 	if current_id != _scene_id:
 		_scene_id = current_id
 		_world = current_scene as Node2D
-		_camera = null
 		_terrain_root = null
-		_terrain_sprite = null
-		_load_failed = false
-		_terrain_top_y = 0.0
+		_last_left_x = INF
+		_last_map_width = INF
+		_last_top_y = INF
+		_last_band_height = INF
 
 	if _world == null:
 		return
 
-	_camera = _world.get_node_or_null("Boat/Camera2D") as Camera2D
-	if _camera == null:
-		return
-
 	_ensure_terrain()
-	_update_horizontal_alignment()
+	_sync_terrain_to_world()
 
 
 func _reset_refs() -> void:
 	_scene_id = 0
 	_world = null
-	_camera = null
 	_terrain_root = null
-	_terrain_sprite = null
-	_load_failed = false
-	_terrain_top_y = 0.0
+	_last_left_x = INF
+	_last_map_width = INF
+	_last_top_y = INF
+	_last_band_height = INF
 
 
 func _ensure_terrain() -> void:
-	if is_instance_valid(_terrain_root) and is_instance_valid(_terrain_sprite):
-		return
-	if _load_failed:
+	if is_instance_valid(_terrain_root):
 		return
 
 	_remove_old_terrain()
 
-	var texture: Texture2D = _build_texture_from_encoded_data()
-	if texture == null:
-		_load_failed = true
-		return
-
-	_terrain_texture = texture
-	_terrain_top_y = _world_y_for_depth(TERRAIN_TOP_DEPTH_METERS)
-
 	_terrain_root = Node2D.new()
 	_terrain_root.name = TERRAIN_NODE_NAME
 	_terrain_root.z_as_relative = false
-	# Water -9. Terrain -7: su gorunur, terrain suyun icinde; oynanis objeleri onunde.
-	_terrain_root.z_index = -7
+	_terrain_root.z_index = TERRAIN_Z_INDEX
 	_terrain_root.set_meta("layout_version", LAYOUT_VERSION)
 	_terrain_root.set_meta("collisionless", true)
+	_terrain_root.set_meta("camera_locked", false)
+	_terrain_root.set_meta("depth_top_m", TERRAIN_TOP_DEPTH_METERS)
+	_terrain_root.set_meta("depth_bottom_m", TERRAIN_BOTTOM_DEPTH_METERS)
 	_world.add_child(_terrain_root)
 
-	_terrain_sprite = Sprite2D.new()
-	_terrain_sprite.name = "ReefTerrainArt"
-	_terrain_sprite.texture = _terrain_texture
-	_terrain_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_terrain_sprite.centered = false
-	_terrain_sprite.scale = Vector2(DISPLAY_SCALE, DISPLAY_SCALE)
-	# 1672 genislik, 1280 kadrajdan 196px sola + 196px saga tasar.
-	# Bu sayede oran bozulmaz; X stretch yapilmaz.
-	_terrain_sprite.position = Vector2(-DISPLAY_WIDTH * 0.5, 0.0)
-	_terrain_sprite.modulate = Color(0.82, 0.90, 0.95, 0.88)
-	_terrain_sprite.z_index = 0
-	_terrain_root.add_child(_terrain_sprite)
+	var profile: PackedVector2Array = _terrain_profile()
 
-	_update_horizontal_alignment()
+	# Ana kaya kutlesi: kenarlarda erken baslar, merkezde ancak Abyss'e dogru tabana iner.
+	# Boylece 20-80 m ortasinda havada duran duz bir "deniz tabani" olusmaz.
+	_add_mass_layer(
+		"RockMassBase",
+		_build_mass_polygon(profile, 0.0),
+		Color(0.095, 0.145, 0.225, 0.985),
+		0
+	)
 
-	var ppm: float = _pixels_per_meter()
-	var expected_height: float = 80.0 * ppm
+	# Ic katmanlar ana poligonun tamamen icinde kalir; yeni dekorlarla z-fighting yapmaz.
+	_add_mass_layer(
+		"RockMassMidShadow",
+		_build_mass_polygon(profile, 116.0),
+		Color(0.058, 0.094, 0.158, 0.82),
+		1
+	)
+	_add_mass_layer(
+		"RockMassDeepShadow",
+		_build_mass_polygon(profile, 336.0),
+		Color(0.030, 0.050, 0.098, 0.88),
+		2
+	)
+
+	_add_profile_line(
+		"RockRim",
+		profile,
+		12.0,
+		Color(0.235, 0.335, 0.445, 0.96),
+		3
+	)
+	_add_profile_line(
+		"RockInnerRim",
+		_offset_profile(profile, 88.0),
+		7.0,
+		Color(0.125, 0.205, 0.305, 0.88),
+		3
+	)
+
+	_sync_terrain_to_world(true)
+
+	var bounds: Vector2 = _get_world_horizontal_bounds()
+	var top_y: float = _world_y_for_depth(TERRAIN_TOP_DEPTH_METERS)
+	var bottom_y: float = _world_y_for_depth(TERRAIN_BOTTOM_DEPTH_METERS)
 	print(
-		"UNDERWATER TERRAIN V10 OK | source=", Vector2(SOURCE_WIDTH, SOURCE_HEIGHT),
-		" | display=", Vector2(DISPLAY_WIDTH, DISPLAY_HEIGHT),
-		" | expected_20_100_height=", expected_height,
-		" | sprite_count=1 | collision=OFF"
+		"UNDERWATER TERRAIN V11 OK | x=", bounds.x, "..", bounds.y,
+		" | width=", bounds.y - bounds.x,
+		" | y20=", top_y,
+		" | y100=", bottom_y,
+		" | height=", bottom_y - top_y,
+		" | collision=OFF | camera_lock=OFF"
 	)
 
 
-func _update_horizontal_alignment() -> void:
-	if not is_instance_valid(_terrain_root) or not is_instance_valid(_camera):
+func _terrain_profile() -> PackedVector2Array:
+	# Referans alan: 12000 x 2760 px.
+	# Profil, tek bir U-sekilli kara kutlesidir: sol/sag kayalik duvarlar + Abyss tabani.
+	# Tum noktalar 4 px grid'e yakin tutuldu; pixel-art katmanlariyla uyumludur.
+	return PackedVector2Array([
+		Vector2(0.0, 220.0),
+		Vector2(360.0, 264.0),
+		Vector2(760.0, 360.0),
+		Vector2(1200.0, 520.0),
+		Vector2(1680.0, 740.0),
+		Vector2(2160.0, 1012.0),
+		Vector2(2640.0, 1320.0),
+		Vector2(3160.0, 1600.0),
+		Vector2(3680.0, 1872.0),
+		Vector2(4200.0, 2108.0),
+		Vector2(4720.0, 2260.0),
+		Vector2(5240.0, 2372.0),
+		Vector2(5760.0, 2448.0),
+		Vector2(6280.0, 2420.0),
+		Vector2(6800.0, 2352.0),
+		Vector2(7320.0, 2240.0),
+		Vector2(7840.0, 2100.0),
+		Vector2(8360.0, 1880.0),
+		Vector2(8840.0, 1620.0),
+		Vector2(9320.0, 1380.0),
+		Vector2(9760.0, 1140.0),
+		Vector2(10200.0, 920.0),
+		Vector2(10600.0, 748.0),
+		Vector2(11000.0, 588.0),
+		Vector2(11400.0, 428.0),
+		Vector2(11720.0, 308.0),
+		Vector2(12000.0, 248.0)
+	])
+
+
+func _build_mass_polygon(profile: PackedVector2Array, inset_y: float) -> PackedVector2Array:
+	var polygon: PackedVector2Array = PackedVector2Array()
+	for point: Vector2 in profile:
+		polygon.append(
+			Vector2(
+				point.x,
+				minf(point.y + inset_y, REFERENCE_BAND_HEIGHT - 8.0)
+			)
+		)
+
+	polygon.append(Vector2(REFERENCE_MAP_WIDTH, REFERENCE_BAND_HEIGHT))
+	polygon.append(Vector2(0.0, REFERENCE_BAND_HEIGHT))
+	return polygon
+
+
+func _offset_profile(profile: PackedVector2Array, offset_y: float) -> PackedVector2Array:
+	var result: PackedVector2Array = PackedVector2Array()
+	for point: Vector2 in profile:
+		result.append(
+			Vector2(
+				point.x,
+				minf(point.y + offset_y, REFERENCE_BAND_HEIGHT - 8.0)
+			)
+		)
+	return result
+
+
+func _add_mass_layer(
+	layer_name: String,
+	polygon_points: PackedVector2Array,
+	layer_color: Color,
+	layer_z: int
+) -> void:
+	var polygon: Polygon2D = Polygon2D.new()
+	polygon.name = layer_name
+	polygon.polygon = polygon_points
+	polygon.color = layer_color
+	polygon.z_index = layer_z
+	_terrain_root.add_child(polygon)
+
+
+func _add_profile_line(
+	line_name: String,
+	line_points: PackedVector2Array,
+	line_width: float,
+	line_color: Color,
+	line_z: int
+) -> void:
+	var line: Line2D = Line2D.new()
+	line.name = line_name
+	line.points = line_points
+	line.width = line_width
+	line.default_color = line_color
+	line.z_index = line_z
+	line.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_terrain_root.add_child(line)
+
+
+func _sync_terrain_to_world(force: bool = false) -> void:
+	if not is_instance_valid(_terrain_root) or _world == null:
 		return
 
-	# X kadraja kilitli: tekne saga/sola giderken terrain ekranda kaymaz.
-	# Y ASLA kamerayi takip etmez: 20-100m dunya derinliginde fiziksel olarak sabittir.
-	_terrain_root.global_position = Vector2(_camera.global_position.x, _terrain_top_y)
+	var bounds: Vector2 = _get_world_horizontal_bounds()
+	var left_x: float = bounds.x
+	var map_width: float = maxf(bounds.y - bounds.x, 1.0)
 
+	var top_y: float = _world_y_for_depth(TERRAIN_TOP_DEPTH_METERS)
+	var bottom_y: float = _world_y_for_depth(TERRAIN_BOTTOM_DEPTH_METERS)
+	var band_height: float = maxf(bottom_y - top_y, 1.0)
 
-func _build_texture_from_encoded_data() -> Texture2D:
-	var encoded: String = ""
-	for path: String in DATA_PART_PATHS:
-		if not FileAccess.file_exists(path):
-			push_error("UNDERWATER TERRAIN: veri parcasi yok | " + path)
-			return null
-		encoded += FileAccess.get_file_as_string(path).strip_edges()
+	if (
+		not force
+		and is_equal_approx(left_x, _last_left_x)
+		and is_equal_approx(map_width, _last_map_width)
+		and is_equal_approx(top_y, _last_top_y)
+		and is_equal_approx(band_height, _last_band_height)
+	):
+		return
 
-	if encoded.is_empty():
-		push_error("UNDERWATER TERRAIN: encoded terrain verisi bos")
-		return null
-
-	var compressed: PackedByteArray = Marshalls.base64_to_raw(encoded)
-	if compressed.is_empty():
-		push_error("UNDERWATER TERRAIN: base64 decode basarisiz")
-		return null
-
-	var raw: PackedByteArray = compressed.decompress(RAW_DATA_SIZE, FileAccess.COMPRESSION_GZIP)
-	if raw.size() != RAW_DATA_SIZE:
-		push_error(
-			"UNDERWATER TERRAIN: gzip decode boyutu hatali | got=%d expected=%d"
-			% [raw.size(), RAW_DATA_SIZE]
-		)
-		return null
-
-	var width: int = raw.decode_u16(0)
-	var height: int = raw.decode_u16(2)
-	var palette_count: int = raw.decode_u16(4)
-	if width != SOURCE_WIDTH or height != SOURCE_HEIGHT or palette_count != PALETTE_COUNT:
-		push_error(
-			"UNDERWATER TERRAIN: header hatali | %dx%d palette=%d"
-			% [width, height, palette_count]
-		)
-		return null
-
-	var palette_offset: int = 6
-	var indices_offset: int = palette_offset + palette_count * 4
-	var pixel_count: int = width * height
-	if raw.size() < indices_offset + pixel_count:
-		push_error("UNDERWATER TERRAIN: pixel verisi eksik")
-		return null
-
-	var rgba: PackedByteArray = PackedByteArray()
-	rgba.resize(pixel_count * 4)
-
-	for pixel_index: int in range(pixel_count):
-		var palette_index: int = int(raw[indices_offset + pixel_index])
-		if palette_index < 0 or palette_index >= palette_count:
-			palette_index = 0
-
-		var palette_pos: int = palette_offset + palette_index * 4
-		var out_pos: int = pixel_index * 4
-		rgba[out_pos] = raw[palette_pos]
-		rgba[out_pos + 1] = raw[palette_pos + 1]
-		rgba[out_pos + 2] = raw[palette_pos + 2]
-		rgba[out_pos + 3] = raw[palette_pos + 3]
-
-	var image: Image = Image.create_from_data(
-		width,
-		height,
-		false,
-		Image.FORMAT_RGBA8,
-		rgba
+	# Kritik fark: X kamera konumundan GELMEZ. Terrain mapin kendi dunya koordinatinda kalir.
+	_terrain_root.global_position = Vector2(left_x, top_y)
+	_terrain_root.scale = Vector2(
+		map_width / REFERENCE_MAP_WIDTH,
+		band_height / REFERENCE_BAND_HEIGHT
 	)
-	if image == null or image.is_empty():
-		push_error("UNDERWATER TERRAIN: Image olusturulamadi")
-		return null
 
-	return ImageTexture.create_from_image(image)
+	_terrain_root.set_meta("map_left_x", left_x)
+	_terrain_root.set_meta("map_right_x", bounds.y)
+	_terrain_root.set_meta("world_y_20m", top_y)
+	_terrain_root.set_meta("world_y_100m", bottom_y)
+
+	_last_left_x = left_x
+	_last_map_width = map_width
+	_last_top_y = top_y
+	_last_band_height = band_height
+
+
+func _get_world_horizontal_bounds() -> Vector2:
+	# Map genisligi zaten World/Water rect'inde tanimli; ayni kaynagi kullanarak sabitleri kopyalamiyoruz.
+	var water: Control = _world.get_node_or_null("Water") as Control
+	if water != null:
+		var left_x: float = water.position.x
+		var right_x: float = water.position.x + water.size.x
+		if right_x - left_x >= 1280.0:
+			return Vector2(left_x, right_x)
+
+	return Vector2(FALLBACK_WORLD_LEFT_X, FALLBACK_WORLD_RIGHT_X)
 
 
 func _pixels_per_meter() -> float:
@@ -240,6 +311,7 @@ func _world_y_for_depth(depth_meters: float) -> float:
 
 
 func _remove_old_terrain() -> void:
+	# V10 ve daha eski kamera-kilitli terrain kalintilarini tek seferde temizle.
 	var old_direct: Node = _world.get_node_or_null(TERRAIN_NODE_NAME)
 	if old_direct != null:
 		_world.remove_child(old_direct)
