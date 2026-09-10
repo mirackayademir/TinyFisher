@@ -10,6 +10,9 @@ const WATER_SURFACE_Y: float = 360.0
 const WORLD_LEFT_X: float = -1000.0
 const WORLD_RIGHT_X: float = 11000.0
 
+# Sky assetinin en altindaki sert turuncu piksel bandini kullanmiyoruz.
+const SKY_BOTTOM_CROP_PX: float = 14.0
+
 # World.tscn Sky=-10, Water=-9. Gokyuzu yeni tabanin ustunde,
 # su/oynanis elemanlarinin arkasinda kalir.
 const Z_SKY_BASE: int = -8
@@ -43,7 +46,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V3: TEK TEK YERLESTIRME MODU")
+	print("ENVIRONMENT LAYERS V4: SKY ALT KENAR KIRPILDI")
 
 
 func _process(_delta: float) -> void:
@@ -75,7 +78,7 @@ func _ensure_environment_layers() -> void:
 
 	_build_layer_tree()
 	_build_sky_only()
-	print("ENVIRONMENT: sadece SKY 1/36 aktif")
+	print("ENVIRONMENT: sadece SKY 1/36 aktif - alt kenar temiz")
 
 
 func _build_layer_tree() -> void:
@@ -114,11 +117,26 @@ func _build_sky_only() -> void:
 	if layer == null or layer.get_node_or_null("SkyBaseArt") != null:
 		return
 
-	var texture: Texture2D = _load_texture(SKY_TEXTURE_PATH)
-	if texture == null:
+	var source_texture: Texture2D = _load_texture(SKY_TEXTURE_PATH)
+	if source_texture == null:
 		return
 
-	var texture_size: Vector2 = texture.get_size()
+	var source_size: Vector2 = source_texture.get_size()
+	if source_size.x <= 0.0 or source_size.y <= SKY_BOTTOM_CROP_PX:
+		return
+
+	# Assetin en altindaki duz turuncu bant AtlasTexture ile gercekten kirpilir.
+	# Sprite'i sadece yukari tasimiyoruz; sorunlu pikseller hic cizilmiyor.
+	var cropped_texture: AtlasTexture = AtlasTexture.new()
+	cropped_texture.atlas = source_texture
+	cropped_texture.region = Rect2(
+		0.0,
+		0.0,
+		source_size.x,
+		source_size.y - SKY_BOTTOM_CROP_PX
+	)
+
+	var texture_size: Vector2 = cropped_texture.get_size()
 	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
 		return
 
@@ -126,10 +144,10 @@ func _build_sky_only() -> void:
 	root.name = "SkyBaseArt"
 	layer.add_child(root)
 
-	# Gokyuzu sadece su cizgisinin ustunu doldurur.
+	# Kirpilmis gokyuzunun alt kenari tam su cizgisine oturur.
 	# Diger 7 surface gorselinin hicbiri burada eklenmez.
 	var target_height: float = 860.0
-	var center_y: float = -70.0
+	var center_y: float = WATER_SURFACE_Y - (target_height * 0.5)
 	var scale_factor: float = target_height / texture_size.y
 	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
 	var x: float = WORLD_LEFT_X + tile_width * 0.5
@@ -138,7 +156,7 @@ func _build_sky_only() -> void:
 	while x < WORLD_RIGHT_X + tile_width * 0.5:
 		var sprite: Sprite2D = Sprite2D.new()
 		sprite.name = "Tile_%02d" % tile_index
-		sprite.texture = texture
+		sprite.texture = cropped_texture
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		sprite.position = Vector2(x, center_y)
 		sprite.scale = Vector2.ONE * scale_factor
