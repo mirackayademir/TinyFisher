@@ -2,7 +2,7 @@ extends Node
 
 # TinyFisher katmanli dunya altyapisi.
 # 36 environment gorseli TEK TEK eklenecek.
-# Aktif: 1) sky_base_01.png  2) sun_01_TEMP.png
+# Aktif: 1) sky_base_01.png  2) sun_01_TEMP.png  3) horizon_land_01.png
 
 const ENV_ROOT_NAME: String = "EnvironmentLayers"
 const DECOR_SEED: int = 9042026
@@ -39,6 +39,7 @@ const ZONE_ABYSS: String = "abyss"
 
 const SKY_TEXTURE_PATH: String = "res://assets/environment/surface/sky_base_01.png"
 const SUN_TEXTURE_PATH: String = "res://assets/environment/surface/sun_01_TEMP.png"
+const HORIZON_TEXTURE_PATH: String = "res://assets/environment/surface/horizon_land_01.png"
 
 var _scene_id: int = 0
 var _world: Node2D = null
@@ -50,7 +51,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V6: GORSEL 2/36 GUNES EKLENDI")
+	print("ENVIRONMENT LAYERS V7: GORSEL 3/36 UFUK KARASI EKLENDI")
 
 
 func _process(_delta: float) -> void:
@@ -85,7 +86,8 @@ func _ensure_environment_layers() -> void:
 	_build_layer_tree()
 	_build_sky_only()
 	_build_sun_only()
-	print("ENVIRONMENT: SKY + SUN aktif - 2/36")
+	_build_horizon_only()
+	print("ENVIRONMENT: SKY + SUN + HORIZON aktif - 3/36")
 
 
 func _prepare_base_layer_order() -> void:
@@ -196,8 +198,6 @@ func _build_sun_only() -> void:
 	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
 		return
 
-	# Gunes ilk oyun kadrajinda gorulecek ama tekne/liman ile cakismayacak sekilde
-	# ufkun biraz ustune, kontrollu kucuk boyutta yerlestirilir.
 	var max_size: Vector2 = Vector2(120.0, 120.0)
 	var fit_scale: float = minf(max_size.x / texture_size.x, max_size.y / texture_size.y)
 
@@ -209,6 +209,50 @@ func _build_sun_only() -> void:
 	sprite.scale = Vector2.ONE * fit_scale
 	sprite.modulate = Color(1.0, 1.0, 1.0, 0.94)
 	layer.add_child(sprite)
+
+
+# -----------------------------------------------------------------------------
+# GORSEL 3 / 36 - HORIZON LAND
+# -----------------------------------------------------------------------------
+
+func _build_horizon_only() -> void:
+	var layer: Node2D = get_layer("HorizonLandLayer")
+	if layer == null or layer.get_node_or_null("HorizonLandArt") != null:
+		return
+
+	var texture: Texture2D = _load_texture(HORIZON_TEXTURE_PATH)
+	if texture == null:
+		return
+
+	var texture_size: Vector2 = texture.get_size()
+	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+		return
+
+	var root: Node2D = Node2D.new()
+	root.name = "HorizonLandArt"
+	layer.add_child(root)
+
+	# Uzak kara yalnizca ince bir ufuk silueti olarak kullanilir.
+	# Alt kenar su cizgisine oturur; denizin icine sarkmaz.
+	var target_height: float = 72.0
+	var scale_factor: float = target_height / texture_size.y
+	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
+	var center_y: float = WATER_SURFACE_Y - (target_height * 0.5) - 3.0
+	var x: float = WORLD_LEFT_X + tile_width * 0.5
+	var tile_index: int = 0
+
+	while x < WORLD_RIGHT_X + tile_width * 0.5:
+		var sprite: Sprite2D = Sprite2D.new()
+		sprite.name = "Tile_%02d" % tile_index
+		sprite.texture = texture
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.position = Vector2(x, center_y)
+		sprite.scale = Vector2.ONE * scale_factor
+		sprite.modulate = Color(0.78, 0.80, 0.92, 0.82)
+		root.add_child(sprite)
+
+		x += tile_width - 1.0
+		tile_index += 1
 
 
 func _load_texture(path: String) -> Texture2D:
