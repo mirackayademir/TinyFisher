@@ -4,7 +4,7 @@ extends Node
 # 7/36 surface_foam_01.png: hareketli ana dalgaya baglanir.
 # 8/36 sun_rays_01.png: tek, duzenli bir gunes huzmesi kumesi olarak kullanilir.
 # 9/36 shallow_rock_01.png: SIMDİLIK ATLANDI / gorunmez.
-# 10/36 shallow_fish_school_01_TEMP.png: tek, hafif arka-plan balık surusu.
+# 10/36 shallow_fish_school_01_TEMP.png: 0-20m bandinda aralikli arka-plan balik suruleri.
 
 const FOAM_TEXTURE: Texture2D = preload("res://assets/environment/surface/surface_foam_01.png")
 const SUN_RAYS_TEXTURE: Texture2D = preload("res://assets/environment/surface/sun_rays_01.png")
@@ -16,21 +16,19 @@ const SUN_TARGET_SIZE: float = 175.0
 const SUN_RAYS_WIDTH: float = 1450.0
 const SUN_RAYS_DEPTH_HEIGHT: float = 540.0
 
-const FISH_SCHOOL_POSITION: Vector2 = Vector2(1320.0, 650.0)
 const FISH_SCHOOL_TARGET_WIDTH: float = 220.0
 
 var _bound_line: Line2D = null
 var _ray_root: Node2D = null
 var _sun_light_parallax: Parallax2D = null
-var _fish_school_sprite: Sprite2D = null
-var _fish_school_origin: Vector2 = FISH_SCHOOL_POSITION
+var _fish_school_root: Node2D = null
 var _anim_time: float = 0.0
 var _scene_id: int = 0
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("ENV RUNTIME: 7/36 kopuk + 8/36 huzme + 9/36 kaya atlandi + 10/36 sig balik surusu")
+	print("ENV RUNTIME: 7/36 kopuk + 8/36 huzme + 9/36 kaya atlandi + 10/36 sig balik suruleri")
 
 
 func _process(delta: float) -> void:
@@ -45,22 +43,22 @@ func _process(delta: float) -> void:
 		_bound_line = null
 		_ray_root = null
 		_sun_light_parallax = null
-		_fish_school_sprite = null
+		_fish_school_root = null
 		_anim_time = 0.0
 
 	_sync_surface_foam(current_scene)
 	_ensure_sun_light_group(current_scene)
 	_ensure_sun_rays(current_scene)
 	_remove_skipped_rocks(current_scene)
-	_ensure_shallow_fish_school(current_scene)
-	_animate_shallow_fish_school(delta)
+	_ensure_shallow_fish_schools(current_scene)
+	_animate_shallow_fish_schools(delta)
 
 
 func _reset_scene_refs() -> void:
 	_bound_line = null
 	_ray_root = null
 	_sun_light_parallax = null
-	_fish_school_sprite = null
+	_fish_school_root = null
 	_anim_time = 0.0
 	_scene_id = 0
 
@@ -234,8 +232,8 @@ func _remove_skipped_rocks(current_scene: Node) -> void:
 # 10 / 36 - SHALLOW FISH SCHOOL 01 TEMP
 # -----------------------------------------------------------------------------
 
-func _ensure_shallow_fish_school(current_scene: Node) -> void:
-	if is_instance_valid(_fish_school_sprite):
+func _ensure_shallow_fish_schools(current_scene: Node) -> void:
+	if is_instance_valid(_fish_school_root):
 		return
 
 	var decor_layer: Node2D = current_scene.get_node_or_null(
@@ -244,10 +242,13 @@ func _ensure_shallow_fish_school(current_scene: Node) -> void:
 	if decor_layer == null:
 		return
 
-	var existing: Sprite2D = decor_layer.get_node_or_null("ShallowFishSchool01") as Sprite2D
+	var old_single: Node = decor_layer.get_node_or_null("ShallowFishSchool01")
+	if old_single != null and not old_single.is_queued_for_deletion():
+		old_single.queue_free()
+
+	var existing: Node2D = decor_layer.get_node_or_null("ShallowFishSchools10") as Node2D
 	if existing != null:
-		_fish_school_sprite = existing
-		_fish_school_origin = existing.position
+		_fish_school_root = existing
 		return
 
 	var texture_size: Vector2 = SHALLOW_FISH_SCHOOL_TEXTURE.get_size()
@@ -256,25 +257,57 @@ func _ensure_shallow_fish_school(current_scene: Node) -> void:
 
 	var fit_scale: float = FISH_SCHOOL_TARGET_WIDTH / texture_size.x
 
-	_fish_school_sprite = Sprite2D.new()
-	_fish_school_sprite.name = "ShallowFishSchool01"
-	_fish_school_sprite.texture = SHALLOW_FISH_SCHOOL_TEXTURE
-	_fish_school_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_fish_school_sprite.position = FISH_SCHOOL_POSITION
-	_fish_school_sprite.scale = Vector2.ONE * fit_scale
-	_fish_school_sprite.modulate = Color(0.78, 0.90, 0.96, 0.50)
-	decor_layer.add_child(_fish_school_sprite)
-	_fish_school_origin = FISH_SCHOOL_POSITION
+	_fish_school_root = Node2D.new()
+	_fish_school_root.name = "ShallowFishSchools10"
+	decor_layer.add_child(_fish_school_root)
 
-	print("SHALLOW FISH SCHOOL: 10/36 tek arka-plan surusu eklendi")
+	# Yaklasik 10-15m aralik hissiyle saga dogru yayilir.
+	# Dikey konumlar 0-20m sig su bandi icinde degisir.
+	var placements: Array[Vector2] = [
+		Vector2(1320.0, 650.0),
+		Vector2(1850.0, 520.0),
+		Vector2(2380.0, 760.0),
+		Vector2(2910.0, 600.0),
+		Vector2(3440.0, 900.0),
+		Vector2(3970.0, 700.0),
+		Vector2(4500.0, 980.0),
+		Vector2(5030.0, 560.0),
+		Vector2(5560.0, 820.0),
+		Vector2(6090.0, 670.0)
+	]
+
+	for i: int in range(placements.size()):
+		var sprite: Sprite2D = Sprite2D.new()
+		sprite.name = "ShallowFishSchool_%02d" % i
+		sprite.texture = SHALLOW_FISH_SCHOOL_TEXTURE
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.position = placements[i]
+
+		var size_variation: float = 0.88 + float(i % 4) * 0.05
+		var direction: float = -1.0 if i % 3 == 1 else 1.0
+		sprite.scale = Vector2(direction * fit_scale * size_variation, fit_scale * size_variation)
+		sprite.modulate = Color(0.78, 0.90, 0.96, 0.42 + float(i % 3) * 0.04)
+		sprite.set_meta("origin", placements[i])
+		sprite.set_meta("phase", float(i) * 0.83)
+		_fish_school_root.add_child(sprite)
+
+	print("SHALLOW FISH SCHOOL: 10/36 0-20m bandina 10 arka-plan surusu yayildi")
 
 
-func _animate_shallow_fish_school(delta: float) -> void:
-	if not is_instance_valid(_fish_school_sprite):
+func _animate_shallow_fish_schools(delta: float) -> void:
+	if not is_instance_valid(_fish_school_root):
 		return
 
 	_anim_time += delta
-	_fish_school_sprite.position = _fish_school_origin + Vector2(
-		sin(_anim_time * 0.32) * 38.0,
-		sin(_anim_time * 0.67) * 6.0
-	)
+
+	for child: Node in _fish_school_root.get_children():
+		var sprite: Sprite2D = child as Sprite2D
+		if sprite == null:
+			continue
+
+		var origin: Vector2 = sprite.get_meta("origin", sprite.position)
+		var phase: float = float(sprite.get_meta("phase", 0.0))
+		sprite.position = origin + Vector2(
+			sin(_anim_time * 0.26 + phase) * 24.0,
+			sin(_anim_time * 0.51 + phase) * 5.0
+		)
