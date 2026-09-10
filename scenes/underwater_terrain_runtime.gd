@@ -1,34 +1,26 @@
 extends Node
 
-# TinyFisher fake-3D arka-plan terrain.
-# Onaylanan terrain gorseli TEK PARCA kullanilir.
-# Tile / tekrar / 20-100m stretch YOK.
-# Gorsel dunyada sabit bir Y derinliginde durur; kamera asagi indikce DOGAL olarak kadraja girer.
-# X ekseninde kamera kadrajina hizali kalir. Collision yoktur; baliklar ve kanca onunden gecer.
+# TinyFisher 20-100m fake-3D reef terrain.
+# Kaynak gorselin sol / orta / sag kara kutleleri AYRI crop olarak kullanilir.
+# Tek dev sprite, tile, tekrar ve 20m'de ani pop-in YOK.
+# Y ekseni dunya derinligine sabittir; X ekseni kamera kadrajina 1:1 hizalanir.
+# Collision yoktur; baliklar ve kanca terrain'in onunden gecer.
 
 const TERRAIN_TEXTURE_PATH: String = "res://assets/environment/terrain/underwater_terrain_20_100.png"
 const TERRAIN_NODE_NAME: String = "UnderwaterReefTerrain20To100"
-const LAYOUT_VERSION: int = 8
-
-# Kamera 720px yukseklikte oldugu icin terrain'i tam 20m dunya-Y'sine koyarsak
-# oyuncu 20m'ye gelmeden alt kenari gorur. 24m civari baslatmak, terrain'in ekrana
-# yaklasik 20m civarinda yavasca girmesini saglar.
-const TERRAIN_ART_TOP_DEPTH_METERS: float = 24.0
+const LAYOUT_VERSION: int = 9
 
 var _scene_id: int = 0
 var _world: Node2D = null
 var _camera: Camera2D = null
 var _terrain_root: Node2D = null
-var _terrain_sprite: Sprite2D = null
 var _terrain_texture: Texture2D = null
 var _load_failed: bool = false
-var _drawn_height: float = 0.0
-var _terrain_center_y: float = 0.0
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V8: world-depth placement / no pop-in / no tile")
+	print("UNDERWATER TERRAIN V9: depth chunks / no pop-in / no tile / collision OFF")
 
 
 func _process(_delta: float) -> void:
@@ -43,10 +35,8 @@ func _process(_delta: float) -> void:
 		_world = current_scene as Node2D
 		_camera = null
 		_terrain_root = null
-		_terrain_sprite = null
+		_terrain_texture = null
 		_load_failed = false
-		_drawn_height = 0.0
-		_terrain_center_y = 0.0
 
 	if _world == null:
 		return
@@ -64,14 +54,12 @@ func _reset_refs() -> void:
 	_world = null
 	_camera = null
 	_terrain_root = null
-	_terrain_sprite = null
+	_terrain_texture = null
 	_load_failed = false
-	_drawn_height = 0.0
-	_terrain_center_y = 0.0
 
 
 func _ensure_terrain() -> void:
-	if is_instance_valid(_terrain_root) and is_instance_valid(_terrain_sprite):
+	if is_instance_valid(_terrain_root):
 		return
 	if _load_failed:
 		return
@@ -89,62 +77,95 @@ func _ensure_terrain() -> void:
 		_load_failed = true
 		return
 
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	if viewport_size.x <= 0.0:
-		viewport_size = Vector2(1280.0, 720.0)
-
-	# SADECE genislige sigdir. X/Y ayni scale: oran bozulmaz.
-	# Kaynak 16:9'a yakin oldugu icin 1280 genislikte yaklasik 700px yukseklik olur.
-	var fit_scale: float = viewport_size.x / source_size.x
-	_drawn_height = source_size.y * fit_scale
-
-	# Terrain'i dunyada gercek bir derinlige koy. Kamera asagi indikce sprite kadraja girer;
-	# depth==20 oldugunda visible=true gibi ani bir acilma YOK.
-	var terrain_top_y: float = _world_y_for_depth(TERRAIN_ART_TOP_DEPTH_METERS)
-	_terrain_center_y = terrain_top_y + _drawn_height * 0.5
-
 	_terrain_root = Node2D.new()
 	_terrain_root.name = TERRAIN_NODE_NAME
 	_terrain_root.z_as_relative = false
-	# Water -9. Terrain -7: suyun onunde, balik/kancanin arkasinda.
+	# Water -9. Terrain -7: suyun onunde, oynanis objelerinin arkasinda.
 	_terrain_root.z_index = -7
 	_terrain_root.set_meta("layout_version", LAYOUT_VERSION)
 	_terrain_root.set_meta("collisionless", true)
 	_world.add_child(_terrain_root)
 
-	_terrain_sprite = Sprite2D.new()
-	_terrain_sprite.name = "ReefTerrainArt"
-	_terrain_sprite.texture = texture
-	_terrain_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_terrain_sprite.centered = true
-	_terrain_sprite.scale = Vector2.ONE * fit_scale
-	_terrain_sprite.position = Vector2.ZERO
-	_terrain_sprite.z_index = 0
-	# Arka-plan hissi; DeepSeaAtmosphere zaten derinlige gore ekstra karartiyor.
-	_terrain_sprite.modulate = Color(0.76, 0.86, 0.92, 0.82)
-	_terrain_root.add_child(_terrain_sprite)
+	# Kaynak gorsel yaklasik 16:9. Uc benzersiz bolgeye ayiriyoruz.
+	# Her parca kendi oranini korur; tum resmi 20-100m'ye germiyoruz.
+	var left_rect := Rect2(
+		0.0,
+		0.0,
+		floor(source_size.x * 0.38),
+		source_size.y
+	)
+	var center_rect := Rect2(
+		floor(source_size.x * 0.29),
+		floor(source_size.y * 0.29),
+		floor(source_size.x * 0.47),
+		floor(source_size.y * 0.71)
+	)
+	var right_rect := Rect2(
+		floor(source_size.x * 0.70),
+		0.0,
+		source_size.x - floor(source_size.x * 0.70),
+		source_size.y
+	)
+
+	# 20-100m boyunca birbirinden farkli uc kara kutlesi.
+	# Ilk parca ekrana 20m'de bir anda acilmaz; dunya Y konumunda durdugu icin
+	# kamera indikce ustten/kenardan dogal olarak kadraja girer.
+	_create_chunk("Reef_Left_20_42", left_rect, 22.0, -830.0, 650.0)
+	_create_chunk("Reef_Center_43_70", center_rect, 45.0, -325.0, 650.0)
+	_create_chunk("Reef_Right_70_100", right_rect, 72.0, 230.0, 620.0)
 
 	_update_horizontal_alignment()
 
-	var pixels_per_meter: float = _pixels_per_meter()
-	var visual_depth_span: float = _drawn_height / maxf(pixels_per_meter, 0.001)
 	print(
-		"UNDERWATER TERRAIN V8 OK | source=", source_size,
-		" | drawn=", Vector2(viewport_size.x, _drawn_height),
-		" | top_depth=", TERRAIN_ART_TOP_DEPTH_METERS,
-		"m | approx_bottom_depth=", TERRAIN_ART_TOP_DEPTH_METERS + visual_depth_span,
-		"m | collision=OFF"
+		"UNDERWATER TERRAIN V9 OK | source=", source_size,
+		" | chunks=3 | depth=20-100m | tile=OFF | stretch=OFF | collision=OFF"
 	)
+
+
+func _create_chunk(
+	chunk_name: String,
+	region: Rect2,
+	top_depth_m: float,
+	x_offset: float,
+	target_width: float
+) -> void:
+	if _terrain_texture == null or _terrain_root == null:
+		return
+	if region.size.x <= 0.0 or region.size.y <= 0.0:
+		return
+
+	var atlas := AtlasTexture.new()
+	atlas.atlas = _terrain_texture
+	atlas.region = region
+
+	var sprite := Sprite2D.new()
+	sprite.name = chunk_name
+	sprite.texture = atlas
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.centered = false
+
+	# X/Y ayni scale: oran bozulmaz. Dev 12k stretch YOK.
+	var uniform_scale: float = target_width / region.size.x
+	sprite.scale = Vector2.ONE * uniform_scale
+	sprite.position = Vector2(
+		x_offset,
+		_world_y_for_depth(top_depth_m)
+	)
+
+	# Derinlik atmosferi zaten karartiyor; sadece hafif arka-plan soluklugu.
+	sprite.modulate = Color(0.86, 0.93, 0.97, 0.90)
+	sprite.z_index = 0
+	_terrain_root.add_child(sprite)
 
 
 func _update_horizontal_alignment() -> void:
 	if not is_instance_valid(_terrain_root) or not is_instance_valid(_camera):
 		return
 
-	# Y asla kamerayi takip etmez: terrain dunyada kendi derinliginde sabittir.
-	# X, 1280px kadraji her zaman doldurmak icin kamera merkezine hizalanir.
-	# Bu parallax degildir; terrain ekranda saga-sola bagimsiz kaymaz.
-	_terrain_root.global_position = Vector2(_camera.global_position.x, _terrain_center_y)
+	# Parallax yok. Kara parcasi kadrajla saga-sola savrulmaz.
+	# Sadece X merkezini kameraya 1:1 baglariz; Y koordinatlari gercek dunya derinligidir.
+	_terrain_root.global_position.x = _camera.global_position.x
+	_terrain_root.global_position.y = 0.0
 
 
 func _pixels_per_meter() -> float:
@@ -183,7 +204,7 @@ func _load_png_direct() -> Texture2D:
 		push_error("UNDERWATER TERRAIN: PNG DOSYASI YOK | " + absolute_path)
 		return null
 
-	var image: Image = Image.new()
+	var image := Image.new()
 	var err: Error = image.load(absolute_path)
 	if err != OK:
 		push_error("UNDERWATER TERRAIN: PNG OKUNAMADI | error=%d | %s" % [err, absolute_path])
