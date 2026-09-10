@@ -1,21 +1,20 @@
 extends Node
 
 # High-quality 20-100 m canyon terrain.
-# The source art is a wide transparent PNG and is fitted mathematically to the
-# real world bounds and the real hook depth scale. It is world-anchored,
-# collisionless and never follows the camera.
+# The supplied source art is fitted mathematically to the real Water world
+# bounds and the live hook depth scale. It is world-anchored, collisionless
+# and never follows the camera.
 
 const TERRAIN_NODE_NAME := "UnderwaterCanyonTerrain20To100"
-const TERRAIN_TEXTURE_PATH := "res://assets/environment/terrain/underwater_canyon_20_100_hq.png"
-const LAYOUT_VERSION := 16
+const TERRAIN_TEXTURE_PATH := "res://assets/environment/terrain/underwater_canyon_20_100_hq.webp"
+const LAYOUT_VERSION := 17
 
 const TOP_M := 20.0
 const BOTTOM_M := 100.0
 
-# Generated HQ source: 2172 x 724. The first 29 px are fully transparent.
-# Cropping that transparent strip prevents wasting vertical fit area while
-# preserving the exact terrain silhouette.
-const SOURCE_REGION := Rect2(0.0, 29.0, 2172.0, 695.0)
+# Accepted source: 2048 x 682. Rows 0..26 are fully transparent.
+# We crop only that empty strip. Every visible source pixel is preserved.
+const SOURCE_REGION := Rect2(0.0, 27.0, 2048.0, 655.0)
 
 const FALLBACK_LEFT := -1000.0
 const FALLBACK_RIGHT := 11000.0
@@ -35,7 +34,7 @@ var _last_height := INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V16: HQ WIDE CANYON / EXACT WORLD FIT")
+	print("UNDERWATER TERRAIN V17: ACCEPTED HQ CANYON / EXACT 20-100M MAP FIT")
 
 
 func _process(_delta: float) -> void:
@@ -102,8 +101,6 @@ func _ensure_terrain() -> void:
 	_sprite.name = "TerrainSpriteHQ"
 	_sprite.centered = false
 	_sprite.texture = atlas
-	# Linear filtering is intentional here. The source is painted HQ art, not
-	# pixel-art; NEAREST caused the large blocky pixels seen in the previous test.
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_sprite.position = Vector2.ZERO
 	_sprite.z_index = 0
@@ -130,9 +127,11 @@ func _fit_to_world(force := false) -> void:
 	and is_equal_approx(height, _last_height):
 		return
 
-	# Exact non-guess fit:
-	# X: entire Water world width.
-	# Y: exact 20-100 m band calculated from the hook's live px/m scale.
+	# Exact map fit:
+	# X -> complete Water width (-1000..11000 = 12000 px in world.tscn)
+	# Y -> exact live 20..100 m band (34.5 px/m in current full-depth test).
+	# The visible source rectangle is mapped directly to those world bounds so
+	# the previous terrain footprint/position is not changed.
 	_root.global_position = Vector2(left, top_y)
 	_root.scale = Vector2(
 		width / SOURCE_REGION.size.x,
