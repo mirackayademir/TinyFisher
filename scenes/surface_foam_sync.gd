@@ -1,28 +1,31 @@
 extends Node
 
-# Yuzey efektleri runtime destegi.
+# Environment runtime destegi.
 # 7/36 surface_foam_01.png: hareketli ana dalgaya baglanir.
 # 8/36 sun_rays_01.png: tek, duzenli bir gunes huzmesi kumesi olarak kullanilir.
-# Gunes + huzmeler yatayda ayni parallax'i kullanir; dikeyde normal dunya gibi hareket eder.
+# 9/36 shallow_rock_01.png: 18-20 m bandinda dogal kaya cikintilari.
 
 const FOAM_TEXTURE: Texture2D = preload("res://assets/environment/surface/surface_foam_01.png")
 const SUN_RAYS_TEXTURE: Texture2D = preload("res://assets/environment/surface/sun_rays_01.png")
+const SHALLOW_ROCK_TEXTURE: Texture2D = preload("res://assets/environment/shallow/shallow_rock_01.png")
 
 const WATER_SURFACE_Y: float = 360.0
 const SUN_X: float = 1060.0
 const SUN_TARGET_SIZE: float = 175.0
 const SUN_RAYS_WIDTH: float = 1450.0
 const SUN_RAYS_DEPTH_HEIGHT: float = 540.0
+const SHALLOW_BOTTOM_Y: float = 1030.0
 
 var _bound_line: Line2D = null
 var _ray_root: Node2D = null
+var _rock_root: Node2D = null
 var _sun_light_parallax: Parallax2D = null
 var _scene_id: int = 0
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("SURFACE EFFECTS: 7/36 kopuk + 8/36 duzenli gunes huzmeleri hazir")
+	print("ENV RUNTIME: 7/36 kopuk + 8/36 huzme + 9/36 sig kaya hazir")
 
 
 func _process(_delta: float) -> void:
@@ -36,16 +39,19 @@ func _process(_delta: float) -> void:
 		_scene_id = current_id
 		_bound_line = null
 		_ray_root = null
+		_rock_root = null
 		_sun_light_parallax = null
 
 	_sync_surface_foam(current_scene)
 	_ensure_sun_light_group(current_scene)
 	_ensure_sun_rays(current_scene)
+	_ensure_shallow_rock(current_scene)
 
 
 func _reset_scene_refs() -> void:
 	_bound_line = null
 	_ray_root = null
+	_rock_root = null
 	_sun_light_parallax = null
 	_scene_id = 0
 
@@ -55,8 +61,6 @@ func _reset_scene_refs() -> void:
 # -----------------------------------------------------------------------------
 
 func _sync_surface_foam(current_scene: Node) -> void:
-	# EnvironmentLayers tarafinda uretilen sabit kopuk seridini gizliyoruz.
-	# Ana dalga hareket ederken arkada ayri bir iz birakmasin.
 	var static_foam: CanvasItem = current_scene.get_node_or_null(
 		"EnvironmentLayers/SurfaceLayers/SurfaceFoamLayer/SurfaceFoamArt"
 	) as CanvasItem
@@ -85,7 +89,6 @@ func _apply_foam_texture(line: Line2D) -> void:
 	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	line.end_cap_mode = Line2D.LINE_CAP_ROUND
 	line.antialiased = false
-	print("SURFACE FOAM SYNC: kopuk hareketli dalgaya baglandi")
 
 
 # -----------------------------------------------------------------------------
@@ -101,16 +104,11 @@ func _ensure_sun_light_group(current_scene: Node) -> void:
 	if _sun_light_parallax == null:
 		_sun_light_parallax = Parallax2D.new()
 		_sun_light_parallax.name = "SunLightParallax"
-		# X ekseninde uzak ufuk hissi korunur.
-		# Y=1.0 oldugu icin kamera denize indikce gunes de normal dunya gibi yukarida kalir
-		# ve ekran disina cikar; artik kancayla birlikte su altina gelmez.
 		_sun_light_parallax.scroll_scale = Vector2(0.08, 1.0)
 		environment_root.add_child(_sun_light_parallax)
 	else:
 		_sun_light_parallax.scroll_scale = Vector2(0.08, 1.0)
 
-	# EnvironmentLayers tarafinda daha once SkyParallax altinda kurulan gunesi
-	# bu yeni ortak parallax grubuna tasiyoruz.
 	var sun_layer: Node2D = current_scene.get_node_or_null(
 		"EnvironmentLayers/SkyParallax/SunLayer"
 	) as Node2D
@@ -119,7 +117,6 @@ func _ensure_sun_light_group(current_scene: Node) -> void:
 	if sun_layer != null and sun_layer.get_parent() != _sun_light_parallax:
 		sun_layer.reparent(_sun_light_parallax, false)
 
-	# Huzmeler de gunesle ayni yatay parallax'i kullansin.
 	var rays_layer: Node2D = current_scene.get_node_or_null(
 		"EnvironmentLayers/UnderwaterLayers/SunRaysLayer"
 	) as Node2D
@@ -179,8 +176,6 @@ func _ensure_sun_rays(_current_scene: Node) -> void:
 	_ray_root.name = "SunRaysArt"
 	rays_layer.add_child(_ray_root)
 
-	# Onceki surumde ayni asset dunya boyunca tekrar ediyordu ve bagimsiz/random
-	# isik konileri gibi gorunuyordu. Artik SADECE TEK bir genis huzme kumesi var.
 	var ray_shader: Shader = Shader.new()
 	ray_shader.code = (
 		"shader_type canvas_item;\n"
@@ -213,4 +208,56 @@ func _ensure_sun_rays(_current_scene: Node) -> void:
 	)
 	_ray_root.add_child(ray_sprite)
 
-	print("SUN RAYS: tek huzme kumesi gunesle hizalandi; dikey kamera takibi kapatildi")
+
+# -----------------------------------------------------------------------------
+# 9 / 36 - SHALLOW ROCK 01
+# -----------------------------------------------------------------------------
+
+func _ensure_shallow_rock(current_scene: Node) -> void:
+	if is_instance_valid(_rock_root):
+		return
+
+	var decor_layer: Node2D = current_scene.get_node_or_null(
+		"EnvironmentLayers/UnderwaterLayers/MidDecorLayer"
+	) as Node2D
+	if decor_layer == null:
+		return
+
+	var existing: Node2D = decor_layer.get_node_or_null("ShallowRock01Art") as Node2D
+	if existing != null:
+		_rock_root = existing
+		return
+
+	var texture_size: Vector2 = SHALLOW_ROCK_TEXTURE.get_size()
+	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+		return
+
+	_rock_root = Node2D.new()
+	_rock_root.name = "ShallowRock01Art"
+	decor_layer.add_child(_rock_root)
+
+	# Ayni asset duvar kagidi gibi tekrarlanmaz. Dunya boyunca seyrek ve farkli
+	# boylarda kaya cikintilari var; hepsinin tabani 18-20m bandina gomulur.
+	var placements: Array[Vector3] = [
+		Vector3(1450.0, 1025.0, 0.66),
+		Vector3(3350.0, 1005.0, 0.50),
+		Vector3(5600.0, 1035.0, 0.76),
+		Vector3(8150.0, 1015.0, 0.58),
+		Vector3(10350.0, 1030.0, 0.69)
+	]
+
+	for i: int in range(placements.size()):
+		var placement: Vector3 = placements[i]
+		var scale_value: float = placement.z
+		var scaled_height: float = texture_size.y * scale_value
+
+		var sprite: Sprite2D = Sprite2D.new()
+		sprite.name = "ShallowRock01_%02d" % i
+		sprite.texture = SHALLOW_ROCK_TEXTURE
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.position = Vector2(placement.x, placement.y - scaled_height * 0.5)
+		sprite.scale = Vector2(-scale_value if i % 2 == 1 else scale_value, scale_value)
+		sprite.modulate = Color(0.86, 0.95, 1.0, 0.92)
+		_rock_root.add_child(sprite)
+
+	print("SHALLOW ROCK: 9/36 18-20m bandina dogal kaya cikintilari eklendi")
