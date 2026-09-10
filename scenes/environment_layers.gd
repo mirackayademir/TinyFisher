@@ -2,7 +2,7 @@ extends Node
 
 # TinyFisher katmanli dunya altyapisi.
 # 36 environment gorseli TEK TEK eklenecek.
-# Su an sadece 1. gorsel aktif: sky_base_01.png
+# Aktif: 1) sky_base_01.png  2) sun_01_TEMP.png
 
 const ENV_ROOT_NAME: String = "EnvironmentLayers"
 const DECOR_SEED: int = 9042026
@@ -38,6 +38,7 @@ const ZONE_DEEP: String = "deep"
 const ZONE_ABYSS: String = "abyss"
 
 const SKY_TEXTURE_PATH: String = "res://assets/environment/surface/sky_base_01.png"
+const SUN_TEXTURE_PATH: String = "res://assets/environment/surface/sun_01_TEMP.png"
 
 var _scene_id: int = 0
 var _world: Node2D = null
@@ -49,7 +50,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V5: SKY UFUK BANDI SU ALTINA GIZLENDI")
+	print("ENVIRONMENT LAYERS V6: GORSEL 2/36 GUNES EKLENDI")
 
 
 func _process(_delta: float) -> void:
@@ -83,16 +84,15 @@ func _ensure_environment_layers() -> void:
 
 	_build_layer_tree()
 	_build_sky_only()
-	print("ENVIRONMENT: sadece SKY 1/36 aktif - ufuk bandi su arkasinda")
+	_build_sun_only()
+	print("ENVIRONMENT: SKY + SUN aktif - 2/36")
 
 
 func _prepare_base_layer_order() -> void:
-	# Eski shader gokyuzu fallback olarak en arkada kalir.
 	var legacy_sky: CanvasItem = _world.get_node_or_null("Sky") as CanvasItem
 	if legacy_sky != null:
 		legacy_sky.z_index = Z_LEGACY_SKY
 
-	# Water mevcut z=-9 degerinde kalir ve yeni sky'i orter.
 	var water: CanvasItem = _world.get_node_or_null("Water") as CanvasItem
 	if water != null:
 		water.z_index = -9
@@ -161,9 +161,6 @@ func _build_sky_only() -> void:
 
 	var target_height: float = 860.0
 	var scale_factor: float = target_height / texture_size.y
-
-	# Sky'in alt 42 ekran-piksellik kismi Water'in arkasina girer.
-	# Asset icindeki duz turuncu ufuk bandi artik suyun ustunde gorunemez.
 	var center_y: float = WATER_SURFACE_Y + SKY_WATER_OVERLAP_PX - (target_height * 0.5)
 	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
 	var x: float = WORLD_LEFT_X + tile_width * 0.5
@@ -180,6 +177,38 @@ func _build_sky_only() -> void:
 
 		x += tile_width - 1.0
 		tile_index += 1
+
+
+# -----------------------------------------------------------------------------
+# GORSEL 2 / 36 - SUN
+# -----------------------------------------------------------------------------
+
+func _build_sun_only() -> void:
+	var layer: Node2D = get_layer("SunLayer")
+	if layer == null or layer.get_node_or_null("SunArt") != null:
+		return
+
+	var texture: Texture2D = _load_texture(SUN_TEXTURE_PATH)
+	if texture == null:
+		return
+
+	var texture_size: Vector2 = texture.get_size()
+	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+		return
+
+	# Gunes ilk oyun kadrajinda gorulecek ama tekne/liman ile cakismayacak sekilde
+	# ufkun biraz ustune, kontrollu kucuk boyutta yerlestirilir.
+	var max_size: Vector2 = Vector2(120.0, 120.0)
+	var fit_scale: float = minf(max_size.x / texture_size.x, max_size.y / texture_size.y)
+
+	var sprite: Sprite2D = Sprite2D.new()
+	sprite.name = "SunArt"
+	sprite.texture = texture
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.position = Vector2(1060.0, 235.0)
+	sprite.scale = Vector2.ONE * fit_scale
+	sprite.modulate = Color(1.0, 1.0, 1.0, 0.94)
+	layer.add_child(sprite)
 
 
 func _load_texture(path: String) -> Texture2D:
