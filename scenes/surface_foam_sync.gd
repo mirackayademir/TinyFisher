@@ -5,10 +5,12 @@ extends Node
 # 8/36 sun_rays_01.png: tek, duzenli bir gunes huzmesi kumesi olarak kullanilir.
 # 9/36 shallow_rock_01.png: SIMDİLIK ATLANDI / gorunmez.
 # 10/36 shallow_fish_school_01_TEMP.png: 0-20m bandinda aralikli arka-plan balik suruleri.
+# 11/36 shallow_kelp_01.png: liman/kayi altinda, kokleri acik suda gorunmeyecek sekilde.
 
 const FOAM_TEXTURE: Texture2D = preload("res://assets/environment/surface/surface_foam_01.png")
 const SUN_RAYS_TEXTURE: Texture2D = preload("res://assets/environment/surface/sun_rays_01.png")
 const SHALLOW_FISH_SCHOOL_TEXTURE: Texture2D = preload("res://assets/environment/shallow/shallow_fish_school_01_TEMP.png")
+const SHALLOW_KELP_TEXTURE: Texture2D = preload("res://assets/environment/shallow/shallow_kelp_01.png")
 
 const WATER_SURFACE_Y: float = 360.0
 const SUN_X: float = 1060.0
@@ -17,18 +19,20 @@ const SUN_RAYS_WIDTH: float = 1450.0
 const SUN_RAYS_DEPTH_HEIGHT: float = 540.0
 
 const FISH_SCHOOL_TARGET_WIDTH: float = 220.0
+const KELP_TARGET_HEIGHT: float = 190.0
 
 var _bound_line: Line2D = null
 var _ray_root: Node2D = null
 var _sun_light_parallax: Parallax2D = null
 var _fish_school_root: Node2D = null
+var _kelp_root: Node2D = null
 var _anim_time: float = 0.0
 var _scene_id: int = 0
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("ENV RUNTIME: 7/36 kopuk + 8/36 huzme + 9/36 kaya atlandi + 10/36 sig balik suruleri")
+	print("ENV RUNTIME: 7/36 kopuk + 8/36 huzme + 9/36 kaya atlandi + 10/36 balik suruleri + 11/36 liman kelbi")
 
 
 func _process(delta: float) -> void:
@@ -44,6 +48,7 @@ func _process(delta: float) -> void:
 		_ray_root = null
 		_sun_light_parallax = null
 		_fish_school_root = null
+		_kelp_root = null
 		_anim_time = 0.0
 
 	_sync_surface_foam(current_scene)
@@ -51,7 +56,8 @@ func _process(delta: float) -> void:
 	_ensure_sun_rays(current_scene)
 	_remove_skipped_rocks(current_scene)
 	_ensure_shallow_fish_schools(current_scene)
-	_animate_shallow_fish_schools(delta)
+	_ensure_shallow_kelp(current_scene)
+	_animate_shallow_environment(delta)
 
 
 func _reset_scene_refs() -> void:
@@ -59,6 +65,7 @@ func _reset_scene_refs() -> void:
 	_ray_root = null
 	_sun_light_parallax = null
 	_fish_school_root = null
+	_kelp_root = null
 	_anim_time = 0.0
 	_scene_id = 0
 
@@ -261,8 +268,6 @@ func _ensure_shallow_fish_schools(current_scene: Node) -> void:
 	_fish_school_root.name = "ShallowFishSchools10"
 	decor_layer.add_child(_fish_school_root)
 
-	# Yaklasik 10-15m aralik hissiyle saga dogru yayilir.
-	# Dikey konumlar 0-20m sig su bandi icinde degisir.
 	var placements: Array[Vector2] = [
 		Vector2(1320.0, 650.0),
 		Vector2(1850.0, 520.0),
@@ -294,20 +299,90 @@ func _ensure_shallow_fish_schools(current_scene: Node) -> void:
 	print("SHALLOW FISH SCHOOL: 10/36 0-20m bandina 10 arka-plan surusu yayildi")
 
 
-func _animate_shallow_fish_schools(delta: float) -> void:
-	if not is_instance_valid(_fish_school_root):
+# -----------------------------------------------------------------------------
+# 11 / 36 - SHALLOW KELP 01
+# -----------------------------------------------------------------------------
+
+func _ensure_shallow_kelp(current_scene: Node) -> void:
+	if is_instance_valid(_kelp_root):
 		return
 
+	var decor_layer: Node2D = current_scene.get_node_or_null(
+		"EnvironmentLayers/UnderwaterLayers/BackgroundDecorLayer"
+	) as Node2D
+	if decor_layer == null:
+		return
+
+	var existing: Node2D = decor_layer.get_node_or_null("ShallowKelp11") as Node2D
+	if existing != null:
+		_kelp_root = existing
+		return
+
+	var texture_size: Vector2 = SHALLOW_KELP_TEXTURE.get_size()
+	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+		return
+
+	var fit_scale: float = KELP_TARGET_HEIGHT / texture_size.y
+
+	_kelp_root = Node2D.new()
+	_kelp_root.name = "ShallowKelp11"
+	decor_layer.add_child(_kelp_root)
+
+	# Kelp acik denize dagitilmaz. Sadece limanin su alti ayaklarinin arkasinda tutulur.
+	# Pivotlar kok noktasidir; sprite yukariya tasindigi icin salinim kokten olur.
+	var placements: Array[Vector3] = [
+		Vector3(70.0, 650.0, 0.88),
+		Vector3(205.0, 700.0, 1.00),
+		Vector3(365.0, 735.0, 0.92),
+		Vector3(520.0, 770.0, 0.80)
+	]
+
+	for i: int in range(placements.size()):
+		var data: Vector3 = placements[i]
+		var local_scale: float = fit_scale * data.z
+		var scaled_height: float = texture_size.y * local_scale
+
+		var pivot: Node2D = Node2D.new()
+		pivot.name = "KelpPivot_%02d" % i
+		pivot.position = Vector2(data.x, data.y)
+		pivot.set_meta("phase", float(i) * 0.91)
+		pivot.set_meta("base_rotation", -0.025 + float(i % 3) * 0.025)
+		_kelp_root.add_child(pivot)
+
+		var sprite: Sprite2D = Sprite2D.new()
+		sprite.name = "Kelp_%02d" % i
+		sprite.texture = SHALLOW_KELP_TEXTURE
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.position = Vector2(0.0, -scaled_height * 0.5)
+		sprite.scale = Vector2(local_scale * (-1.0 if i % 2 == 1 else 1.0), local_scale)
+		sprite.modulate = Color(0.62, 0.86, 0.78, 0.55)
+		pivot.add_child(sprite)
+
+	print("SHALLOW KELP: 11/36 sadece liman alti/kayi bolgesine yerlestirildi")
+
+
+func _animate_shallow_environment(delta: float) -> void:
 	_anim_time += delta
 
-	for child: Node in _fish_school_root.get_children():
-		var sprite: Sprite2D = child as Sprite2D
-		if sprite == null:
-			continue
+	if is_instance_valid(_fish_school_root):
+		for child: Node in _fish_school_root.get_children():
+			var sprite: Sprite2D = child as Sprite2D
+			if sprite == null:
+				continue
 
-		var origin: Vector2 = sprite.get_meta("origin", sprite.position)
-		var phase: float = float(sprite.get_meta("phase", 0.0))
-		sprite.position = origin + Vector2(
-			sin(_anim_time * 0.26 + phase) * 24.0,
-			sin(_anim_time * 0.51 + phase) * 5.0
-		)
+			var origin: Vector2 = sprite.get_meta("origin", sprite.position)
+			var phase: float = float(sprite.get_meta("phase", 0.0))
+			sprite.position = origin + Vector2(
+				sin(_anim_time * 0.26 + phase) * 24.0,
+				sin(_anim_time * 0.51 + phase) * 5.0
+			)
+
+	if is_instance_valid(_kelp_root):
+		for child: Node in _kelp_root.get_children():
+			var pivot: Node2D = child as Node2D
+			if pivot == null:
+				continue
+
+			var phase: float = float(pivot.get_meta("phase", 0.0))
+			var base_rotation: float = float(pivot.get_meta("base_rotation", 0.0))
+			pivot.rotation = base_rotation + sin(_anim_time * 0.72 + phase) * 0.055
