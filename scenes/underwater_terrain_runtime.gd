@@ -1,13 +1,13 @@
 extends Node
 
 # TinyFisher 20-100 m tek-parca dunya terrain temeli.
-# Bu surum terrain'i kameraya kilitlemez: dogrudan World koordinatlarina oturur.
-# 20 m -> 100 m fiziksel bant, mevcut olta olceginde 80 m * 34.5 px = 2760 px.
-# Yatayda World/Water rect'i esas alinir: mevcut map -1000 -> 11000 = 12000 px.
-# Collision YOK; balik, kanca ve gelecek 36 environment asset terrain'in onunde calisir.
+# Terrain kameraya kilitlenmez: dogrudan World koordinatlarina oturur.
+# 20 m -> 100 m = 80 m * 34.5 px = 2760 px.
+# Yatay map: World/Water rect'i, mevcut durumda -1000 -> 11000 = 12000 px.
+# Collision YOK; balik, kanca ve environment assetleri terrain'in onunde kalir.
 
 const TERRAIN_NODE_NAME: String = "UnderwaterReefTerrain20To100"
-const LAYOUT_VERSION: int = 11
+const LAYOUT_VERSION: int = 12
 
 const TERRAIN_TOP_DEPTH_METERS: float = 20.0
 const TERRAIN_BOTTOM_DEPTH_METERS: float = 100.0
@@ -17,6 +17,8 @@ const FALLBACK_WORLD_RIGHT_X: float = 11000.0
 const REFERENCE_MAP_WIDTH: float = 12000.0
 const REFERENCE_BAND_HEIGHT: float = 2760.0
 
+# Water=-9, yeni environment BackgroundDecor=-6.
+# Terrain'in TAMAMI -7'de kalir: suyun onunde, tum dekorlarin arkasinda.
 const TERRAIN_Z_INDEX: int = -7
 
 var _scene_id: int = 0
@@ -31,7 +33,7 @@ var _last_band_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V11: WORLD-ANCHORED 20-100m / CAMERA LOCK OFF / COLLISION OFF")
+	print("UNDERWATER TERRAIN V12: WORLD-ANCHORED 20-100m / SINGLE Z / COLLISION OFF")
 
 
 func _process(_delta: float) -> void:
@@ -86,42 +88,35 @@ func _ensure_terrain() -> void:
 
 	var profile: PackedVector2Array = _terrain_profile()
 
-	# Ana kaya kutlesi: kenarlarda erken baslar, merkezde ancak Abyss'e dogru tabana iner.
-	# Boylece 20-80 m ortasinda havada duran duz bir "deniz tabani" olusmaz.
+	# Kenarlarda kayalik duvarlar erken baslar; merkezde taban yalnizca Abyss'e iner.
+	# Boylece 20-80 m ortasinda havada duran duz bir deniz tabani olusmaz.
 	_add_mass_layer(
 		"RockMassBase",
 		_build_mass_polygon(profile, 0.0),
-		Color(0.095, 0.145, 0.225, 0.985),
-		0
+		Color(0.095, 0.145, 0.225, 0.985)
 	)
-
-	# Ic katmanlar ana poligonun tamamen icinde kalir; yeni dekorlarla z-fighting yapmaz.
 	_add_mass_layer(
 		"RockMassMidShadow",
 		_build_mass_polygon(profile, 116.0),
-		Color(0.058, 0.094, 0.158, 0.82),
-		1
+		Color(0.058, 0.094, 0.158, 0.82)
 	)
 	_add_mass_layer(
 		"RockMassDeepShadow",
 		_build_mass_polygon(profile, 336.0),
-		Color(0.030, 0.050, 0.098, 0.88),
-		2
+		Color(0.030, 0.050, 0.098, 0.88)
 	)
 
 	_add_profile_line(
 		"RockRim",
 		profile,
 		12.0,
-		Color(0.235, 0.335, 0.445, 0.96),
-		3
+		Color(0.235, 0.335, 0.445, 0.96)
 	)
 	_add_profile_line(
 		"RockInnerRim",
 		_offset_profile(profile, 88.0),
 		7.0,
-		Color(0.125, 0.205, 0.305, 0.88),
-		3
+		Color(0.125, 0.205, 0.305, 0.88)
 	)
 
 	_sync_terrain_to_world(true)
@@ -130,19 +125,19 @@ func _ensure_terrain() -> void:
 	var top_y: float = _world_y_for_depth(TERRAIN_TOP_DEPTH_METERS)
 	var bottom_y: float = _world_y_for_depth(TERRAIN_BOTTOM_DEPTH_METERS)
 	print(
-		"UNDERWATER TERRAIN V11 OK | x=", bounds.x, "..", bounds.y,
+		"UNDERWATER TERRAIN V12 OK | x=", bounds.x, "..", bounds.y,
 		" | width=", bounds.y - bounds.x,
 		" | y20=", top_y,
 		" | y100=", bottom_y,
 		" | height=", bottom_y - top_y,
+		" | z=", TERRAIN_Z_INDEX,
 		" | collision=OFF | camera_lock=OFF"
 	)
 
 
 func _terrain_profile() -> PackedVector2Array:
 	# Referans alan: 12000 x 2760 px.
-	# Profil, tek bir U-sekilli kara kutlesidir: sol/sag kayalik duvarlar + Abyss tabani.
-	# Tum noktalar 4 px grid'e yakin tutuldu; pixel-art katmanlariyla uyumludur.
+	# Tek U-sekilli kara kutlesi: sol/sag kayalik duvarlar + derin Abyss tabani.
 	return PackedVector2Array([
 		Vector2(0.0, 220.0),
 		Vector2(360.0, 264.0),
@@ -204,14 +199,14 @@ func _offset_profile(profile: PackedVector2Array, offset_y: float) -> PackedVect
 func _add_mass_layer(
 	layer_name: String,
 	polygon_points: PackedVector2Array,
-	layer_color: Color,
-	layer_z: int
+	layer_color: Color
 ) -> void:
 	var polygon: Polygon2D = Polygon2D.new()
 	polygon.name = layer_name
 	polygon.polygon = polygon_points
 	polygon.color = layer_color
-	polygon.z_index = layer_z
+	# Ayni Z: sirayi child draw order belirler; environment Z katmanlarina cikmaz.
+	polygon.z_index = 0
 	_terrain_root.add_child(polygon)
 
 
@@ -219,15 +214,14 @@ func _add_profile_line(
 	line_name: String,
 	line_points: PackedVector2Array,
 	line_width: float,
-	line_color: Color,
-	line_z: int
+	line_color: Color
 ) -> void:
 	var line: Line2D = Line2D.new()
 	line.name = line_name
 	line.points = line_points
 	line.width = line_width
 	line.default_color = line_color
-	line.z_index = line_z
+	line.z_index = 0
 	line.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_terrain_root.add_child(line)
 
@@ -253,7 +247,7 @@ func _sync_terrain_to_world(force: bool = false) -> void:
 	):
 		return
 
-	# Kritik fark: X kamera konumundan GELMEZ. Terrain mapin kendi dunya koordinatinda kalir.
+	# X kamera konumundan GELMEZ. Terrain mapin kendi dunya koordinatinda sabittir.
 	_terrain_root.global_position = Vector2(left_x, top_y)
 	_terrain_root.scale = Vector2(
 		map_width / REFERENCE_MAP_WIDTH,
@@ -272,7 +266,7 @@ func _sync_terrain_to_world(force: bool = false) -> void:
 
 
 func _get_world_horizontal_bounds() -> Vector2:
-	# Map genisligi zaten World/Water rect'inde tanimli; ayni kaynagi kullanarak sabitleri kopyalamiyoruz.
+	# World/Water rect map genisliginin tek kaynagi; gelecekte boyut degisirse terrain de otomatik uyar.
 	var water: Control = _world.get_node_or_null("Water") as Control
 	if water != null:
 		var left_x: float = water.position.x
@@ -311,7 +305,7 @@ func _world_y_for_depth(depth_meters: float) -> float:
 
 
 func _remove_old_terrain() -> void:
-	# V10 ve daha eski kamera-kilitli terrain kalintilarini tek seferde temizle.
+	# V10/V11 ve daha eski kamera-kilitli terrain kalintilarini temizle.
 	var old_direct: Node = _world.get_node_or_null(TERRAIN_NODE_NAME)
 	if old_direct != null:
 		_world.remove_child(old_direct)
