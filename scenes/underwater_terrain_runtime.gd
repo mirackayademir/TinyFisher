@@ -1,18 +1,22 @@
 extends Node
 
 # TinyFisher 20-100m collision'siz arka-plan reef terrain runtime.
-# PNG import cache'e bagli degildir; kaynak PNG dosyasi runtime'da direkt okunur.
+# TEK PNG kullanilir: tile, tekrar, satir veya parallax YOK.
+# Baliklar ve kanca terrain'in onunden gecer.
 
 const TERRAIN_TEXTURE_PATH: String = "res://assets/environment/terrain/underwater_terrain_20_100.png"
 const TERRAIN_NODE_NAME: String = "UnderwaterReefTerrain20To100"
-const LAYOUT_VERSION: int = 5
+const LAYOUT_VERSION: int = 6
 
 const WORLD_LEFT_X: float = -1000.0
 const WORLD_RIGHT_X: float = 11000.0
-const TARGET_TILE_WIDTH: float = 1280.0
-const TARGET_ROW_STEP: float = 620.0
 const START_DEPTH_METERS: float = 20.0
 const END_DEPTH_METERS: float = 100.0
+
+# Onaylanan gorselin ustundeki bos seffaf alani atiyoruz.
+# Mevcut PNG 1280x720 ve asil terrain yaklasik y=60'ta basliyor.
+const CROP_TOP_PX: float = 60.0
+const CROP_BOTTOM_PX: float = 6.0
 
 var _scene_id: int = 0
 var _world: Node2D = null
@@ -23,7 +27,7 @@ var _load_failed: bool = false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V5: runtime direct PNG loader")
+	print("UNDERWATER TERRAIN V6: tek sabit 20-100m PNG")
 
 
 func _process(_delta: float) -> void:
@@ -61,6 +65,25 @@ func _ensure_terrain() -> void:
 		_load_failed = true
 		return
 
+	var crop_top: float = clampf(CROP_TOP_PX, 0.0, source_size.y - 1.0)
+	var crop_bottom: float = clampf(CROP_BOTTOM_PX, 0.0, source_size.y - crop_top - 1.0)
+	var crop_height: float = source_size.y - crop_top - crop_bottom
+
+	var atlas: AtlasTexture = AtlasTexture.new()
+	atlas.atlas = texture
+	atlas.region = Rect2(0.0, crop_top, source_size.x, crop_height)
+
+	var y_start: float = _world_y_for_depth(START_DEPTH_METERS)
+	var y_end: float = _world_y_for_depth(END_DEPTH_METERS)
+	if y_end <= y_start:
+		push_error("UNDERWATER TERRAIN: 20-100m Y araligi gecersiz")
+		_load_failed = true
+		return
+
+	var world_width: float = WORLD_RIGHT_X - WORLD_LEFT_X
+	var terrain_height: float = y_end - y_start
+	var atlas_size: Vector2 = atlas.get_size()
+
 	_terrain_root = Node2D.new()
 	_terrain_root.name = TERRAIN_NODE_NAME
 	_terrain_root.z_as_relative = false
@@ -69,52 +92,33 @@ func _ensure_terrain() -> void:
 	_terrain_root.set_meta("collisionless", true)
 	_world.add_child(_terrain_root)
 
-	var y_start: float = _world_y_for_depth(START_DEPTH_METERS)
-	var y_end: float = _world_y_for_depth(END_DEPTH_METERS)
-	var uniform_scale: float = TARGET_TILE_WIDTH / source_size.x
-	var tile_height: float = source_size.y * uniform_scale
-	var row_count: int = int(ceil((y_end - y_start) / TARGET_ROW_STEP)) + 1
+	var sprite: Sprite2D = Sprite2D.new()
+	sprite.name = "ReefTerrainSingleArt"
+	sprite.texture = atlas
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.centered = true
+	sprite.position = Vector2(
+		WORLD_LEFT_X + world_width * 0.5,
+		y_start + terrain_height * 0.5
+	)
 
-	for row: int in range(row_count):
-		var row_top: float = y_start + float(row) * TARGET_ROW_STEP
-		var row_center_y: float = row_top + tile_height * 0.5
-		var stagger: float = 0.0 if row % 2 == 0 else TARGET_TILE_WIDTH * 0.5
-		var x: float = WORLD_LEFT_X - stagger + TARGET_TILE_WIDTH * 0.5
-		var column: int = 0
+	# Kullanici istegi: gorseli denizin 20-100m dikdortgenine TAM OTURT.
+	# Aspect ratio korunmuyor; tek gorsel tum alan boyunca bir kez geriliyor.
+	sprite.scale = Vector2(
+		world_width / atlas_size.x,
+		terrain_height / atlas_size.y
+	)
 
-		while x < WORLD_RIGHT_X + TARGET_TILE_WIDTH:
-			var sprite: Sprite2D = Sprite2D.new()
-			sprite.name = "Terrain_R%02d_C%02d" % [row, column]
-			sprite.texture = texture
-			sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			sprite.centered = true
-			sprite.position = Vector2(x, row_center_y)
-
-			var flip_x: float = -uniform_scale if (row + column) % 2 == 1 else uniform_scale
-			sprite.scale = Vector2(flip_x, uniform_scale)
-
-			var depth_t: float = clampf(
-				float(row) / maxf(float(row_count - 1), 1.0),
-				0.0,
-				1.0
-			)
-			var brightness: float = lerpf(0.92, 0.70, depth_t)
-			sprite.modulate = Color(
-				brightness * 0.82,
-				brightness * 0.92,
-				brightness,
-				0.78
-			)
-			_terrain_root.add_child(sprite)
-
-			x += TARGET_TILE_WIDTH
-			column += 1
+	# Arka-plan / fake-3D hissi icin hafif soluk.
+	sprite.modulate = Color(0.82, 0.90, 0.94, 0.74)
+	_terrain_root.add_child(sprite)
 
 	print(
-		"UNDERWATER TERRAIN V5 OK | source=", source_size,
-		" rows=", row_count,
-		" y=", Vector2(y_start, y_end),
-		" collision=OFF"
+		"UNDERWATER TERRAIN V6 OK | SINGLE IMAGE | source=", source_size,
+		" crop=", atlas_size,
+		" world_x=", Vector2(WORLD_LEFT_X, WORLD_RIGHT_X),
+		" depth_y=", Vector2(y_start, y_end),
+		" collision=OFF | repeat=OFF"
 	)
 
 
