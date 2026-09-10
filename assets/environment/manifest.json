@@ -1,0 +1,254 @@
+[
+  {
+    "category": "surface",
+    "file": "sky_base_01.png",
+    "size": 1100568,
+    "sha256": "390ccd244a2189e3997d2e2c03b08ab1505e1bc3ae30164a10fa605f1372f372",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "surface",
+    "file": "sun_01_TEMP.png",
+    "size": 49967,
+    "sha256": "0333d37646ae46cece0f3cdf2d04c513b51615eae0a9b9d6e3f48dba609b1459",
+    "status": "TEMP_REVIEW"
+  },
+  {
+    "category": "surface",
+    "file": "horizon_land_01.png",
+    "size": 85351,
+    "sha256": "cf4cad9ef1e65df45fdbabd22a6980cceed2f8bb8f5906704967bee6fdb31128",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "surface",
+    "file": "ocean_surface_base_01.png",
+    "size": 186987,
+    "sha256": "3a7d9bfca84af51cc75978da4bb8a6f184c8ab863d519ab57e2cab1396ed8fe7",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "surface",
+    "file": "wave_back_01.png",
+    "size": 26365,
+    "sha256": "760f1d660794facc0797b45de4b65fdaeb7f2458e0488f303def1ad048dc9056",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "surface",
+    "file": "wave_front_01.png",
+    "size": 46959,
+    "sha256": "dac3b48da97b1854ee147e2ae4e211748e831fb64fafd7b8f27bf855991e17ae",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "surface",
+    "file": "surface_foam_01.png",
+    "size": 17523,
+    "sha256": "d858e1707f218e5e780015e7480f14fde68276b3b5e8ed410563c2553d2dd5fc",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "surface",
+    "file": "sun_rays_01.png",
+    "size": 504106,
+    "sha256": "69e84678161678b9f18bc4758e29dd4f74ba9c287c7ffd4824a549a05f1f2ee4",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "shallow",
+    "file": "shallow_rock_01.png",
+    "size": 158466,
+    "sha256": "e924353b4b748bc425a645aaa003412ccd1b4398cbefa3fa04fa21c9a180af76",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "shallow",
+    "file": "shallow_rock_02.png",
+    "size": 108060,
+    "sha256": "3c34e06da262dc928f7e813a275462b5cea5c72ba3fa2d5bbbe37c6db258929f",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "shallow",
+    "file": "shallow_kelp_01.png",
+    "size": 60724,
+    "sha256": "208d44b94068c6ea77bf9a05cd03388d3857653b4f7e6d317836e221d38976e8",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "shallow",
+    "file": "shallow_coral_01.png",
+    "size": 36591,
+    "sha256": "01a5477a43ee607b16d0304d80463fabcb4e36b998cb413d0334dcf0348c0061",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "shallow",
+    "file": "shallow_fish_school_01_TEMP.png",
+    "size": 21124,
+    "sha256": "84bfd97af8a7ea8f9f09f4d72a1b4b6d35292b624ee070460951cfa58ef03a3c",
+    "status": "TEMP_REVIEW"
+  },
+  {
+    "category": "open_blue",
+    "file": "open_blue_rock_01.png",
+    "size": 163326,
+    "sha256": "e2ec1712abc949147a4d05bad7825a15cbd3e31548d0437e5ff43e2c928674a3",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "open_blue",
+    "file": "open_blue_rock_02.png",
+    "size": 190665,
+    "sha256": "5189fe8fb8d03344b023d4b6662b1aeea9983fe5c6b35657f069030e3b994843",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "open_blue",
+    "file": "open_blue_coral_01.png",
+    "size": 91792,
+    "sha256": "d43443e514f0b16607bf6f1d60e7508fbf6971b39900385459c5674a3f1be9b4",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "open_blue",
+    "file": "open_blue_wreck_01.png",
+    "size": 76125,
+    "sha256": "542cf3d4625983c4281eca576d7f0331d963a49707fdab00d69083bbc459277f",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "open_blue",
+    "file": "open_blue_large_fish_silhouette_01.png",
+    "size": 50186,
+    "sha256": "388815a42efb6d6f757ceb71c7d27896e5caef2046b37cf1c83a87a4af8a6037",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "deep_sea",
+    "file": "deep_sea_rock_01.png",
+    "size": 251787,
+    "sha256": "b5a9b3d7f670fb5583dfed87e54ba9e6cd6215e086f0d25b2fbe2cf965099ba4",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "deep_sea",
+    "file": "deep_sea_rock_02.png",
+    "size": 153800,
+    "sha256": "4062f0c6b954c3bbaa9c48bcfdc53aa63eee0c043b0bb5e73f54527f3669cab3",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "deep_sea",
+    "file": "deep_sea_chain_01_TEMP.png",
+    "size": 112771,
+    "sha256": "2bfcf7908976e9ac2f810eecc882c84d124b47f930c11d7783cac9c981370846",
+    "status": "TEMP_REVIEW"
+  },
+  {
+    "category": "deep_sea",
+    "file": "deep_sea_wreck_01.png",
+    "size": 242163,
+    "sha256": "e27d43e56c6f71b90350b0eb9cf3f4347985b3eb21a3db843fc64a4f765a33bb",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "deep_sea",
+    "file": "deep_sea_bioluminescent_01.png",
+    "size": 87389,
+    "sha256": "999e89cf398f5726a16737c9cbe7b6ba5afbce6be2d555464e5d86ac4746752e",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "deep_sea",
+    "file": "deep_sea_creature_silhouette_01_TEMP.png",
+    "size": 83770,
+    "sha256": "81a0bc3888298ab3962bf439e5bc20d9144f64e05317e991d743b91d5c80b150",
+    "status": "TEMP_REVIEW"
+  },
+  {
+    "category": "deep_sea",
+    "file": "deep_sea_landmark_ruin_gate_01.png",
+    "size": 526105,
+    "sha256": "2ea7b936773278338ed608bf6fbad369831ba18d0cb1a5872c21da39ae368abe",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "abyss",
+    "file": "abyss_rock_01_TEMP.png",
+    "size": 308430,
+    "sha256": "ebdbd26a2bc747bed627c46a929975f8a861afda67fb50b3a0cfcc3ab70a3762",
+    "status": "TEMP_REVIEW"
+  },
+  {
+    "category": "abyss",
+    "file": "abyss_cave_01.png",
+    "size": 381533,
+    "sha256": "935847a221359d114fff2ac93e6f3c54bbd6161f565eb93da8180a052f4c65fa",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "abyss",
+    "file": "abyss_skeleton_01.png",
+    "size": 345733,
+    "sha256": "60a4e1fe8a9f22afe76da669c400173e449962996ecf536bc0e06fe083c199e4",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "abyss",
+    "file": "abyss_ruin_01_TEMP.png",
+    "size": 313478,
+    "sha256": "114fbf98359cf4895fe73a4cafe6cb871732a0990eb5657f94f4ed570698f15f",
+    "status": "TEMP_REVIEW"
+  },
+  {
+    "category": "abyss",
+    "file": "abyss_anchor_01.png",
+    "size": 296560,
+    "sha256": "f9d72cac1cecaf772c67b127000bed4a4413f954f9152ba98b174a049dc995cb",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "abyss",
+    "file": "abyss_tentacle_silhouette_01_TEMP.png",
+    "size": 169905,
+    "sha256": "0a2da692b14c2d311d244d5ccd759269375c5465a7401f79efa8f08ad87a9cf8",
+    "status": "TEMP_REVIEW"
+  },
+  {
+    "category": "leviathan",
+    "file": "leviathan_scars_01_TEMP.png",
+    "size": 257135,
+    "sha256": "cb39f322460026359b89c90783f4bb8f259ac88565b0886ac4f63c97a68ea100",
+    "status": "TEMP_REVIEW"
+  },
+  {
+    "category": "leviathan",
+    "file": "leviathan_debris_01_TEMP.png",
+    "size": 183534,
+    "sha256": "b94a2ccd80396372af3ec6125b80ea9f6ca6e472aa90c2121e47df90fa05e728",
+    "status": "TEMP_REVIEW"
+  },
+  {
+    "category": "leviathan",
+    "file": "leviathan_glow_marker_01.png",
+    "size": 185547,
+    "sha256": "4fc518fecc67053e151f853cdf5bc14123de60a9829817278851fbc756caffd8",
+    "status": "APPROVED_OR_USABLE"
+  },
+  {
+    "category": "leviathan",
+    "file": "leviathan_arena_rock_left_01_TEMP.png",
+    "size": 224026,
+    "sha256": "9eaee6bc97d72b1b6c77996d105513b118ab41447b5172bcfc0f7f64c6ada1bc",
+    "status": "TEMP_REVIEW"
+  },
+  {
+    "category": "leviathan",
+    "file": "leviathan_arena_rock_right_01.png",
+    "size": 198340,
+    "sha256": "5286280f0ca993c2d71d1580550a49041c6ea46aabd10cc7fdaf026111a6b409",
+    "status": "APPROVED_OR_USABLE"
+  }
+]
