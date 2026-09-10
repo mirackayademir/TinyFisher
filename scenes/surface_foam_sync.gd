@@ -11,7 +11,7 @@ extends Node
 const FOAM_TEXTURE: Texture2D = preload("res://assets/environment/surface/surface_foam_01.png")
 const SUN_RAYS_TEXTURE: Texture2D = preload("res://assets/environment/surface/sun_rays_01.png")
 const SHALLOW_FISH_SCHOOL_TEXTURE: Texture2D = preload("res://assets/environment/shallow/shallow_fish_school_01_TEMP.png")
-const TERRAIN_TEXTURE: Texture2D = preload("res://assets/environment/terrain/underwater_terrain_20_100.png")
+const TERRAIN_TEXTURE_PATH: String = "res://assets/environment/terrain/underwater_terrain_20_100.png"
 
 const WATER_SURFACE_Y: float = 360.0
 const SUN_X: float = 1060.0
@@ -32,6 +32,7 @@ var _ray_root: Node2D = null
 var _sun_light_parallax: Parallax2D = null
 var _fish_school_root: Node2D = null
 var _terrain_root: Node2D = null
+var _terrain_texture: Texture2D = null
 var _anim_time: float = 0.0
 var _scene_id: int = 0
 
@@ -337,6 +338,22 @@ func _animate_shallow_environment(delta: float) -> void:
 # 20-100m REEF TERRAIN - TEK SABIT ARKA PLAN GORSELI
 # -----------------------------------------------------------------------------
 
+func _load_terrain_texture() -> Texture2D:
+	if _terrain_texture != null:
+		return _terrain_texture
+
+	# Preload kullanmiyoruz. Yeni PNG GitHub'dan geldikten sonra Godot importer
+	# henuz .import olusturmamis olsa bile kaynak dosyayi direkt okur.
+	var image: Image = Image.new()
+	var load_error: Error = image.load(TERRAIN_TEXTURE_PATH)
+	if load_error != OK:
+		push_error("REEF TERRAIN PNG okunamadi: %s (error %d)" % [TERRAIN_TEXTURE_PATH, load_error])
+		return null
+
+	_terrain_texture = ImageTexture.create_from_image(image)
+	return _terrain_texture
+
+
 func _ensure_underwater_terrain(current_scene: Node) -> void:
 	if is_instance_valid(_terrain_root):
 		return
@@ -357,7 +374,11 @@ func _ensure_underwater_terrain(current_scene: Node) -> void:
 		_terrain_root = existing
 		return
 
-	var texture_size: Vector2 = TERRAIN_TEXTURE.get_size()
+	var terrain_texture: Texture2D = _load_terrain_texture()
+	if terrain_texture == null:
+		return
+
+	var texture_size: Vector2 = terrain_texture.get_size()
 	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
 		return
 
@@ -372,7 +393,7 @@ func _ensure_underwater_terrain(current_scene: Node) -> void:
 
 	var sprite: Sprite2D = Sprite2D.new()
 	sprite.name = "ReefTerrainArt"
-	sprite.texture = TERRAIN_TEXTURE
+	sprite.texture = terrain_texture
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.centered = true
 	sprite.position = Vector2(
@@ -389,4 +410,4 @@ func _ensure_underwater_terrain(current_scene: Node) -> void:
 	sprite.z_index = -3
 	_terrain_root.add_child(sprite)
 
-	print("REEF TERRAIN: 20-100m tek sabit PNG olarak yerlestirildi; collision yok")
+	print("REEF TERRAIN: 20-100m sabit PNG, runtime Image.load, collision yok")
