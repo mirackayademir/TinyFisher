@@ -2,7 +2,8 @@ extends Node
 
 # TinyFisher katmanli dunya altyapisi.
 # 36 environment gorseli TEK TEK eklenecek.
-# Aktif: 1) sky_base_01.png  2) sun_01_TEMP.png  3) horizon_land_01.png  4) ocean_surface_base_01.png
+# Aktif: 1) sky_base_01.png  2) sun_01_TEMP.png  3) horizon_land_01.png
+#        4) ocean_surface_base_01.png  5) wave_back_01.png
 
 const ENV_ROOT_NAME: String = "EnvironmentLayers"
 const DECOR_SEED: int = 9042026
@@ -37,6 +38,7 @@ const SKY_TEXTURE_PATH: String = "res://assets/environment/surface/sky_base_01.p
 const SUN_TEXTURE_PATH: String = "res://assets/environment/surface/sun_01_TEMP.png"
 const HORIZON_TEXTURE_PATH: String = "res://assets/environment/surface/horizon_land_01.png"
 const OCEAN_SURFACE_TEXTURE_PATH: String = "res://assets/environment/surface/ocean_surface_base_01.png"
+const WAVE_BACK_TEXTURE_PATH: String = "res://assets/environment/surface/wave_back_01.png"
 
 var _scene_id: int = 0
 var _world: Node2D = null
@@ -48,7 +50,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V11: OCEAN SURFACE TEKRARSIZ")
+	print("ENVIRONMENT LAYERS V12: WAVE BACK 5/36")
 
 
 func _process(_delta: float) -> void:
@@ -85,7 +87,8 @@ func _ensure_environment_layers() -> void:
 	_build_sun_only()
 	_build_horizon_only()
 	_build_ocean_surface_only()
-	print("ENVIRONMENT: 4/36 aktif")
+	_build_wave_back_only()
+	print("ENVIRONMENT: 5/36 aktif")
 
 
 func _prepare_base_layer_order() -> void:
@@ -231,8 +234,6 @@ func _build_ocean_surface_only() -> void:
 	root.name = "OceanSurfaceArt"
 	layer.add_child(root)
 
-	# Bu gorsel tile edilmez. Tek bir uzun yuzey bandi olarak tum dunya genisligine yayilir.
-	# Boylece onceki surumde olusan kutu kutu tekrar ve dikey ek yerleri tamamen kalkar.
 	var fade_shader: Shader = Shader.new()
 	fade_shader.code = (
 		"shader_type canvas_item;\n"
@@ -259,6 +260,51 @@ func _build_ocean_surface_only() -> void:
 	sprite.position = Vector2(WORLD_LEFT_X + world_width * 0.5, WATER_SURFACE_Y + target_height * 0.5)
 	sprite.scale = Vector2(world_width / texture_size.x, target_height / texture_size.y)
 	root.add_child(sprite)
+
+
+# -----------------------------------------------------------------------------
+# GORSEL 5 / 36 - WAVE BACK
+# -----------------------------------------------------------------------------
+
+func _build_wave_back_only() -> void:
+	var layer: Node2D = get_layer("WaveBackLayer")
+	if layer == null or layer.get_node_or_null("WaveBackArt") != null:
+		return
+
+	var texture: Texture2D = _load_texture(WAVE_BACK_TEXTURE_PATH)
+	if texture == null:
+		return
+
+	var texture_size: Vector2 = texture.get_size()
+	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+		return
+
+	var root: Node2D = Node2D.new()
+	root.name = "WaveBackArt"
+	layer.add_child(root)
+
+	# Asset 2048x128. Yatay olcegi koruyoruz; kisa araliklarla tekrar edip
+	# desen olusturmasin diye 2048 px'lik uzun parcalar kullaniyoruz.
+	# Her ikinci parca aynalanir; tekrar fark edilmesi daha da azalir.
+	var target_height: float = 30.0
+	var y_scale: float = target_height / texture_size.y
+	var tile_width: float = texture_size.x
+	var center_y: float = WATER_SURFACE_Y - 7.0
+	var x: float = WORLD_LEFT_X + tile_width * 0.5
+	var tile_index: int = 0
+
+	while x < WORLD_RIGHT_X + tile_width * 0.5:
+		var sprite: Sprite2D = Sprite2D.new()
+		sprite.name = "WaveBack_%02d" % tile_index
+		sprite.texture = texture
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.position = Vector2(x, center_y)
+		sprite.scale = Vector2(-1.0 if tile_index % 2 == 1 else 1.0, y_scale)
+		sprite.modulate = Color(0.84, 0.94, 1.0, 0.34)
+		root.add_child(sprite)
+
+		x += tile_width - 2.0
+		tile_index += 1
 
 
 func _add_tiled_strip(
