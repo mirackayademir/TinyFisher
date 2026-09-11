@@ -3,6 +3,7 @@ extends CharacterBody2D
 @export var speed: float = 220.0
 @export var speed_per_level: float = 35.0
 @export var min_world_x: float = 470.0
+@export var max_world_x: float = 3500.0
 @export var harbor_dock_approach: float = 270.0
 
 @export var rod_rest_rotation: float = 0.0
@@ -71,6 +72,13 @@ func _physics_process(delta: float) -> void:
 	if global_position.x < effective_min_world_x:
 		global_position.x = effective_min_world_x
 		if velocity.x < 0.0:
+			velocity.x = 0.0
+
+	# Compact 5500 px world: camera right edge stays inside the sea instead of
+	# letting the boat travel into the old 12k prototype area.
+	if global_position.x > max_world_x:
+		global_position.x = max_world_x
+		if velocity.x > 0.0:
 			velocity.x = 0.0
 
 	_update_surface_motion(delta)
