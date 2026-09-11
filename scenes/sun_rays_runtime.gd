@@ -1,13 +1,14 @@
 extends Node
 
 # TinyFisher environment asset 8 / 36 - sun_rays_01.png
-# Also bootstraps the independent kelp-cluster compositor so project.godot
-# does not need another autoload entry.
+# Also bootstraps the independent kelp-cluster compositor and the final
+# rock-contact safety guard so project.godot needs no extra autoload entries.
 
 const ROOT_NAME := "SunRaysArt"
 const LAYER_PATH := "EnvironmentLayers/UnderwaterLayers/SunRaysLayer"
 const TEXTURE_PATH := "res://assets/environment/surface/sun_rays_01.png"
 const KELP_CLUSTER_SCRIPT := preload("res://scenes/kelp_cluster_runtime.gd")
+const KELP_CONTACT_GUARD_SCRIPT := preload("res://scenes/kelp_rock_contact_guard.gd")
 
 const WATER_SURFACE_Y := 360.0
 const WORLD_LEFT_X := -1000.0
@@ -22,16 +23,19 @@ var _scene_id := 0
 var _world: Node2D = null
 var _root: Node2D = null
 var _kelp_cluster_runtime: Node = null
+var _kelp_contact_guard_runtime: Node = null
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_ensure_kelp_cluster_runtime()
-	print("SUN RAYS RUNTIME V2: ENVIRONMENT 8/36 + KELP CLUSTER BOOTSTRAP")
+	_ensure_kelp_contact_guard_runtime()
+	print("SUN RAYS RUNTIME V3: ENVIRONMENT 8/36 + KELP CLUSTER + ROCK CONTACT GUARD")
 
 
 func _process(_delta: float) -> void:
 	_ensure_kelp_cluster_runtime()
+	_ensure_kelp_contact_guard_runtime()
 	_ensure_sun_rays()
 
 
@@ -46,6 +50,19 @@ func _ensure_kelp_cluster_runtime() -> void:
 
 	_kelp_cluster_runtime.name = "KelpClusterRuntime"
 	add_child(_kelp_cluster_runtime)
+
+
+func _ensure_kelp_contact_guard_runtime() -> void:
+	if is_instance_valid(_kelp_contact_guard_runtime):
+		return
+
+	_kelp_contact_guard_runtime = KELP_CONTACT_GUARD_SCRIPT.new() as Node
+	if _kelp_contact_guard_runtime == null:
+		push_warning("Kelp rock contact guard olusturulamadi.")
+		return
+
+	_kelp_contact_guard_runtime.name = "KelpRockContactGuard"
+	add_child(_kelp_contact_guard_runtime)
 
 
 func _ensure_sun_rays() -> void:
