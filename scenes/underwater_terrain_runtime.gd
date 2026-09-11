@@ -1,76 +1,45 @@
 extends Node
 
-# TinyFisher grounded canyon compositor.
-#
-# V25 removes approximate kelp placement completely.
-# Kelp roots are now pixel-locked to the ACTUAL visible rock surface:
-# - Rock PNG alpha is scanned to find a stable opaque upper surface point.
-# - Kelp PNG alpha is scanned to find the real bottom/root pixel.
-# - Both source pixels are transformed through the exact Sprite2D scale/flip.
-# - The two pixels are mapped to the same world coordinate.
-#
-# Result: transparent padding inside either PNG can no longer make kelp float.
-# This is visual terrain only; it intentionally has no collision yet.
+# TinyFisher accepted HQ canyon runtime.
+# Restores the single wide canyon artwork that was previously approved for the
+# 20-100 m band. No repeated rock towers, no procedural tiling.
+# The visible artwork is mapped mathematically to the real Water world width and
+# the live hook depth scale, so editor/runtime placement uses the same geometry.
 
-const TERRAIN_NODE_NAME := "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION := 25
+const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To100"
+const TERRAIN_TEXTURE_PATH: String = "res://assets/environment/terrain/underwater_canyon_20_100_hq.webp"
+const LAYOUT_VERSION: int = 26
 
-const TOP_M := 20.0
-const BOTTOM_M := 100.0
-const SEABED_DEPTH_M := 100.0
+const TOP_M: float = 20.0
+const BOTTOM_M: float = 100.0
 
-const FALLBACK_LEFT := -1000.0
-const FALLBACK_RIGHT := 11000.0
-const FALLBACK_PPM := 34.5
-const FALLBACK_ZERO_Y := 392.6
+# Accepted source is 2048x682. Rows 0..26 are fully transparent, therefore only
+# that empty strip is cropped. Every visible canyon pixel is preserved.
+const SOURCE_REGION: Rect2 = Rect2(0.0, 27.0, 2048.0, 655.0)
 
-const TERRAIN_Z := -4
+const FALLBACK_LEFT: float = -1000.0
+const FALLBACK_RIGHT: float = 11000.0
+const FALLBACK_PPM: float = 34.5
+const FALLBACK_ZERO_Y: float = 392.6
+const TERRAIN_Z: int = -7
 
-const SPIRE_SPACING_X := 2200.0
-const FIRST_SPIRE_OFFSET_X := 900.0
-const MIN_HORIZONTAL_GAP := 90.0
-
-const ROCK_TALL := "res://assets/environment/deep_sea/deep_sea_rock_01.png"
-const ROCK_FLOOR := "res://assets/environment/deep_sea/deep_sea_rock_02.png"
-const KELP_TEXTURE := "res://assets/environment/shallow/shallow_kelp_01.png"
-
-const SPIRE_TOP_DEPTH_PATTERN := [44.0, 48.0, 52.0, 46.0, 50.0, 45.0]
-
-const KELP_MAX_LEDGE_DEPTH_M := 48.0
-const KELP_TARGET_HEIGHT_PATTERN := [155.0, 132.0, 146.0, 125.0]
-const KELP_SWAY_SPEED := 0.85
-const KELP_SWAY_RADIANS := 0.035
-
-const ALPHA_THRESHOLD := 0.18
-const ROCK_SCAN_MIN_X_RATIO := 0.16
-const ROCK_SCAN_MAX_X_RATIO := 0.84
-const ROCK_SURFACE_WINDOW_RATIO := 0.035
-const ROCK_MAX_LOCAL_ROUGHNESS_PX := 34
-const KELP_BASE_SAMPLE_ROWS := 8
-
-var _scene_id := 0
+var _scene_id: int = 0
 var _world: Node2D = null
 var _root: Node2D = null
-var _last_ppm := -1.0
-var _last_left := INF
-var _last_right := INF
-
-var _textures: Dictionary = {}
-var _occupied_x: Array[Vector2] = []
-var _kelp_pivots: Array[Node2D] = []
-var _kelp_time := 0.0
-
-var _rock_surface_source_px := Vector2(-1.0, -1.0)
-var _kelp_base_source_px := Vector2(-1.0, -1.0)
+var _sprite: Sprite2D = null
+var _last_left: float = INF
+var _last_width: float = INF
+var _last_top_y: float = INF
+var _last_height: float = INF
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V25: PIXEL-LOCKED ROCK/KELP GROUNDING")
+	print("UNDERWATER TERRAIN V26: ACCEPTED HQ CANYON RESTORED / EXACT 20-100M MAP FIT")
 
 
-func _process(delta: float) -> void:
-	var scene := get_tree().current_scene
+func _process(_delta: float) -> void:
+	var scene: Node = get_tree().current_scene
 	if scene == null:
 		_reset()
 		return
@@ -79,48 +48,53 @@ func _process(delta: float) -> void:
 		_scene_id = scene.get_instance_id()
 		_world = scene as Node2D
 		_root = null
-		_last_ppm = -1.0
+		_sprite = null
 		_last_left = INF
-		_last_right = INF
-		_kelp_pivots.clear()
-		_kelp_time = 0.0
+		_last_width = INF
+		_last_top_y = INF
+		_last_height = INF
 
 	if _world == null:
 		return
 
-	var bounds := _get_world_horizontal_bounds()
-	var ppm := _pixels_per_meter()
-
-	if not is_instance_valid(_root):
-		_rebuild_terrain(bounds, ppm)
-	elif not is_equal_approx(bounds.x, _last_left) \
-	or not is_equal_approx(bounds.y, _last_right) \
-	or not is_equal_approx(ppm, _last_ppm):
-		_rebuild_terrain(bounds, ppm)
-
-	_animate_kelp(delta)
+	_ensure_terrain()
+	_fit_to_world()
 
 
 func _reset() -> void:
 	_scene_id = 0
 	_world = null
 	_root = null
-	_last_ppm = -1.0
+	_sprite = null
 	_last_left = INF
-	_last_right = INF
-	_occupied_x.clear()
-	_kelp_pivots.clear()
-	_kelp_time = 0.0
+	_last_width = INF
+	_last_top_y = INF
+	_last_height = INF
 
 
-func _rebuild_terrain(bounds: Vector2, ppm: float) -> void:
-	_remove_old_terrain()
-	_cache_textures()
-	_cache_alpha_geometry()
-
-	if not _textures.has(ROCK_TALL) or not _textures.has(ROCK_FLOOR):
-		push_error("Underwater terrain: gerekli HQ kaya texture'lari bulunamadi.")
+func _ensure_terrain() -> void:
+	if is_instance_valid(_root) and is_instance_valid(_sprite):
 		return
+
+	_remove_old_terrain()
+
+	var source_texture: Texture2D = load(TERRAIN_TEXTURE_PATH) as Texture2D
+	if source_texture == null:
+		push_error("HQ terrain texture bulunamadi: " + TERRAIN_TEXTURE_PATH)
+		return
+
+	if source_texture.get_width() < int(SOURCE_REGION.size.x) or source_texture.get_height() < int(SOURCE_REGION.end.y):
+		push_error(
+			"HQ terrain texture boyutu beklenenden kucuk: %dx%d" % [
+				source_texture.get_width(),
+				source_texture.get_height()
+			]
+		)
+		return
+
+	var atlas: AtlasTexture = AtlasTexture.new()
+	atlas.atlas = source_texture
+	atlas.region = SOURCE_REGION
 
 	_root = Node2D.new()
 	_root.name = TERRAIN_NODE_NAME
@@ -131,406 +105,71 @@ func _rebuild_terrain(bounds: Vector2, ppm: float) -> void:
 	_root.set_meta("camera_locked", false)
 	_root.set_meta("depth_top_m", TOP_M)
 	_root.set_meta("depth_bottom_m", BOTTOM_M)
-	_root.set_meta("terrain_source", "grounded_hq_png_canyon")
-	_root.set_meta("kelp_grounding", "alpha_pixel_lock")
+	_root.set_meta("terrain_source", "accepted_hq_canyon_webp")
+	_root.set_meta("source_region", SOURCE_REGION)
+	_root.set_meta("kelp_surface_adapter", "pending_hq_canyon_surface")
 	_world.add_child(_root)
 
-	_occupied_x.clear()
-	_kelp_pivots.clear()
-	_build_seabed_mass(bounds)
-	_build_grounded_spires(bounds)
-	_build_floor_detail(bounds)
-	_build_grounded_kelp(bounds)
+	_sprite = Sprite2D.new()
+	_sprite.name = "TerrainSpriteHQ"
+	_sprite.centered = false
+	_sprite.texture = atlas
+	# This artwork is painted HQ terrain rather than a small pixel-art sprite.
+	# Linear filtering preserves the intended canyon silhouette when map-scaled.
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_sprite.position = Vector2.ZERO
+	_sprite.z_index = 0
+	_root.add_child(_sprite)
 
-	_last_left = bounds.x
-	_last_right = bounds.y
-	_last_ppm = ppm
+	_fit_to_world(true)
 
-	print(
-		"HQ CANYON V%d / X %.0f..%.0f / %.2f px-m / terrain=%d / kelp=%d / rock_px=(%.1f,%.1f) / kelp_base_px=(%.1f,%.1f)" % [
-			LAYOUT_VERSION,
-			bounds.x,
-			bounds.y,
-			ppm,
-			_occupied_x.size(),
-			_kelp_pivots.size(),
-			_rock_surface_source_px.x,
-			_rock_surface_source_px.y,
-			_kelp_base_source_px.x,
-			_kelp_base_source_px.y
-		]
+
+func _fit_to_world(force: bool = false) -> void:
+	if not is_instance_valid(_root) or not is_instance_valid(_sprite) or _world == null:
+		return
+
+	var bounds: Vector2 = _get_world_horizontal_bounds()
+	var left: float = bounds.x
+	var width: float = maxf(bounds.y - bounds.x, 1.0)
+	var top_y: float = _world_y_for_depth(TOP_M)
+	var bottom_y: float = _world_y_for_depth(BOTTOM_M)
+	var height: float = maxf(bottom_y - top_y, 1.0)
+
+	if not force \
+	and is_equal_approx(left, _last_left) \
+	and is_equal_approx(width, _last_width) \
+	and is_equal_approx(top_y, _last_top_y) \
+	and is_equal_approx(height, _last_height):
+		return
+
+	# Exact map fit, no hand-positioned guesses:
+	# X -> complete Water world width.
+	# Y -> exact live 20..100 m hook-depth band.
+	_root.global_position = Vector2(left, top_y)
+	_root.scale = Vector2(
+		width / SOURCE_REGION.size.x,
+		height / SOURCE_REGION.size.y
 	)
 
-
-func _cache_textures() -> void:
-	if not _textures.is_empty():
-		return
-
-	for path_variant in [ROCK_TALL, ROCK_FLOOR, KELP_TEXTURE]:
-		var path := String(path_variant)
-		var texture := load(path) as Texture2D
-		if texture != null and texture.get_width() > 0 and texture.get_height() > 0:
-			_textures[path] = texture
-		else:
-			push_warning("Underwater terrain texture atlandi: " + path)
-
-
-func _cache_alpha_geometry() -> void:
-	if _rock_surface_source_px.x >= 0.0 and _kelp_base_source_px.x >= 0.0:
-		return
-
-	var rock_texture := _textures.get(ROCK_TALL) as Texture2D
-	var kelp_texture := _textures.get(KELP_TEXTURE) as Texture2D
-	if rock_texture == null or kelp_texture == null:
-		return
-
-	var rock_image := rock_texture.get_image()
-	var kelp_image := kelp_texture.get_image()
-	if rock_image == null or rock_image.is_empty():
-		push_warning("Rock alpha geometry okunamadi.")
-		return
-	if kelp_image == null or kelp_image.is_empty():
-		push_warning("Kelp alpha geometry okunamadi.")
-		return
-
-	_rock_surface_source_px = _find_stable_rock_surface_pixel(rock_image)
-	_kelp_base_source_px = _find_kelp_base_pixel(kelp_image)
-
-	if _rock_surface_source_px.x < 0.0:
-		push_warning("Gercek kaya yuzey pikseli bulunamadi.")
-	if _kelp_base_source_px.x < 0.0:
-		push_warning("Gercek kelp kok pikseli bulunamadi.")
-
-
-func _build_seabed_mass(bounds: Vector2) -> void:
-	if not is_instance_valid(_root):
-		return
-
-	var seabed_y := _world_y_for_depth(SEABED_DEPTH_M)
-	var bottom_y := seabed_y + 900.0
-	var width := bounds.y - bounds.x
-	var step := 400.0
-	var point_count := int(ceil(width / step)) + 1
-	var points := PackedVector2Array()
-
-	for i in range(point_count + 1):
-		var x := minf(bounds.x + float(i) * step, bounds.y)
-		var wave := sin(float(i) * 1.37) * 18.0 + sin(float(i) * 0.53) * 11.0
-		points.append(Vector2(x, seabed_y + wave))
-
-	points.append(Vector2(bounds.y, bottom_y))
-	points.append(Vector2(bounds.x, bottom_y))
-
-	var seabed := Polygon2D.new()
-	seabed.name = "SeabedMass"
-	seabed.polygon = points
-	seabed.color = Color(0.018, 0.055, 0.095, 1.0)
-	seabed.z_index = -1
-	_root.add_child(seabed)
-
-
-func _build_grounded_spires(bounds: Vector2) -> void:
-	var texture := _textures.get(ROCK_TALL) as Texture2D
-	if texture == null:
-		return
-
-	var x := bounds.x + FIRST_SPIRE_OFFSET_X
-	var index := 0
-
-	while x <= bounds.y + FIRST_SPIRE_OFFSET_X:
-		var top_depth := float(SPIRE_TOP_DEPTH_PATTERN[index % SPIRE_TOP_DEPTH_PATTERN.size()])
-		_add_grounded_spire(texture, x, top_depth, index)
-		x += SPIRE_SPACING_X
-		index += 1
-
-
-func _add_grounded_spire(texture: Texture2D, center_x: float, top_depth_m: float, index: int) -> void:
-	var source_size := texture.get_size()
-	if source_size.x <= 0.0 or source_size.y <= 0.0:
-		return
-
-	var top_y := _world_y_for_depth(top_depth_m)
-	var seabed_y := _seabed_y_at_x(center_x)
-	var target_height := maxf(seabed_y - top_y, 1.0)
-	var scale_factor := target_height / source_size.y
-	var rendered_width := source_size.x * scale_factor
-
-	var interval := Vector2(
-		center_x - rendered_width * 0.5,
-		center_x + rendered_width * 0.5
-	)
-	if not _reserve_interval(interval):
-		return
-
-	var sprite := Sprite2D.new()
-	sprite.name = "GroundedSpire_%02d" % index
-	sprite.texture = texture
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	sprite.position = Vector2(center_x, seabed_y - target_height * 0.5)
-	sprite.scale = Vector2(
-		-scale_factor if index % 2 == 1 else scale_factor,
-		scale_factor
-	)
-	sprite.rotation = 0.0
-	sprite.modulate = Color(0.76, 0.86, 0.97, 0.98)
-	sprite.set_meta("grounded", true)
-	sprite.set_meta("top_depth_m", top_depth_m)
-	sprite.set_meta("bottom_depth_m", SEABED_DEPTH_M)
-	_root.add_child(sprite)
-
-
-func _build_floor_detail(bounds: Vector2) -> void:
-	var texture := _textures.get(ROCK_FLOOR) as Texture2D
-	if texture == null:
-		return
-
-	var source_size := texture.get_size()
-	if source_size.x <= 0.0 or source_size.y <= 0.0:
-		return
-
-	var x := bounds.x + FIRST_SPIRE_OFFSET_X + SPIRE_SPACING_X * 0.5
-	var index := 0
-	var target_width := 480.0
-	var scale_factor := target_width / source_size.x
-	var rendered_height := source_size.y * scale_factor
-
-	while x <= bounds.y:
-		var interval := Vector2(x - target_width * 0.5, x + target_width * 0.5)
-		if _reserve_interval(interval):
-			var seabed_y := _seabed_y_at_x(x)
-			var sprite := Sprite2D.new()
-			sprite.name = "SeabedRock_%02d" % index
-			sprite.texture = texture
-			sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			sprite.position = Vector2(x, seabed_y - rendered_height * 0.5)
-			sprite.scale = Vector2(
-				-scale_factor if index % 2 == 1 else scale_factor,
-				scale_factor
-			)
-			sprite.rotation = 0.0
-			sprite.modulate = Color(0.65, 0.76, 0.89, 1.0)
-			sprite.set_meta("grounded", true)
-			_root.add_child(sprite)
-
-		x += SPIRE_SPACING_X
-		index += 1
-
-
-func _build_grounded_kelp(bounds: Vector2) -> void:
-	var kelp_texture := _textures.get(KELP_TEXTURE) as Texture2D
-	if kelp_texture == null:
-		push_warning("Kelp texture bulunamadi; terrain kelpsiz devam ediyor.")
-		return
-	if _rock_surface_source_px.x < 0.0 or _kelp_base_source_px.x < 0.0:
-		push_warning("Alpha anchor geometry hazir degil; kelp spawn iptal edildi.")
-		return
-
-	var kelp_size := kelp_texture.get_size()
-	if kelp_size.x <= 0.0 or kelp_size.y <= 0.0:
-		return
-
-	var x := bounds.x + FIRST_SPIRE_OFFSET_X
-	var spire_index := 0
-	var kelp_index := 0
-
-	while x <= bounds.y:
-		var top_depth := float(SPIRE_TOP_DEPTH_PATTERN[spire_index % SPIRE_TOP_DEPTH_PATTERN.size()])
-		if top_depth <= KELP_MAX_LEDGE_DEPTH_M:
-			var spire := _root.get_node_or_null("GroundedSpire_%02d" % spire_index) as Sprite2D
-			if spire != null:
-				var rock_size := spire.texture.get_size()
-				var rock_anchor_local := _source_pixel_to_rendered_offset(
-					_rock_surface_source_px,
-					rock_size,
-					spire.scale
-				)
-				var exact_anchor := spire.position + rock_anchor_local
-
-				var target_height := float(
-					KELP_TARGET_HEIGHT_PATTERN[kelp_index % KELP_TARGET_HEIGHT_PATTERN.size()]
-				)
-				var kelp_scale_factor := target_height / kelp_size.y
-				var kelp_scale := Vector2(
-					-kelp_scale_factor if kelp_index % 2 == 1 else kelp_scale_factor,
-					kelp_scale_factor
-				)
-
-				var pivot := Node2D.new()
-				pivot.name = "GroundedKelpPivot_%02d" % kelp_index
-				pivot.position = exact_anchor
-				pivot.z_index = 2
-				pivot.set_meta("grounded", true)
-				pivot.set_meta("grounding_method", "rock_alpha_pixel_to_kelp_alpha_pixel")
-				pivot.set_meta("rock_source_pixel", _rock_surface_source_px)
-				pivot.set_meta("kelp_base_source_pixel", _kelp_base_source_px)
-				pivot.set_meta("source_spire", spire.name)
-				pivot.set_meta("sway_phase", float(kelp_index) * 1.73)
-				_root.add_child(pivot)
-
-				var sprite := Sprite2D.new()
-				sprite.name = "KelpVisual"
-				sprite.texture = kelp_texture
-				sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-				sprite.scale = kelp_scale
-
-				var kelp_base_rendered := _source_pixel_to_rendered_offset(
-					_kelp_base_source_px,
-					kelp_size,
-					kelp_scale
-				)
-				sprite.position = -kelp_base_rendered
-				sprite.modulate = Color(0.62, 0.84, 0.78, 0.88)
-				pivot.add_child(sprite)
-
-				_kelp_pivots.append(pivot)
-				kelp_index += 1
-
-		x += SPIRE_SPACING_X
-		spire_index += 1
-
-
-func _find_stable_rock_surface_pixel(image: Image) -> Vector2:
-	var width: int = image.get_width()
-	var height: int = image.get_height()
-	if width <= 0 or height <= 0:
-		return Vector2(-1.0, -1.0)
-
-	var min_x: int = clampi(int(round(float(width) * ROCK_SCAN_MIN_X_RATIO)), 0, width - 1)
-	var max_x: int = clampi(int(round(float(width) * ROCK_SCAN_MAX_X_RATIO)), 0, width - 1)
-	var window: int = maxi(4, int(round(float(width) * ROCK_SURFACE_WINDOW_RATIO)))
-
-	var best_x: int = -1
-	var best_y: int = -1
-	var best_score: float = INF
-
-	for x in range(min_x, max_x + 1, 2):
-		var y: int = _top_opaque_y(image, x)
-		if y < 0:
-			continue
-
-		var left_x: int = clampi(x - window, 0, width - 1)
-		var right_x: int = clampi(x + window, 0, width - 1)
-		var left_y: int = _top_opaque_y(image, left_x)
-		var right_y: int = _top_opaque_y(image, right_x)
-		if left_y < 0 or right_y < 0:
-			continue
-
-		var roughness: int = maxi(absi(y - left_y), absi(y - right_y))
-		if roughness > ROCK_MAX_LOCAL_ROUGHNESS_PX:
-			continue
-
-		var slope_penalty: float = float(absi(right_y - left_y)) * 2.5
-		var roughness_penalty: float = float(roughness) * 4.0
-		var center_penalty: float = absf(float(x) - float(width) * 0.5) * 0.035
-		var score: float = float(y) + slope_penalty + roughness_penalty + center_penalty
-
-		if score < best_score:
-			best_score = score
-			best_x = x
-			best_y = y
-
-	if best_x < 0:
-		for x in range(min_x, max_x + 1):
-			var y: int = _top_opaque_y(image, x)
-			if y >= 0 and (best_y < 0 or y < best_y):
-				best_x = x
-				best_y = y
-
-	if best_x < 0 or best_y < 0:
-		return Vector2(-1.0, -1.0)
-
-	return Vector2(float(best_x) + 0.5, float(best_y) + 0.5)
-
-
-func _find_kelp_base_pixel(image: Image) -> Vector2:
-	var width := image.get_width()
-	var height := image.get_height()
-	if width <= 0 or height <= 0:
-		return Vector2(-1.0, -1.0)
-
-	var bottom_y := -1
-	for y in range(height - 1, -1, -1):
-		var found := false
-		for x in range(width):
-			if image.get_pixel(x, y).a >= ALPHA_THRESHOLD:
-				bottom_y = y
-				found = true
-				break
-		if found:
-			break
-
-	if bottom_y < 0:
-		return Vector2(-1.0, -1.0)
-
-	var start_y := maxi(0, bottom_y - KELP_BASE_SAMPLE_ROWS + 1)
-	var x_sum := 0.0
-	var count := 0
-	for y in range(start_y, bottom_y + 1):
-		for x in range(width):
-			if image.get_pixel(x, y).a >= ALPHA_THRESHOLD:
-				x_sum += float(x) + 0.5
-				count += 1
-
-	var root_x := float(width) * 0.5
-	if count > 0:
-		root_x = x_sum / float(count)
-
-	return Vector2(root_x, float(bottom_y) + 0.5)
-
-
-func _top_opaque_y(image: Image, x: int) -> int:
-	if x < 0 or x >= image.get_width():
-		return -1
-
-	for y in range(image.get_height()):
-		if image.get_pixel(x, y).a >= ALPHA_THRESHOLD:
-			return y
-	return -1
-
-
-func _source_pixel_to_rendered_offset(
-	source_pixel: Vector2,
-	texture_size: Vector2,
-	sprite_scale: Vector2
-) -> Vector2:
-	var centered := source_pixel - texture_size * 0.5
-	return Vector2(centered.x * sprite_scale.x, centered.y * sprite_scale.y)
-
-
-func _animate_kelp(delta: float) -> void:
-	if _kelp_pivots.is_empty():
-		return
-
-	_kelp_time += delta
-	for pivot in _kelp_pivots:
-		if not is_instance_valid(pivot):
-			continue
-		var phase := float(pivot.get_meta("sway_phase", 0.0))
-		pivot.rotation = sin(_kelp_time * KELP_SWAY_SPEED + phase) * KELP_SWAY_RADIANS
-
-
-func _reserve_interval(interval: Vector2) -> bool:
-	for used in _occupied_x:
-		if interval.x < used.y + MIN_HORIZONTAL_GAP and interval.y > used.x - MIN_HORIZONTAL_GAP:
-			return false
-
-	_occupied_x.append(interval)
-	return true
-
-
-func _seabed_y_at_x(world_x: float) -> float:
-	var bounds := _get_world_horizontal_bounds()
-	var normalized := (world_x - bounds.x) / 400.0
-	var wave := sin(normalized * 1.37) * 18.0 + sin(normalized * 0.53) * 11.0
-	return _world_y_for_depth(SEABED_DEPTH_M) + wave
+	_root.set_meta("map_left_x", left)
+	_root.set_meta("map_right_x", bounds.y)
+	_root.set_meta("world_y_20m", top_y)
+	_root.set_meta("world_y_100m", bottom_y)
+	_root.set_meta("source_visible_size", SOURCE_REGION.size)
+	_root.set_meta("fit_scale", _root.scale)
+
+	_last_left = left
+	_last_width = width
+	_last_top_y = top_y
+	_last_height = height
 
 
 func _get_world_horizontal_bounds() -> Vector2:
 	if _world != null:
-		var water := _world.get_node_or_null("Water") as Control
+		var water: Control = _world.get_node_or_null("Water") as Control
 		if water != null:
-			var left := water.position.x
-			var right := water.position.x + water.size.x
+			var left: float = water.position.x
+			var right: float = water.position.x + water.size.x
 			if right - left >= 1280.0:
 				return Vector2(left, right)
 
@@ -541,12 +180,12 @@ func _pixels_per_meter() -> float:
 	if _world == null:
 		return FALLBACK_PPM
 
-	var hook := _world.get_node_or_null("Boat/Hook") as Node2D
+	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
 	if hook == null:
 		return FALLBACK_PPM
 
-	var max_depth_pixels := float(hook.get("max_depth"))
-	var max_depth_meters := float(hook.get("max_depth_meters"))
+	var max_depth_pixels: float = float(hook.get("max_depth"))
+	var max_depth_meters: float = float(hook.get("max_depth_meters"))
 	if max_depth_pixels <= 0.0 or max_depth_meters <= 0.0:
 		return FALLBACK_PPM
 
@@ -557,12 +196,12 @@ func _world_y_for_depth(depth_meters: float) -> float:
 	if _world == null:
 		return FALLBACK_ZERO_Y + depth_meters * FALLBACK_PPM
 
-	var boat := _world.get_node_or_null("Boat") as Node2D
-	var hook := _world.get_node_or_null("Boat/Hook") as Node2D
+	var boat: Node2D = _world.get_node_or_null("Boat") as Node2D
+	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
 	if boat == null or hook == null:
 		return FALLBACK_ZERO_Y + depth_meters * FALLBACK_PPM
 
-	var hook_start_y := hook.position.y
+	var hook_start_y: float = hook.position.y
 	var start_variant: Variant = hook.get("start_position")
 	if start_variant is Vector2:
 		hook_start_y = (start_variant as Vector2).y
@@ -580,18 +219,16 @@ func _remove_old_terrain() -> void:
 		TERRAIN_NODE_NAME
 	]
 
-	for node_name in old_names:
-		var direct := _world.get_node_or_null(node_name)
+	for node_name: String in old_names:
+		var direct: Node = _world.get_node_or_null(node_name)
 		if direct != null:
 			_world.remove_child(direct)
 			direct.queue_free()
 
-	var bg := _world.get_node_or_null("EnvironmentLayers/UnderwaterLayers/BackgroundDecorLayer")
+	var bg: Node = _world.get_node_or_null("EnvironmentLayers/UnderwaterLayers/BackgroundDecorLayer")
 	if bg != null:
-		for node_name in old_names:
-			var child := bg.get_node_or_null(node_name)
+		for node_name: String in old_names:
+			var child: Node = bg.get_node_or_null(node_name)
 			if child != null:
 				bg.remove_child(child)
 				child.queue_free()
-
-	_root = null
