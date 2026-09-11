@@ -1,19 +1,18 @@
 @tool
 extends Node2D
 
-# Editor preview of the exact runtime canyon layout.
-# V28 keeps the canyon aspect ratio locked, uses the same fixed 34.5 px/m world
-# scale as runtime and calculates the natural bottom depth from the real Water
-# width. The generated dark-water extension is editor-only; runtime extends the
-# real Water node itself.
+# Editor preview of the exact compact runtime canyon layout.
+# The preview is capped to the same 5500 px horizontal world used at runtime so
+# opening the editor can no longer make the canyon look like the old 12k map.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
 const PREVIEW_ROOT_NAME: String = "__GeneratedEnvironmentPreview"
 const TOP_M: float = 20.0
 const WORLD_PIXELS_PER_METER: float = 34.5
+const MAP_WIDTH_PX: float = 5500.0
 const FALLBACK_LEFT: float = -1000.0
-const FALLBACK_RIGHT: float = 11000.0
+const FALLBACK_RIGHT: float = 4500.0
 const FALLBACK_ZERO_Y: float = 392.6
 const TERRAIN_Z: int = -7
 const DEEP_WATER_MARGIN_PX: float = 700.0
@@ -97,7 +96,7 @@ func _rebuild_preview() -> void:
 	sprite.name = "TerrainSpriteHQ_Preview"
 	sprite.centered = false
 	sprite.texture = atlas
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	sprite.position = Vector2(bounds.x, top_y)
 	sprite.scale = Vector2(uniform_scale, uniform_scale)
 	sprite.z_as_relative = false
@@ -115,9 +114,11 @@ func _rebuild_preview() -> void:
 	_preview_root.set_meta("fit_scale", sprite.scale)
 	_preview_root.set_meta("aspect_locked", true)
 	_preview_root.set_meta("world_pixels_per_meter", WORLD_PIXELS_PER_METER)
+	_preview_root.set_meta("compact_map_width_px", MAP_WIDTH_PX)
 
 	print(
-		"EDITOR CANYON V28: top=", TOP_M,
+		"EDITOR CANYON V29: compact=", snappedf(world_width, 1.0),
+		"px top=", TOP_M,
 		"m bottom=", snappedf(bottom_m, 0.1),
 		"m texture=", _source_region.size,
 		" scale=", snappedf(uniform_scale, 0.001)
@@ -179,7 +180,8 @@ func _world_bounds() -> Vector2:
 		var water: Control = world.get_node_or_null("Water") as Control
 		if water != null:
 			var left: float = water.position.x
-			var right: float = water.position.x + water.size.x
+			var water_right: float = water.position.x + water.size.x
+			var right: float = minf(water_right, left + MAP_WIDTH_PX)
 			if right - left >= 1280.0:
 				return Vector2(left, right)
 	return Vector2(FALLBACK_LEFT, FALLBACK_RIGHT)
