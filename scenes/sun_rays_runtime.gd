@@ -1,21 +1,18 @@
 extends Node
 
 # TinyFisher environment asset 8 / 36 - sun_rays_01.png
-#
-# This runtime layer deliberately stays independent from the canyon compositor.
-# It only paints soft surface light into the shallow-water band, so terrain,
-# fish, hook gameplay and the 20-100 m grounded canyon remain untouched.
+# Also bootstraps the independent kelp-cluster compositor so project.godot
+# does not need another autoload entry.
 
 const ROOT_NAME := "SunRaysArt"
 const LAYER_PATH := "EnvironmentLayers/UnderwaterLayers/SunRaysLayer"
 const TEXTURE_PATH := "res://assets/environment/surface/sun_rays_01.png"
+const KELP_CLUSTER_SCRIPT := preload("res://scenes/kelp_cluster_runtime.gd")
 
 const WATER_SURFACE_Y := 360.0
 const WORLD_LEFT_X := -1000.0
 const WORLD_RIGHT_X := 11000.0
 
-# Current game depth scale is roughly 34-35 px/m. 760 px therefore keeps the
-# light inside the shallow-water band instead of washing out the deep sea.
 const TARGET_HEIGHT := 760.0
 const TOP_OVERLAP := 16.0
 const TILE_OVERLAP := 70.0
@@ -24,15 +21,31 @@ const BASE_ALPHA := 0.16
 var _scene_id := 0
 var _world: Node2D = null
 var _root: Node2D = null
+var _kelp_cluster_runtime: Node = null
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("SUN RAYS RUNTIME V1: ENVIRONMENT 8/36")
+	_ensure_kelp_cluster_runtime()
+	print("SUN RAYS RUNTIME V2: ENVIRONMENT 8/36 + KELP CLUSTER BOOTSTRAP")
 
 
 func _process(_delta: float) -> void:
+	_ensure_kelp_cluster_runtime()
 	_ensure_sun_rays()
+
+
+func _ensure_kelp_cluster_runtime() -> void:
+	if is_instance_valid(_kelp_cluster_runtime):
+		return
+
+	_kelp_cluster_runtime = KELP_CLUSTER_SCRIPT.new() as Node
+	if _kelp_cluster_runtime == null:
+		push_warning("Kelp cluster runtime olusturulamadi.")
+		return
+
+	_kelp_cluster_runtime.name = "KelpClusterRuntime"
+	add_child(_kelp_cluster_runtime)
 
 
 func _ensure_sun_rays() -> void:
