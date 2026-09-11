@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/world.tscn" id="1_world"]
+[ext_resource type="Script" path="res://scenes/editor_environment_preview.gd" id="2_preview"]
+
+[node name="WorldEditorPreview" type="Node2D"]
+
+[node name="World" parent="." instance=ExtResource("1_world")]
+
+[node name="EnvironmentPreview" type="Node2D" parent="World"]
+script = ExtResource("2_preview")
+show_preview = true
+show_editor_depth_band = true
