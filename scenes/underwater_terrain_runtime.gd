@@ -83,7 +83,8 @@ func _ensure_terrain() -> void:
 		push_error("HQ terrain texture bulunamadi: " + TERRAIN_TEXTURE_PATH)
 		return
 
-	if source_texture.get_width() < int(SOURCE_REGION.size.x) or source_texture.get_height() < int(SOURCE_REGION.end.y):
+	var required_height: int = int(SOURCE_REGION.position.y + SOURCE_REGION.size.y)
+	if source_texture.get_width() < int(SOURCE_REGION.size.x) or source_texture.get_height() < required_height:
 		push_error(
 			"HQ terrain texture boyutu beklenenden kucuk: %dx%d" % [
 				source_texture.get_width(),
