@@ -1,14 +1,13 @@
 @tool
 extends Node2D
 
-# Editor-only preview of the exact terrain used by underwater_terrain_runtime.gd.
-# It intentionally mirrors the accepted single HQ canyon fit instead of the
-# obsolete repeated-spire compositor. Nothing from this script runs in gameplay.
+# Editor-only preview of the exact HQ canyon used by underwater_terrain_runtime.gd.
+# The texture is rebuilt from the same verified lossless chunks, so editor and
+# gameplay can no longer disagree because of a broken standalone WebP file.
+
+const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
 const PREVIEW_ROOT_NAME: String = "__GeneratedEnvironmentPreview"
-const TERRAIN_TEXTURE_PATH: String = "res://assets/environment/terrain/underwater_canyon_20_100_hq.webp"
-const SOURCE_REGION: Rect2 = Rect2(0.0, 27.0, 2048.0, 655.0)
-
 const TOP_M: float = 20.0
 const BOTTOM_M: float = 100.0
 const FALLBACK_LEFT: float = -1000.0
@@ -21,6 +20,9 @@ const TERRAIN_Z: int = -7
 @export var show_editor_depth_band: bool = true
 
 var _preview_root: Node2D = null
+var _terrain_texture: Texture2D = null
+var _source_region: Rect2 = Rect2()
+var _build_attempted: bool = false
 
 
 func _ready() -> void:
@@ -42,10 +44,10 @@ func _process(_delta: float) -> void:
 			_preview_root.visible = false
 		return
 
-	if not is_instance_valid(_preview_root):
-		_rebuild_preview()
-	else:
+	if is_instance_valid(_preview_root):
 		_preview_root.visible = true
+	elif not _build_attempted:
+		_rebuild_preview()
 
 
 func _rebuild_preview() -> void:
@@ -56,19 +58,16 @@ func _rebuild_preview() -> void:
 	if not show_preview:
 		return
 
-	var source_texture: Texture2D = load(TERRAIN_TEXTURE_PATH) as Texture2D
-	if source_texture == null:
-		push_warning("Editor HQ canyon preview texture bulunamadi: " + TERRAIN_TEXTURE_PATH)
+	_build_attempted = true
+	if _terrain_texture == null:
+		_terrain_texture = CanyonTextureLoader.build_texture()
+	if _terrain_texture == null:
+		push_warning("Editor HQ canyon preview lossless parcalardan olusturulamadi.")
 		return
 
-	if source_texture.get_width() < int(SOURCE_REGION.size.x) \
-	or source_texture.get_height() < int(SOURCE_REGION.position.y + SOURCE_REGION.size.y):
-		push_warning(
-			"Editor HQ canyon texture boyutu beklenenden kucuk: %dx%d" % [
-				source_texture.get_width(),
-				source_texture.get_height()
-			]
-		)
+	_source_region = CanyonTextureLoader.visible_region(_terrain_texture)
+	if _source_region.size.x <= 0.0 or _source_region.size.y <= 0.0:
+		push_warning("Editor HQ canyon visible region gecersiz.")
 		return
 
 	_preview_root = Node2D.new()
@@ -86,8 +85,8 @@ func _rebuild_preview() -> void:
 		_build_editor_depth_band(bounds, top_y, bottom_y)
 
 	var atlas: AtlasTexture = AtlasTexture.new()
-	atlas.atlas = source_texture
-	atlas.region = SOURCE_REGION
+	atlas.atlas = _terrain_texture
+	atlas.region = _source_region
 
 	var sprite: Sprite2D = Sprite2D.new()
 	sprite.name = "TerrainSpriteHQ_Preview"
@@ -96,18 +95,19 @@ func _rebuild_preview() -> void:
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	sprite.position = Vector2(bounds.x, top_y)
 	sprite.scale = Vector2(
-		world_width / SOURCE_REGION.size.x,
-		world_height / SOURCE_REGION.size.y
+		world_width / _source_region.size.x,
+		world_height / _source_region.size.y
 	)
 	sprite.z_as_relative = false
 	sprite.z_index = TERRAIN_Z
 	_preview_root.add_child(sprite, false, Node.INTERNAL_MODE_BACK)
 
-	_preview_root.set_meta("preview_source", "accepted_hq_canyon_webp")
+	_preview_root.set_meta("preview_source", "verified_hq_lossless_chunks")
 	_preview_root.set_meta("world_y_20m", top_y)
 	_preview_root.set_meta("world_y_100m", bottom_y)
 	_preview_root.set_meta("map_left_x", bounds.x)
 	_preview_root.set_meta("map_right_x", bounds.y)
+	_preview_root.set_meta("source_region", _source_region)
 	_preview_root.set_meta("fit_scale", sprite.scale)
 
 
@@ -129,7 +129,6 @@ func _build_editor_depth_band(bounds: Vector2, top_y: float, bottom_y: float) ->
 		Vector2(bounds.y, bottom_y),
 		Vector2(bounds.x, bottom_y)
 	])
-	# Only a subtle guide behind the canyon; it must not hide the source art.
 	band.color = Color(0.025, 0.075, 0.12, 0.20)
 	_preview_root.add_child(band, false, Node.INTERNAL_MODE_BACK)
 
@@ -143,7 +142,6 @@ func _world_bounds() -> Vector2:
 			var right: float = water.position.x + water.size.x
 			if right - left >= 1280.0:
 				return Vector2(left, right)
-
 	return Vector2(FALLBACK_LEFT, FALLBACK_RIGHT)
 
 
@@ -160,7 +158,6 @@ func _pixels_per_meter() -> float:
 	var max_depth_meters: float = float(hook.get("max_depth_meters"))
 	if max_depth_pixels <= 0.0 or max_depth_meters <= 0.0:
 		return FALLBACK_PPM
-
 	return max_depth_pixels / max_depth_meters
 
 
