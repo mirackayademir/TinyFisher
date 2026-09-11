@@ -22,7 +22,6 @@ DeepSeaAtmosphere="*res://scenes/deep_sea_atmosphere.gd"
 RareFishSystem="*res://scenes/abyssal_leviathan_runtime.gd"
 EnvironmentLayers="*res://scenes/environment_layers.gd"
 SunRaysRuntime="*res://scenes/sun_rays_runtime.gd"
-ShallowRock01Runtime="*res://scenes/shallow_rock_01_runtime.gd"
 SurfaceFoamSync="*res://scenes/surface_foam_sync.gd"
 UnderwaterTerrainRuntime="*res://scenes/underwater_terrain_runtime.gd"
 
