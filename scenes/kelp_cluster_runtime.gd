@@ -1,8 +1,11 @@
 extends Node
 
-# Replaces the old one-kelp-per-spire composition with deterministic clusters.
-# Placement is still fully pixel-grounded: every root is locked to a real
-# opaque rock-surface pixel and the apex region is explicitly forbidden.
+# TinyFisher kelp cluster compositor V2.
+# Every kelp root is still alpha-pixel grounded, but placement now also:
+# - rejects thin pre-existing rock/plant protrusions by checking solid support below,
+# - rejects world-space overlap between generated kelps,
+# - searches nearby fallback points instead of stacking plants,
+# - uses a darker blue-green tint so kelp blends into the canyon.
 
 const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To100"
 const KELP_TEXTURE_PATH: String = "res://assets/environment/shallow/shallow_kelp_01.png"
@@ -14,14 +17,28 @@ const SEARCH_RADIUS_RATIO: float = 0.075
 const STABILITY_WINDOW_RATIO: float = 0.022
 const MAX_LOCAL_ROUGHNESS_PX: int = 34
 const MIN_SOURCE_X_SPACING_PX: float = 46.0
+
+# A valid root must sit on a real rock mass, not on a thin opaque strand/detail.
+const SUPPORT_HALF_WIDTH_RATIO: float = 0.020
+const SUPPORT_DEPTH_RATIO: float = 0.060
+const MIN_SUPPORT_FILL_RATIO: float = 0.40
+
+# Generated plants must keep a real screen-space gap from each other.
+const KELP_WORLD_CLEARANCE_PX: float = 14.0
+
 const SWAY_SPEED: float = 0.82
 const SWAY_RADIANS: float = 0.025
 const MAX_BASE_LEAN_RADIANS: float = 0.24
 
-# Five non-central zones: left/lower shoulder, left slope, mid-left slope,
-# right slope and right/lower shoulder. There is intentionally no 0.50 apex slot.
+# No 0.50 summit slot. These target left/right shoulders and lower slopes.
 const TARGET_X_RATIOS: Array[float] = [0.17, 0.29, 0.41, 0.70, 0.83]
-const HEIGHT_PATTERN: Array[float] = [108.0, 128.0, 116.0, 136.0, 101.0]
+const HEIGHT_PATTERN: Array[float] = [104.0, 121.0, 111.0, 128.0, 98.0]
+
+# If the preferred point is occupied, search around it instead of stacking.
+const CANDIDATE_RATIO_OFFSETS: Array[float] = [0.0, -0.035, 0.035, -0.070, 0.070, -0.105, 0.105]
+
+# Dark, desaturated blue-green. It deliberately stays subordinate to the rock.
+const KELP_TINT: Color = Color(0.40, 0.55, 0.55, 0.76)
 
 var _scene_id: int = 0
 var _terrain_id: int = 0
@@ -29,6 +46,7 @@ var _world: Node2D = null
 var _terrain: Node2D = null
 var _kelp_texture: Texture2D = null
 var _kelp_base_source_px: Vector2 = Vector2(-1.0, -1.0)
+var _kelp_used_rect: Rect2i = Rect2i()
 var _pivots: Array[Node2D] = []
 var _time: float = 0.0
 
@@ -36,7 +54,7 @@ var _time: float = 0.0
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_load_kelp_geometry()
-	print("KELP CLUSTER RUNTIME V1: MULTI-SLOPE PIXEL GROUNDING")
+	print("KELP CLUSTER RUNTIME V2: SUPPORT FILTER + OVERLAP GUARD + DARK TINT")
 
 
 func _process(delta: float) -> void:
@@ -89,13 +107,14 @@ func _load_kelp_geometry() -> void:
 		return
 
 	_kelp_base_source_px = _find_kelp_base_pixel(image)
+	_kelp_used_rect = image.get_used_rect()
 
 
 func _rebuild_clusters() -> void:
 	if _terrain == null or _kelp_texture == null or _kelp_base_source_px.x < 0.0:
 		return
 
-	# Remove V25's single apex kelps and any cluster from an earlier pass.
+	# Remove the old single-apex kelps and any previous cluster pass.
 	for child: Node in _terrain.get_children():
 		if child.name.begins_with("GroundedKelpPivot_") or child.name.begins_with("KelpClusterPivot_"):
 			_terrain.remove_child(child)
@@ -114,10 +133,9 @@ func _rebuild_clusters() -> void:
 	var total_kelps: int = 0
 	for spire_index: int in range(spires.size()):
 		var spire: Sprite2D = spires[spire_index]
-		var created: int = _decorate_spire(spire, spire_index)
-		total_kelps += created
+		total_kelps += _decorate_spire(spire, spire_index)
 
-	print("KELP CLUSTERS: spires=%d / kelp=%d / apex=forbidden" % [spires.size(), total_kelps])
+	print("KELP CLUSTERS V2: spires=%d / kelp=%d / overlap=guarded / thin_support=rejected" % [spires.size(), total_kelps])
 
 
 func _decorate_spire(spire: Sprite2D, spire_index: int) -> int:
@@ -137,80 +155,127 @@ func _decorate_spire(spire: Sprite2D, spire_index: int) -> int:
 	if global_top_y < 0:
 		return 0
 
-	# Alternate between 5 and 4 plants so the silhouette does not repeat.
+	# Keep the requested 4-5 plant rhythm, but never force a bad position.
 	var wanted_count: int = 5 if spire_index % 2 == 0 else 4
 	var ratios: Array[float] = TARGET_X_RATIOS.duplicate()
 	if wanted_count == 4:
 		ratios.remove_at(2)
 
 	var used_source_x: Array[float] = []
+	var used_world_bounds: Array[Rect2] = []
 	var created: int = 0
 
 	for local_index: int in range(ratios.size()):
-		var surface_px: Vector2 = _find_surface_near_ratio(
-			rock_image,
-			ratios[local_index],
-			global_top_y,
-			used_source_x
-		)
-		if surface_px.x < 0.0:
-			continue
-
-		used_source_x.append(surface_px.x)
-		var anchor_local: Vector2 = _source_pixel_to_rendered_offset(surface_px, rock_size, spire.scale)
-		var anchor_world: Vector2 = spire.position + anchor_local
-
 		var height_index: int = (spire_index * 2 + local_index) % HEIGHT_PATTERN.size()
 		var target_height: float = HEIGHT_PATTERN[height_index]
 		var scale_factor: float = target_height / kelp_size.y
 		var flip_x: float = -1.0 if (spire_index + local_index) % 2 == 1 else 1.0
 		var kelp_scale: Vector2 = Vector2(flip_x * scale_factor, scale_factor)
 
-		var base_lean: float = _surface_lean_at(rock_image, int(floor(surface_px.x)))
-		# Mirroring the rock reverses the visible slope direction.
-		if spire.scale.x < 0.0:
-			base_lean = -base_lean
-		base_lean = clampf(base_lean, -MAX_BASE_LEAN_RADIANS, MAX_BASE_LEAN_RADIANS)
+		# Keep rejected candidates blocked during this slot so fallback searches
+		# cannot immediately return the same overlapping point.
+		var blocked_source_x: Array[float] = used_source_x.duplicate()
+		var placed: bool = false
 
-		var pivot: Node2D = Node2D.new()
-		pivot.name = "KelpClusterPivot_%02d_%02d" % [spire_index, local_index]
-		pivot.position = anchor_world
-		pivot.z_index = 2
-		pivot.set_meta("grounded", true)
-		pivot.set_meta("grounding_method", "alpha_surface_profile")
-		pivot.set_meta("rock_source_pixel", surface_px)
-		pivot.set_meta("source_spire", spire.name)
-		pivot.set_meta("base_rotation", base_lean)
-		pivot.set_meta("sway_phase", float(spire_index * 7 + local_index) * 1.19)
-		_terrain.add_child(pivot)
+		for ratio_offset: float in CANDIDATE_RATIO_OFFSETS:
+			var target_ratio: float = clampf(
+				ratios[local_index] + ratio_offset,
+				PROFILE_MARGIN_RATIO,
+				1.0 - PROFILE_MARGIN_RATIO
+			)
 
-		var sprite: Sprite2D = Sprite2D.new()
-		sprite.name = "KelpVisual"
-		sprite.texture = _kelp_texture
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		sprite.scale = kelp_scale
+			var surface_px: Vector2 = _find_surface_near_ratio(
+				rock_image,
+				target_ratio,
+				global_top_y,
+				blocked_source_x
+			)
+			if surface_px.x < 0.0:
+				continue
 
-		var kelp_base_rendered: Vector2 = _source_pixel_to_rendered_offset(
-			_kelp_base_source_px,
-			kelp_size,
-			kelp_scale
-		)
-		sprite.position = -kelp_base_rendered
-		sprite.modulate = Color(0.60, 0.83, 0.76, 0.86)
-		pivot.add_child(sprite)
+			var anchor_local: Vector2 = _source_pixel_to_rendered_offset(surface_px, rock_size, spire.scale)
+			var anchor_world: Vector2 = spire.position + anchor_local
 
-		pivot.rotation = base_lean
-		_pivots.append(pivot)
-		created += 1
+			var base_lean: float = _surface_lean_at(rock_image, int(floor(surface_px.x)))
+			if spire.scale.x < 0.0:
+				base_lean = -base_lean
+			base_lean = clampf(base_lean, -MAX_BASE_LEAN_RADIANS, MAX_BASE_LEAN_RADIANS)
+
+			var candidate_bounds: Rect2 = _kelp_world_bounds(anchor_world, kelp_scale, base_lean)
+			if _intersects_any(candidate_bounds, used_world_bounds):
+				blocked_source_x.append(surface_px.x)
+				continue
+
+			_create_kelp(
+				spire,
+				spire_index,
+				local_index,
+				surface_px,
+				anchor_world,
+				kelp_size,
+				kelp_scale,
+				base_lean
+			)
+
+			used_source_x.append(surface_px.x)
+			used_world_bounds.append(candidate_bounds)
+			created += 1
+			placed = true
+			break
+
+		if not placed:
+			# Better to leave one empty patch than create a visibly wrong overlap.
+			continue
 
 	return created
+
+
+func _create_kelp(
+	spire: Sprite2D,
+	spire_index: int,
+	local_index: int,
+	surface_px: Vector2,
+	anchor_world: Vector2,
+	kelp_size: Vector2,
+	kelp_scale: Vector2,
+	base_lean: float
+) -> void:
+	var pivot: Node2D = Node2D.new()
+	pivot.name = "KelpClusterPivot_%02d_%02d" % [spire_index, local_index]
+	pivot.position = anchor_world
+	pivot.z_index = 2
+	pivot.set_meta("grounded", true)
+	pivot.set_meta("grounding_method", "alpha_surface_profile_with_support_and_overlap_guard")
+	pivot.set_meta("rock_source_pixel", surface_px)
+	pivot.set_meta("source_spire", spire.name)
+	pivot.set_meta("base_rotation", base_lean)
+	pivot.set_meta("sway_phase", float(spire_index * 7 + local_index) * 1.19)
+	_terrain.add_child(pivot)
+
+	var sprite: Sprite2D = Sprite2D.new()
+	sprite.name = "KelpVisual"
+	sprite.texture = _kelp_texture
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.scale = kelp_scale
+
+	var kelp_base_rendered: Vector2 = _source_pixel_to_rendered_offset(
+		_kelp_base_source_px,
+		kelp_size,
+		kelp_scale
+	)
+	sprite.position = -kelp_base_rendered
+	sprite.modulate = KELP_TINT
+	pivot.add_child(sprite)
+
+	pivot.rotation = base_lean
+	_pivots.append(pivot)
 
 
 func _find_surface_near_ratio(
 	image: Image,
 	target_ratio: float,
 	global_top_y: int,
-	used_source_x: Array[float]
+	blocked_source_x: Array[float]
 ) -> Vector2:
 	var width: int = image.get_width()
 	if width <= 0:
@@ -233,12 +298,12 @@ func _find_surface_near_ratio(
 		if y < 0:
 			continue
 
-		# Explicit apex exclusion: no plant may sit on the candle-like summit.
+		# No candle-like summit placement.
 		if y < global_top_y + APEX_CLEARANCE_PX:
 			continue
 
 		var too_close: bool = false
-		for used_x: float in used_source_x:
+		for used_x: float in blocked_source_x:
 			if absf(float(x) - used_x) < MIN_SOURCE_X_SPACING_PX:
 				too_close = true
 				break
@@ -256,11 +321,16 @@ func _find_surface_near_ratio(
 		if roughness > MAX_LOCAL_ROUGHNESS_PX:
 			continue
 
+		# Critical fix: a thin opaque strand is not a valid rock foundation.
+		var support_fill: float = _support_fill_ratio(image, x, y)
+		if support_fill < MIN_SUPPORT_FILL_RATIO:
+			continue
+
 		var distance_penalty: float = absf(float(x - target_x)) * 2.0
 		var roughness_penalty: float = float(roughness) * 1.4
-		# Slight preference for lower shoulder points after the apex is excluded.
 		var lower_reward: float = float(y - global_top_y) * 0.08
-		var score: float = distance_penalty + roughness_penalty - lower_reward
+		var support_reward: float = support_fill * 24.0
+		var score: float = distance_penalty + roughness_penalty - lower_reward - support_reward
 
 		if score < best_score:
 			best_score = score
@@ -270,6 +340,79 @@ func _find_surface_near_ratio(
 	if best_x < 0:
 		return Vector2(-1.0, -1.0)
 	return Vector2(float(best_x) + 0.5, float(best_y) + 0.5)
+
+
+func _support_fill_ratio(image: Image, source_x: int, surface_y: int) -> float:
+	var width: int = image.get_width()
+	var height: int = image.get_height()
+	if width <= 0 or height <= 0:
+		return 0.0
+
+	var half_width: int = maxi(5, int(round(float(width) * SUPPORT_HALF_WIDTH_RATIO)))
+	var depth: int = maxi(16, int(round(float(height) * SUPPORT_DEPTH_RATIO)))
+	var min_x: int = clampi(source_x - half_width, 0, width - 1)
+	var max_x: int = clampi(source_x + half_width, 0, width - 1)
+	var min_y: int = clampi(surface_y + 2, 0, height - 1)
+	var max_y: int = clampi(surface_y + depth, 0, height - 1)
+
+	if max_x < min_x or max_y < min_y:
+		return 0.0
+
+	var opaque_count: int = 0
+	var total_count: int = 0
+	for y: int in range(min_y, max_y + 1):
+		for x: int in range(min_x, max_x + 1):
+			total_count += 1
+			if image.get_pixel(x, y).a >= ALPHA_THRESHOLD:
+				opaque_count += 1
+
+	if total_count <= 0:
+		return 0.0
+	return float(opaque_count) / float(total_count)
+
+
+func _kelp_world_bounds(anchor_world: Vector2, kelp_scale: Vector2, base_rotation: float) -> Rect2:
+	if _kelp_used_rect.size.x <= 0 or _kelp_used_rect.size.y <= 0:
+		var fallback_half_width: float = absf(kelp_scale.x) * 48.0
+		var fallback_height: float = absf(kelp_scale.y) * 160.0
+		return Rect2(
+			anchor_world - Vector2(fallback_half_width + KELP_WORLD_CLEARANCE_PX, fallback_height + KELP_WORLD_CLEARANCE_PX),
+			Vector2((fallback_half_width + KELP_WORLD_CLEARANCE_PX) * 2.0, fallback_height + KELP_WORLD_CLEARANCE_PX * 2.0)
+		)
+
+	var x0: float = float(_kelp_used_rect.position.x)
+	var y0: float = float(_kelp_used_rect.position.y)
+	var x1: float = float(_kelp_used_rect.position.x + _kelp_used_rect.size.x)
+	var y1: float = float(_kelp_used_rect.position.y + _kelp_used_rect.size.y)
+
+	var source_corners: Array[Vector2] = [
+		Vector2(x0, y0),
+		Vector2(x1, y0),
+		Vector2(x1, y1),
+		Vector2(x0, y1)
+	]
+
+	var min_world: Vector2 = Vector2(INF, INF)
+	var max_world: Vector2 = Vector2(-INF, -INF)
+
+	for source_corner: Vector2 in source_corners:
+		var from_root: Vector2 = source_corner - _kelp_base_source_px
+		var scaled: Vector2 = Vector2(from_root.x * kelp_scale.x, from_root.y * kelp_scale.y)
+		var world_point: Vector2 = anchor_world + scaled.rotated(base_rotation)
+		min_world.x = minf(min_world.x, world_point.x)
+		min_world.y = minf(min_world.y, world_point.y)
+		max_world.x = maxf(max_world.x, world_point.x)
+		max_world.y = maxf(max_world.y, world_point.y)
+
+	var clearance: Vector2 = Vector2(KELP_WORLD_CLEARANCE_PX, KELP_WORLD_CLEARANCE_PX)
+	return Rect2(min_world - clearance, (max_world - min_world) + clearance * 2.0)
+
+
+func _intersects_any(candidate: Rect2, used_bounds: Array[Rect2]) -> bool:
+	for used: Rect2 in used_bounds:
+		if candidate.intersects(used):
+			return true
+	return false
 
 
 func _find_global_top_y(image: Image) -> int:
