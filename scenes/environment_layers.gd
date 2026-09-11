@@ -1,16 +1,14 @@
 extends Node
 
 # TinyFisher katmanli dunya altyapisi.
-# 36 environment gorseli TEK TEK eklenecek.
-# Aktif: 1) sky_base_01.png  2) sun_01_TEMP.png  3) horizon_land_01.png
-#        4) ocean_surface_base_01.png  5) wave_back_01.png  6) wave_front_01.png
-#        7) surface_foam_01.png
+# Surface 1-7/36 burada tutulur. Harita sinirlari artik Water node'undan okunur;
+# eski 12000 px sabit dunya genisligi kullanilmaz.
 
 const ENV_ROOT_NAME: String = "EnvironmentLayers"
 const DECOR_SEED: int = 9042026
 const WATER_SURFACE_Y: float = 360.0
-const WORLD_LEFT_X: float = -1000.0
-const WORLD_RIGHT_X: float = 11000.0
+const FALLBACK_LEFT_X: float = -1000.0
+const FALLBACK_RIGHT_X: float = 4500.0
 
 const SKY_BOTTOM_CROP_PX: float = 14.0
 const SKY_WATER_OVERLAP_PX: float = 42.0
@@ -47,13 +45,11 @@ var _scene_id: int = 0
 var _world: Node2D = null
 var _environment_root: Node2D = null
 var _layers: Dictionary = {}
-var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_rng.seed = DECOR_SEED
-	print("ENVIRONMENT LAYERS V14: SURFACE FOAM 7/36")
+	print("ENVIRONMENT LAYERS V15: COMPACT MAP / SURFACE 7/36")
 
 
 func _process(_delta: float) -> void:
@@ -93,7 +89,9 @@ func _ensure_environment_layers() -> void:
 	_build_wave_back_only()
 	_build_wave_front_only()
 	_build_surface_foam_only()
-	print("ENVIRONMENT: 7/36 aktif")
+
+	var bounds: Vector2 = _world_bounds()
+	print("ENVIRONMENT: 7/36 aktif / bounds=", bounds.x, "..", bounds.y)
 
 
 func _prepare_base_layer_order() -> void:
@@ -131,10 +129,6 @@ func _build_layer_tree() -> void:
 	_register_layer("RuntimeDecor", _ensure_node2d(_environment_root, "RuntimeDecor", 0))
 
 
-# -----------------------------------------------------------------------------
-# GORSEL 1 / 36 - SKY
-# -----------------------------------------------------------------------------
-
 func _build_sky_only() -> void:
 	var layer: Node2D = get_layer("SkyBaseLayer")
 	if layer == null or layer.get_node_or_null("SkyBaseArt") != null:
@@ -163,10 +157,6 @@ func _build_sky_only() -> void:
 	_add_tiled_strip(root, cropped_texture, scale_factor, center_y, null, 1.0)
 
 
-# -----------------------------------------------------------------------------
-# GORSEL 2 / 36 - SUN
-# -----------------------------------------------------------------------------
-
 func _build_sun_only() -> void:
 	var layer: Node2D = get_layer("SunLayer")
 	if layer == null or layer.get_node_or_null("SunArt") != null:
@@ -184,16 +174,12 @@ func _build_sun_only() -> void:
 	var sprite: Sprite2D = Sprite2D.new()
 	sprite.name = "SunArt"
 	sprite.texture = texture
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	sprite.position = Vector2(1060.0, 235.0)
 	sprite.scale = Vector2.ONE * fit_scale
 	sprite.modulate = Color(1.0, 1.0, 1.0, 0.94)
 	layer.add_child(sprite)
 
-
-# -----------------------------------------------------------------------------
-# GORSEL 3 / 36 - HORIZON LAND
-# -----------------------------------------------------------------------------
 
 func _build_horizon_only() -> void:
 	var layer: Node2D = get_layer("HorizonLandLayer")
@@ -217,10 +203,6 @@ func _build_horizon_only() -> void:
 	var center_y: float = WATER_SURFACE_Y - target_height * 0.5 + 22.0
 	_add_tiled_strip(root, texture, scale_factor, center_y, null, 1.0, Color(0.78, 0.80, 0.92, 0.82))
 
-
-# -----------------------------------------------------------------------------
-# GORSEL 4 / 36 - OCEAN SURFACE BASE
-# -----------------------------------------------------------------------------
 
 func _build_ocean_surface_only() -> void:
 	var layer: Node2D = get_layer("OceanSurfaceLayer")
@@ -254,22 +236,19 @@ func _build_ocean_surface_only() -> void:
 	var fade_material: ShaderMaterial = ShaderMaterial.new()
 	fade_material.shader = fade_shader
 
-	var world_width: float = WORLD_RIGHT_X - WORLD_LEFT_X
+	var bounds: Vector2 = _world_bounds()
+	var world_width: float = bounds.y - bounds.x
 	var target_height: float = 44.0
 
 	var sprite: Sprite2D = Sprite2D.new()
 	sprite.name = "OceanSurfaceSingleStrip"
 	sprite.texture = texture
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	sprite.material = fade_material
-	sprite.position = Vector2(WORLD_LEFT_X + world_width * 0.5, WATER_SURFACE_Y + target_height * 0.5)
+	sprite.position = Vector2(bounds.x + world_width * 0.5, WATER_SURFACE_Y + target_height * 0.5)
 	sprite.scale = Vector2(world_width / texture_size.x, target_height / texture_size.y)
 	root.add_child(sprite)
 
-
-# -----------------------------------------------------------------------------
-# GORSEL 5 / 36 - WAVE BACK
-# -----------------------------------------------------------------------------
 
 func _build_wave_back_only() -> void:
 	var layer: Node2D = get_layer("WaveBackLayer")
@@ -288,30 +267,26 @@ func _build_wave_back_only() -> void:
 	root.name = "WaveBackArt"
 	layer.add_child(root)
 
+	var bounds: Vector2 = _world_bounds()
 	var target_height: float = 30.0
 	var y_scale: float = target_height / texture_size.y
 	var tile_width: float = texture_size.x
 	var center_y: float = WATER_SURFACE_Y - 7.0
-	var x: float = WORLD_LEFT_X + tile_width * 0.5
+	var x: float = bounds.x + tile_width * 0.5
 	var tile_index: int = 0
 
-	while x < WORLD_RIGHT_X + tile_width * 0.5:
+	while x < bounds.y + tile_width * 0.5:
 		var sprite: Sprite2D = Sprite2D.new()
 		sprite.name = "WaveBack_%02d" % tile_index
 		sprite.texture = texture
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		sprite.position = Vector2(x, center_y)
 		sprite.scale = Vector2(-1.0 if tile_index % 2 == 1 else 1.0, y_scale)
 		sprite.modulate = Color(0.84, 0.94, 1.0, 0.34)
 		root.add_child(sprite)
-
-		x += tile_width - 2.0
+		x += maxf(tile_width - 2.0, 1.0)
 		tile_index += 1
 
-
-# -----------------------------------------------------------------------------
-# GORSEL 6 / 36 - WAVE FRONT
-# -----------------------------------------------------------------------------
 
 func _build_wave_front_only() -> void:
 	var layer: Node2D = get_layer("WaveFrontLayer")
@@ -330,31 +305,27 @@ func _build_wave_front_only() -> void:
 	root.name = "WaveFrontArt"
 	layer.add_child(root)
 
+	var bounds: Vector2 = _world_bounds()
 	var target_height: float = 24.0
 	var x_scale: float = 1.10
 	var y_scale: float = target_height / texture_size.y
 	var tile_width: float = texture_size.x * x_scale
 	var center_y: float = WATER_SURFACE_Y + 5.0
-	var x: float = WORLD_LEFT_X + tile_width * 0.5
+	var x: float = bounds.x + tile_width * 0.5
 	var tile_index: int = 0
 
-	while x < WORLD_RIGHT_X + tile_width * 0.5:
+	while x < bounds.y + tile_width * 0.5:
 		var sprite: Sprite2D = Sprite2D.new()
 		sprite.name = "WaveFront_%02d" % tile_index
 		sprite.texture = texture
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		sprite.position = Vector2(x, center_y)
 		sprite.scale = Vector2((-x_scale) if tile_index % 2 == 1 else x_scale, y_scale)
 		sprite.modulate = Color(0.90, 0.98, 1.0, 0.46)
 		root.add_child(sprite)
-
-		x += tile_width - 3.0
+		x += maxf(tile_width - 3.0, 1.0)
 		tile_index += 1
 
-
-# -----------------------------------------------------------------------------
-# GORSEL 7 / 36 - SURFACE FOAM
-# -----------------------------------------------------------------------------
 
 func _build_surface_foam_only() -> void:
 	var layer: Node2D = get_layer("SurfaceFoamLayer")
@@ -365,27 +336,7 @@ func _build_surface_foam_only() -> void:
 	if source_texture == null:
 		return
 
-	var texture_size: Vector2 = source_texture.get_size()
-	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
-		return
-
-	# Yatay genisligin tamami korunur. Sadece PNG icindeki bos ust/alt alan kirpilir;
-	# boylece onceki deniz dokusunda yasanan kisa-tekrar sorunu burada olusmaz.
-	var foam_texture: Texture2D = source_texture
-	var source_image: Image = source_texture.get_image()
-	if source_image != null and not source_image.is_empty():
-		var used_rect: Rect2i = source_image.get_used_rect()
-		if used_rect.size.y > 0 and used_rect.size.y < int(texture_size.y):
-			var cropped_texture: AtlasTexture = AtlasTexture.new()
-			cropped_texture.atlas = source_texture
-			cropped_texture.region = Rect2(
-				0.0,
-				float(used_rect.position.y),
-				texture_size.x,
-				float(used_rect.size.y)
-			)
-			foam_texture = cropped_texture
-
+	var foam_texture: Texture2D = _crop_to_used_alpha(source_texture)
 	var foam_size: Vector2 = foam_texture.get_size()
 	if foam_size.x <= 0.0 or foam_size.y <= 0.0:
 		return
@@ -394,27 +345,25 @@ func _build_surface_foam_only() -> void:
 	root.name = "SurfaceFoamArt"
 	layer.add_child(root)
 
-	# Kopuk ana beyaz hareketli dalganin hemen altinda, ince ve hafif kalir.
-	# 2048 px'lik uzun parcalar kullanildigi icin ekranda kisa desen tekrari gorunmez.
+	var bounds: Vector2 = _world_bounds()
 	var target_height: float = 16.0
 	var x_scale: float = 1.08
 	var y_scale: float = target_height / foam_size.y
 	var tile_width: float = foam_size.x * x_scale
 	var center_y: float = WATER_SURFACE_Y + 7.0
-	var x: float = WORLD_LEFT_X + tile_width * 0.5
+	var x: float = bounds.x + tile_width * 0.5
 	var tile_index: int = 0
 
-	while x < WORLD_RIGHT_X + tile_width * 0.5:
+	while x < bounds.y + tile_width * 0.5:
 		var sprite: Sprite2D = Sprite2D.new()
 		sprite.name = "SurfaceFoam_%02d" % tile_index
 		sprite.texture = foam_texture
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		sprite.position = Vector2(x, center_y)
 		sprite.scale = Vector2((-x_scale) if tile_index % 2 == 1 else x_scale, y_scale)
 		sprite.modulate = Color(0.96, 1.0, 1.0, 0.52)
 		root.add_child(sprite)
-
-		x += tile_width - 3.0
+		x += maxf(tile_width - 3.0, 1.0)
 		tile_index += 1
 
 
@@ -431,32 +380,65 @@ func _add_tiled_strip(
 	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
 		return
 
+	var bounds: Vector2 = _world_bounds()
 	var tile_width: float = maxf(texture_size.x * scale_factor, 1.0)
 	var step_width: float = maxf(tile_width - overlap_px, 1.0)
-	var x: float = WORLD_LEFT_X + tile_width * 0.5
+	var x: float = bounds.x + tile_width * 0.5
 	var tile_index: int = 0
 
-	while x < WORLD_RIGHT_X + tile_width:
+	while x < bounds.y + tile_width:
 		var sprite: Sprite2D = Sprite2D.new()
 		sprite.name = "Tile_%02d" % tile_index
 		sprite.texture = texture
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		sprite.position = Vector2(x, center_y)
 		sprite.scale = Vector2.ONE * scale_factor
 		sprite.modulate = tint
 		if material != null:
 			sprite.material = material
 		root.add_child(sprite)
-
 		x += step_width
 		tile_index += 1
+
+
+func _crop_to_used_alpha(source_texture: Texture2D) -> Texture2D:
+	var source_size: Vector2 = source_texture.get_size()
+	var source_image: Image = source_texture.get_image()
+	if source_image == null or source_image.is_empty():
+		return source_texture
+
+	var used_rect: Rect2i = source_image.get_used_rect()
+	if used_rect.size.x <= 0 or used_rect.size.y <= 0:
+		return source_texture
+	if used_rect.size.x >= int(source_size.x) and used_rect.size.y >= int(source_size.y):
+		return source_texture
+
+	var cropped: AtlasTexture = AtlasTexture.new()
+	cropped.atlas = source_texture
+	cropped.region = Rect2(
+		float(used_rect.position.x),
+		float(used_rect.position.y),
+		float(used_rect.size.x),
+		float(used_rect.size.y)
+	)
+	return cropped
+
+
+func _world_bounds() -> Vector2:
+	if _world != null:
+		var water: Control = _world.get_node_or_null("Water") as Control
+		if water != null:
+			var left: float = water.position.x
+			var right: float = water.position.x + water.size.x
+			if right - left >= 1280.0:
+				return Vector2(left, right)
+	return Vector2(FALLBACK_LEFT_X, FALLBACK_RIGHT_X)
 
 
 func _load_texture(path: String) -> Texture2D:
 	if not ResourceLoader.exists(path):
 		push_warning("ENVIRONMENT asset bulunamadi: " + path)
 		return null
-
 	var texture: Texture2D = load(path) as Texture2D
 	if texture == null:
 		push_warning("ENVIRONMENT texture yuklenemedi: " + path)
@@ -517,9 +499,9 @@ func get_zone_depth_range(zone: String) -> Vector2:
 		ZONE_DEEP:
 			return Vector2(50.0, 80.0)
 		ZONE_ABYSS:
-			return Vector2(80.0, 100.0)
+			return Vector2(80.0, 140.0)
 		_:
-			return Vector2(0.0, 100.0)
+			return Vector2(0.0, 140.0)
 
 
 func get_zone_density(zone: String) -> float:
@@ -543,7 +525,8 @@ func make_deterministic_rng(salt: int = 0) -> RandomNumberGenerator:
 
 
 func get_safe_horizontal_spawn_range() -> Vector2:
-	return Vector2(1400.0, WORLD_RIGHT_X - 300.0)
+	var bounds: Vector2 = _world_bounds()
+	return Vector2(maxf(bounds.x + 1400.0, bounds.x), bounds.y - 300.0)
 
 
 func get_surface_y() -> float:
