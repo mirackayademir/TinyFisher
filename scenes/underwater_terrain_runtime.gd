@@ -2,19 +2,19 @@ extends Node
 
 # TinyFisher grounded canyon compositor.
 #
-# V23 deliberately removes the old "rock at an approximate depth" layout.
-# Every visible canyon formation is now placed from exact world/depth math:
-# - X positions are on a fixed 2200 px grid across the real Water bounds.
-# - Tall canyon rocks are scaled uniformly from their source aspect ratio.
-# - Their BOTTOM edge is locked to the same seabed line.
-# - No upper/mid-water rocks are spawned, so nothing can float in open water.
-# - Horizontal occupied intervals are checked before any secondary floor rock
-#   is added, so separate rock sprites cannot intersect each other.
+# V24 keeps the exact grounded canyon layout from V23 and adds the next
+# approved environment asset: shallow_kelp_01.png.
 #
-# This is visual terrain only; it intentionally has no collision yet.
+# Important placement rule:
+# - The current map has no real solid 0-20 m shelf yet.
+# - Kelp is therefore NOT allowed to float in the shallow-water band.
+# - It is attached only to the highest existing solid canyon ledges.
+# - Each kelp pivot is anchored at its base, so sway animation cannot detach
+#   the plant from the rock surface.
+# - No collision is added; this remains visual terrain/decor only.
 
 const TERRAIN_NODE_NAME := "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION := 23
+const LAYOUT_VERSION := 24
 
 const TOP_M := 20.0
 const BOTTOM_M := 100.0
@@ -37,10 +37,18 @@ const MIN_HORIZONTAL_GAP := 90.0
 
 const ROCK_TALL := "res://assets/environment/deep_sea/deep_sea_rock_01.png"
 const ROCK_FLOOR := "res://assets/environment/deep_sea/deep_sea_rock_02.png"
+const KELP_TEXTURE := "res://assets/environment/shallow/shallow_kelp_01.png"
 
 # Top edge of each seabed-connected spire. The pattern repeats across X.
 # These are not sprite center depths: they are the exact desired TOP depth.
 const SPIRE_TOP_DEPTH_PATTERN := [44.0, 48.0, 52.0, 46.0, 50.0, 45.0]
+
+# The map currently has no grounded 0-20 m shelf. Only the highest existing
+# ledges are eligible for kelp, so the shallow asset never floats in blue water.
+const KELP_MAX_LEDGE_DEPTH_M := 48.0
+const KELP_TARGET_HEIGHT_PATTERN := [155.0, 132.0, 146.0, 125.0]
+const KELP_SWAY_SPEED := 0.85
+const KELP_SWAY_RADIANS := 0.035
 
 var _scene_id := 0
 var _world: Node2D = null
@@ -51,14 +59,16 @@ var _last_right := INF
 
 var _textures: Dictionary = {}
 var _occupied_x: Array[Vector2] = []
+var _kelp_pivots: Array[Node2D] = []
+var _kelp_time := 0.0
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V23: GROUNDED CANYON / NO FLOATING ROCKS / NO OVERLAP")
+	print("UNDERWATER TERRAIN V24: GROUNDED CANYON + GROUNDED KELP / NO FLOATING DECOR")
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
 		_reset()
@@ -71,6 +81,8 @@ func _process(_delta: float) -> void:
 		_last_ppm = -1.0
 		_last_left = INF
 		_last_right = INF
+		_kelp_pivots.clear()
+		_kelp_time = 0.0
 
 	if _world == null:
 		return
@@ -80,12 +92,12 @@ func _process(_delta: float) -> void:
 
 	if not is_instance_valid(_root):
 		_rebuild_terrain(bounds, ppm)
-		return
-
-	if not is_equal_approx(bounds.x, _last_left) \
+	elif not is_equal_approx(bounds.x, _last_left) \
 	or not is_equal_approx(bounds.y, _last_right) \
 	or not is_equal_approx(ppm, _last_ppm):
 		_rebuild_terrain(bounds, ppm)
+
+	_animate_kelp(delta)
 
 
 func _reset() -> void:
@@ -96,6 +108,8 @@ func _reset() -> void:
 	_last_left = INF
 	_last_right = INF
 	_occupied_x.clear()
+	_kelp_pivots.clear()
+	_kelp_time = 0.0
 
 
 func _rebuild_terrain(bounds: Vector2, ppm: float) -> void:
@@ -116,24 +130,28 @@ func _rebuild_terrain(bounds: Vector2, ppm: float) -> void:
 	_root.set_meta("depth_top_m", TOP_M)
 	_root.set_meta("depth_bottom_m", BOTTOM_M)
 	_root.set_meta("terrain_source", "grounded_hq_png_canyon")
+	_root.set_meta("environment_asset_kelp", true)
 	_world.add_child(_root)
 
 	_occupied_x.clear()
+	_kelp_pivots.clear()
 	_build_seabed_mass(bounds)
 	_build_grounded_spires(bounds)
 	_build_floor_detail(bounds)
+	_build_grounded_kelp(bounds)
 
 	_last_left = bounds.x
 	_last_right = bounds.y
 	_last_ppm = ppm
 
 	print(
-		"HQ CANYON GROUNDED: V%d / X %.0f..%.0f / %.2f px-m / spires=%d" % [
+		"HQ CANYON GROUNDED: V%d / X %.0f..%.0f / %.2f px-m / terrain=%d / kelp=%d" % [
 			LAYOUT_VERSION,
 			bounds.x,
 			bounds.y,
 			ppm,
-			_occupied_x.size()
+			_occupied_x.size(),
+			_kelp_pivots.size()
 		]
 	)
 
@@ -142,7 +160,7 @@ func _cache_textures() -> void:
 	if not _textures.is_empty():
 		return
 
-	for path_variant in [ROCK_TALL, ROCK_FLOOR]:
+	for path_variant in [ROCK_TALL, ROCK_FLOOR, KELP_TEXTURE]:
 		var path := String(path_variant)
 		var texture := load(path) as Texture2D
 		if texture != null and texture.get_width() > 0 and texture.get_height() > 0:
@@ -275,6 +293,78 @@ func _build_floor_detail(bounds: Vector2) -> void:
 
 		x += SPIRE_SPACING_X
 		index += 1
+
+
+func _build_grounded_kelp(bounds: Vector2) -> void:
+	var texture: Texture2D = _textures.get(KELP_TEXTURE) as Texture2D
+	if texture == null:
+		push_warning("Kelp texture bulunamadi; terrain kelpsiz devam ediyor.")
+		return
+
+	var source_size := texture.get_size()
+	if source_size.x <= 0.0 or source_size.y <= 0.0:
+		return
+
+	var x := bounds.x + FIRST_SPIRE_OFFSET_X
+	var spire_index := 0
+	var kelp_index := 0
+
+	while x <= bounds.y:
+		var top_depth := float(SPIRE_TOP_DEPTH_PATTERN[spire_index % SPIRE_TOP_DEPTH_PATTERN.size()])
+
+		# Only the highest solid ledges receive this asset. We intentionally do not
+		# fake a shallow floor just to place kelp at 0-20 m.
+		if top_depth <= KELP_MAX_LEDGE_DEPTH_M:
+			var anchor_y := _world_y_for_depth(top_depth) + 7.0
+			var target_height := float(
+				KELP_TARGET_HEIGHT_PATTERN[kelp_index % KELP_TARGET_HEIGHT_PATTERN.size()]
+			)
+			var scale_factor := target_height / source_size.y
+
+			var pivot := Node2D.new()
+			pivot.name = "GroundedKelpPivot_%02d" % kelp_index
+			pivot.position = Vector2(x, anchor_y)
+			pivot.z_index = 2
+			pivot.set_meta("grounded", true)
+			pivot.set_meta("anchor_depth_m", top_depth)
+			pivot.set_meta("environment_asset", "shallow_kelp_01.png")
+			pivot.set_meta("sway_phase", float(kelp_index) * 1.73)
+			_root.add_child(pivot)
+
+			# Sprite origin sits half a rendered plant above the pivot, making the
+			# pivot itself the root/base of the kelp. Rotation therefore never makes
+			# the root slide away from the rock.
+			var sprite := Sprite2D.new()
+			sprite.name = "KelpVisual"
+			sprite.texture = texture
+			sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			sprite.position = Vector2(0.0, -target_height * 0.5)
+			sprite.scale = Vector2(
+				-scale_factor if kelp_index % 2 == 1 else scale_factor,
+				scale_factor
+			)
+			sprite.modulate = Color(0.62, 0.84, 0.78, 0.88)
+			pivot.add_child(sprite)
+
+			_kelp_pivots.append(pivot)
+			kelp_index += 1
+
+		x += SPIRE_SPACING_X
+		spire_index += 1
+
+
+func _animate_kelp(delta: float) -> void:
+	if _kelp_pivots.is_empty():
+		return
+
+	_kelp_time += delta
+
+	for pivot in _kelp_pivots:
+		if not is_instance_valid(pivot):
+			continue
+
+		var phase := float(pivot.get_meta("sway_phase", 0.0))
+		pivot.rotation = sin(_kelp_time * KELP_SWAY_SPEED + phase) * KELP_SWAY_RADIANS
 
 
 func _reserve_interval(interval: Vector2) -> bool:
