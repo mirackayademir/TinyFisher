@@ -2,9 +2,9 @@
 extends Node2D
 
 # Editor preview V32.
-# Shows the exact final transparent HQ canyon used at runtime.
-# Environment asset 9/36 is intentionally disabled while canyon integration is
-# visually approved, so no extra rock can hide or distort the base-art review.
+# Shows the exact final transparent Q95 WebP canyon reconstructed by the shared
+# chunk loader. Environment asset 9/36 is intentionally disabled while canyon
+# integration is visually approved, so no extra rock can hide the base-art review.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
@@ -64,12 +64,12 @@ func _rebuild_preview() -> void:
 	if _terrain_texture == null:
 		_terrain_texture = CanyonTextureLoader.build_texture()
 	if _terrain_texture == null:
-		push_warning("Editor FINAL HQ canyon preview olusturulamadi.")
+		push_warning("Editor FINAL Q95 canyon preview olusturulamadi.")
 		return
 
 	_source_region = CanyonTextureLoader.visible_region(_terrain_texture)
 	if _source_region.size.x <= 0.0 or _source_region.size.y <= 0.0:
-		push_warning("Editor FINAL HQ canyon visible region gecersiz.")
+		push_warning("Editor FINAL Q95 canyon visible region gecersiz.")
 		return
 
 	_preview_root = Node2D.new()
@@ -104,7 +104,7 @@ func _rebuild_preview() -> void:
 	sprite.z_index = TERRAIN_Z
 	_preview_root.add_child(sprite, false, Node.INTERNAL_MODE_BACK)
 
-	_preview_root.set_meta("preview_source", "final_hq_transparent_png")
+	_preview_root.set_meta("preview_source", "final_q95_webp_chunks")
 	_preview_root.set_meta("depth_top_m", TOP_M)
 	_preview_root.set_meta("depth_bottom_m", bottom_m)
 	_preview_root.set_meta("world_y_top", top_y)
@@ -118,7 +118,7 @@ func _rebuild_preview() -> void:
 	_preview_root.set_meta("compact_map_width_px", MAP_WIDTH_PX)
 
 	print(
-		"EDITOR CANYON V32 FINAL HQ: compact=", snappedf(world_width, 1.0),
+		"EDITOR CANYON V32 FINAL Q95: compact=", snappedf(world_width, 1.0),
 		"px top=", TOP_M,
 		"m bottom=", snappedf(bottom_m, 0.1),
 		"m source=", _source_region.size,
