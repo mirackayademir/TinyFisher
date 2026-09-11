@@ -154,8 +154,19 @@ func _pixels_per_meter() -> float:
 	if hook == null:
 		return FALLBACK_PPM
 
-	var max_depth_pixels: float = float(hook.get("max_depth"))
-	var max_depth_meters: float = float(hook.get("max_depth_meters"))
+	var pixels_variant: Variant = hook.get("max_depth")
+	var meters_variant: Variant = hook.get("max_depth_meters")
+
+	if not (pixels_variant is int or pixels_variant is float):
+		return FALLBACK_PPM
+	if not (meters_variant is int or meters_variant is float):
+		return FALLBACK_PPM
+
+	# Adding 0.0 converts either numeric Variant to a float without calling the
+	# float() constructor, which is not available in this Godot editor build.
+	var max_depth_pixels = pixels_variant + 0.0
+	var max_depth_meters = meters_variant + 0.0
+
 	if max_depth_pixels <= 0.0 or max_depth_meters <= 0.0:
 		return FALLBACK_PPM
 	return max_depth_pixels / max_depth_meters
