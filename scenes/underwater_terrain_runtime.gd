@@ -24,7 +24,6 @@ const FALLBACK_RIGHT := 11000.0
 const FALLBACK_PPM := 34.5
 const FALLBACK_ZERO_Y := 392.6
 
-# Water is -9. Keep the canyon above the water shader and behind gameplay.
 const TERRAIN_Z := -4
 
 const SPIRE_SPACING_X := 2200.0
@@ -35,19 +34,13 @@ const ROCK_TALL := "res://assets/environment/deep_sea/deep_sea_rock_01.png"
 const ROCK_FLOOR := "res://assets/environment/deep_sea/deep_sea_rock_02.png"
 const KELP_TEXTURE := "res://assets/environment/shallow/shallow_kelp_01.png"
 
-# Top edge of each sprite rectangle. Visible rock pixels are calculated from
-# alpha and are NOT assumed to live on this rectangle edge.
 const SPIRE_TOP_DEPTH_PATTERN := [44.0, 48.0, 52.0, 46.0, 50.0, 45.0]
 
-# There is still no real 0-20 m solid shelf. Only the highest existing canyon
-# formations receive kelp for now.
 const KELP_MAX_LEDGE_DEPTH_M := 48.0
 const KELP_TARGET_HEIGHT_PATTERN := [155.0, 132.0, 146.0, 125.0]
 const KELP_SWAY_SPEED := 0.85
 const KELP_SWAY_RADIANS := 0.035
 
-# Alpha geometry settings. Pixels below this threshold are treated as
-# transparent so anti-aliased fringe pixels do not become fake support points.
 const ALPHA_THRESHOLD := 0.18
 const ROCK_SCAN_MIN_X_RATIO := 0.16
 const ROCK_SCAN_MAX_X_RATIO := 0.84
@@ -67,8 +60,6 @@ var _occupied_x: Array[Vector2] = []
 var _kelp_pivots: Array[Node2D] = []
 var _kelp_time := 0.0
 
-# Cached source-pixel anchors. These are actual visible alpha pixels, not
-# guessed world/depth coordinates.
 var _rock_surface_source_px := Vector2(-1.0, -1.0)
 var _kelp_base_source_px := Vector2(-1.0, -1.0)
 
@@ -382,8 +373,6 @@ func _build_grounded_kelp(bounds: Vector2) -> void:
 				sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 				sprite.scale = kelp_scale
 
-				# Shift the sprite so its REAL bottom opaque/root pixel lands exactly on
-				# the pivot. This removes all transparent PNG bottom padding mathematically.
 				var kelp_base_rendered := _source_pixel_to_rendered_offset(
 					_kelp_base_source_px,
 					kelp_size,
@@ -401,51 +390,48 @@ func _build_grounded_kelp(bounds: Vector2) -> void:
 
 
 func _find_stable_rock_surface_pixel(image: Image) -> Vector2:
-	var width := image.get_width()
-	var height := image.get_height()
+	var width: int = image.get_width()
+	var height: int = image.get_height()
 	if width <= 0 or height <= 0:
 		return Vector2(-1.0, -1.0)
 
-	var min_x := clampi(int(round(float(width) * ROCK_SCAN_MIN_X_RATIO)), 0, width - 1)
-	var max_x := clampi(int(round(float(width) * ROCK_SCAN_MAX_X_RATIO)), 0, width - 1)
-	var window := maxi(4, int(round(float(width) * ROCK_SURFACE_WINDOW_RATIO)))
+	var min_x: int = clampi(int(round(float(width) * ROCK_SCAN_MIN_X_RATIO)), 0, width - 1)
+	var max_x: int = clampi(int(round(float(width) * ROCK_SCAN_MAX_X_RATIO)), 0, width - 1)
+	var window: int = maxi(4, int(round(float(width) * ROCK_SURFACE_WINDOW_RATIO)))
 
-	var best_x := -1
-	var best_y := -1
-	var best_score := INF
+	var best_x: int = -1
+	var best_y: int = -1
+	var best_score: float = INF
 
-	# Pick a high but locally stable opaque surface point. We intentionally avoid
-	# a lone spike/anti-alias pixel by comparing neighboring surface columns.
 	for x in range(min_x, max_x + 1, 2):
-		var y := _top_opaque_y(image, x)
+		var y: int = _top_opaque_y(image, x)
 		if y < 0:
 			continue
 
-		var left_x := clampi(x - window, 0, width - 1)
-		var right_x := clampi(x + window, 0, width - 1)
-		var left_y := _top_opaque_y(image, left_x)
-		var right_y := _top_opaque_y(image, right_x)
+		var left_x: int = clampi(x - window, 0, width - 1)
+		var right_x: int = clampi(x + window, 0, width - 1)
+		var left_y: int = _top_opaque_y(image, left_x)
+		var right_y: int = _top_opaque_y(image, right_x)
 		if left_y < 0 or right_y < 0:
 			continue
 
-		var roughness := maxi(abs(y - left_y), abs(y - right_y))
+		var roughness: int = maxi(absi(y - left_y), absi(y - right_y))
 		if roughness > ROCK_MAX_LOCAL_ROUGHNESS_PX:
 			continue
 
-		var slope_penalty := float(abs(right_y - left_y)) * 2.5
-		var roughness_penalty := float(roughness) * 4.0
-		var center_penalty := abs(float(x) - float(width) * 0.5) * 0.035
-		var score := float(y) + slope_penalty + roughness_penalty + center_penalty
+		var slope_penalty: float = float(absi(right_y - left_y)) * 2.5
+		var roughness_penalty: float = float(roughness) * 4.0
+		var center_penalty: float = absf(float(x) - float(width) * 0.5) * 0.035
+		var score: float = float(y) + slope_penalty + roughness_penalty + center_penalty
 
 		if score < best_score:
 			best_score = score
 			best_x = x
 			best_y = y
 
-	# Fallback still uses a real alpha pixel; never a guessed depth coordinate.
 	if best_x < 0:
 		for x in range(min_x, max_x + 1):
-			var y := _top_opaque_y(image, x)
+			var y: int = _top_opaque_y(image, x)
 			if y >= 0 and (best_y < 0 or y < best_y):
 				best_x = x
 				best_y = y
@@ -453,7 +439,6 @@ func _find_stable_rock_surface_pixel(image: Image) -> Vector2:
 	if best_x < 0 or best_y < 0:
 		return Vector2(-1.0, -1.0)
 
-	# Pixel-center coordinates are used for exact Sprite2D transform math.
 	return Vector2(float(best_x) + 0.5, float(best_y) + 0.5)
 
 
@@ -477,8 +462,6 @@ func _find_kelp_base_pixel(image: Image) -> Vector2:
 	if bottom_y < 0:
 		return Vector2(-1.0, -1.0)
 
-	# Average the opaque root pixels across the last few real rows. This gives the
-	# actual visual root center even if the PNG has asymmetric transparent padding.
 	var start_y := maxi(0, bottom_y - KELP_BASE_SAMPLE_ROWS + 1)
 	var x_sum := 0.0
 	var count := 0
@@ -510,8 +493,6 @@ func _source_pixel_to_rendered_offset(
 	texture_size: Vector2,
 	sprite_scale: Vector2
 ) -> Vector2:
-	# Sprite2D is centered by default. source_pixel is already a pixel-center
-	# coordinate, therefore this maps the exact source pixel through scale/flip.
 	var centered := source_pixel - texture_size * 0.5
 	return Vector2(centered.x * sprite_scale.x, centered.y * sprite_scale.y)
 
