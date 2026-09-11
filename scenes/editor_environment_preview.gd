@@ -1,20 +1,22 @@
 @tool
 extends Node2D
 
-# Editor-only preview of the exact HQ canyon used by underwater_terrain_runtime.gd.
-# The texture is rebuilt from the same verified lossless chunks, so editor and
-# gameplay can no longer disagree because of a broken standalone WebP file.
+# Editor preview of the exact runtime canyon layout.
+# V28 keeps the canyon aspect ratio locked, uses the same fixed 34.5 px/m world
+# scale as runtime and calculates the natural bottom depth from the real Water
+# width. The generated dark-water extension is editor-only; runtime extends the
+# real Water node itself.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
 const PREVIEW_ROOT_NAME: String = "__GeneratedEnvironmentPreview"
 const TOP_M: float = 20.0
-const BOTTOM_M: float = 100.0
+const WORLD_PIXELS_PER_METER: float = 34.5
 const FALLBACK_LEFT: float = -1000.0
 const FALLBACK_RIGHT: float = 11000.0
-const FALLBACK_PPM: float = 34.5
 const FALLBACK_ZERO_Y: float = 392.6
 const TERRAIN_Z: int = -7
+const DEEP_WATER_MARGIN_PX: float = 700.0
 
 @export var show_preview: bool = true
 @export var show_editor_depth_band: bool = true
@@ -62,7 +64,7 @@ func _rebuild_preview() -> void:
 	if _terrain_texture == null:
 		_terrain_texture = CanyonTextureLoader.build_texture()
 	if _terrain_texture == null:
-		push_warning("Editor HQ canyon preview lossless parcalardan olusturulamadi.")
+		push_warning("Editor HQ canyon preview olusturulamadi.")
 		return
 
 	_source_region = CanyonTextureLoader.visible_region(_terrain_texture)
@@ -77,10 +79,13 @@ func _rebuild_preview() -> void:
 
 	var bounds: Vector2 = _world_bounds()
 	var top_y: float = _world_y_for_depth(TOP_M)
-	var bottom_y: float = _world_y_for_depth(BOTTOM_M)
 	var world_width: float = maxf(bounds.y - bounds.x, 1.0)
-	var world_height: float = maxf(bottom_y - top_y, 1.0)
+	var uniform_scale: float = world_width / _source_region.size.x
+	var world_height: float = _source_region.size.y * uniform_scale
+	var bottom_y: float = top_y + world_height
+	var bottom_m: float = TOP_M + (world_height / WORLD_PIXELS_PER_METER)
 
+	_build_editor_deep_water(bounds, bottom_y + DEEP_WATER_MARGIN_PX)
 	if show_editor_depth_band:
 		_build_editor_depth_band(bounds, top_y, bottom_y)
 
@@ -94,21 +99,29 @@ func _rebuild_preview() -> void:
 	sprite.texture = atlas
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	sprite.position = Vector2(bounds.x, top_y)
-	sprite.scale = Vector2(
-		world_width / _source_region.size.x,
-		world_height / _source_region.size.y
-	)
+	sprite.scale = Vector2(uniform_scale, uniform_scale)
 	sprite.z_as_relative = false
 	sprite.z_index = TERRAIN_Z
 	_preview_root.add_child(sprite, false, Node.INTERNAL_MODE_BACK)
 
-	_preview_root.set_meta("preview_source", "verified_hq_lossless_chunks")
-	_preview_root.set_meta("world_y_20m", top_y)
-	_preview_root.set_meta("world_y_100m", bottom_y)
+	_preview_root.set_meta("preview_source", "verified_v15_hq_lanczos")
+	_preview_root.set_meta("depth_top_m", TOP_M)
+	_preview_root.set_meta("depth_bottom_m", bottom_m)
+	_preview_root.set_meta("world_y_top", top_y)
+	_preview_root.set_meta("world_y_bottom", bottom_y)
 	_preview_root.set_meta("map_left_x", bounds.x)
 	_preview_root.set_meta("map_right_x", bounds.y)
 	_preview_root.set_meta("source_region", _source_region)
 	_preview_root.set_meta("fit_scale", sprite.scale)
+	_preview_root.set_meta("aspect_locked", true)
+	_preview_root.set_meta("world_pixels_per_meter", WORLD_PIXELS_PER_METER)
+
+	print(
+		"EDITOR CANYON V28: top=", TOP_M,
+		"m bottom=", snappedf(bottom_m, 0.1),
+		"m texture=", _source_region.size,
+		" scale=", snappedf(uniform_scale, 0.001)
+	)
 
 
 func _clear_preview() -> void:
@@ -118,9 +131,36 @@ func _clear_preview() -> void:
 	_preview_root = null
 
 
+func _build_editor_deep_water(bounds: Vector2, required_bottom_y: float) -> void:
+	var world: Node = get_parent()
+	if world == null:
+		return
+
+	var water: Control = world.get_node_or_null("Water") as Control
+	if water == null:
+		return
+
+	var existing_bottom_y: float = water.position.y + water.size.y
+	if existing_bottom_y >= required_bottom_y:
+		return
+
+	var deep_water: Polygon2D = Polygon2D.new()
+	deep_water.name = "EditorDeepWaterExtension"
+	deep_water.z_as_relative = false
+	deep_water.z_index = -9
+	deep_water.polygon = PackedVector2Array([
+		Vector2(bounds.x, existing_bottom_y),
+		Vector2(bounds.y, existing_bottom_y),
+		Vector2(bounds.y, required_bottom_y),
+		Vector2(bounds.x, required_bottom_y)
+	])
+	deep_water.color = Color(0.004, 0.025, 0.052, 1.0)
+	_preview_root.add_child(deep_water, false, Node.INTERNAL_MODE_BACK)
+
+
 func _build_editor_depth_band(bounds: Vector2, top_y: float, bottom_y: float) -> void:
 	var band: Polygon2D = Polygon2D.new()
-	band.name = "EditorDepthBand20To100"
+	band.name = "EditorNaturalCanyonDepthBand"
 	band.z_as_relative = false
 	band.z_index = TERRAIN_Z - 1
 	band.polygon = PackedVector2Array([
@@ -129,7 +169,7 @@ func _build_editor_depth_band(bounds: Vector2, top_y: float, bottom_y: float) ->
 		Vector2(bounds.y, bottom_y),
 		Vector2(bounds.x, bottom_y)
 	])
-	band.color = Color(0.025, 0.075, 0.12, 0.20)
+	band.color = Color(0.025, 0.075, 0.12, 0.16)
 	_preview_root.add_child(band, false, Node.INTERNAL_MODE_BACK)
 
 
@@ -145,46 +185,19 @@ func _world_bounds() -> Vector2:
 	return Vector2(FALLBACK_LEFT, FALLBACK_RIGHT)
 
 
-func _pixels_per_meter() -> float:
-	var world: Node = get_parent()
-	if world == null:
-		return FALLBACK_PPM
-
-	var hook: Node2D = world.get_node_or_null("Boat/Hook") as Node2D
-	if hook == null:
-		return FALLBACK_PPM
-
-	var pixels_variant: Variant = hook.get("max_depth")
-	var meters_variant: Variant = hook.get("max_depth_meters")
-
-	if not (pixels_variant is int or pixels_variant is float):
-		return FALLBACK_PPM
-	if not (meters_variant is int or meters_variant is float):
-		return FALLBACK_PPM
-
-	# Adding 0.0 converts either numeric Variant to a float without calling the
-	# float() constructor, which is not available in this Godot editor build.
-	var max_depth_pixels = pixels_variant + 0.0
-	var max_depth_meters = meters_variant + 0.0
-
-	if max_depth_pixels <= 0.0 or max_depth_meters <= 0.0:
-		return FALLBACK_PPM
-	return max_depth_pixels / max_depth_meters
-
-
 func _world_y_for_depth(depth_meters: float) -> float:
 	var world: Node = get_parent()
 	if world == null:
-		return FALLBACK_ZERO_Y + depth_meters * FALLBACK_PPM
+		return FALLBACK_ZERO_Y + depth_meters * WORLD_PIXELS_PER_METER
 
 	var boat: Node2D = world.get_node_or_null("Boat") as Node2D
 	var hook: Node2D = world.get_node_or_null("Boat/Hook") as Node2D
 	if boat == null or hook == null:
-		return FALLBACK_ZERO_Y + depth_meters * FALLBACK_PPM
+		return FALLBACK_ZERO_Y + depth_meters * WORLD_PIXELS_PER_METER
 
 	var hook_start_y: float = hook.position.y
 	var start_variant: Variant = hook.get("start_position")
 	if start_variant is Vector2:
 		hook_start_y = (start_variant as Vector2).y
 
-	return boat.global_position.y + hook_start_y + depth_meters * _pixels_per_meter()
+	return boat.global_position.y + hook_start_y + depth_meters * WORLD_PIXELS_PER_METER
