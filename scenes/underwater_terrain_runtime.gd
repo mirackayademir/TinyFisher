@@ -1,41 +1,46 @@
 extends Node
 
-# Stable world-anchored 20-100 m underwater terrain compositor.
+# TinyFisher grounded canyon compositor.
 #
-# V22 deliberately removes the broken runtime WebP/base64 reconstruction path
-# from gameplay. The previous source payload was the reason the canyon could
-# fail to exist at all. Terrain is now composed directly from the approved,
-# high-resolution transparent PNG rock assets already present in the project.
+# V23 deliberately removes the old "rock at an approximate depth" layout.
+# Every visible canyon formation is now placed from exact world/depth math:
+# - X positions are on a fixed 2200 px grid across the real Water bounds.
+# - Tall canyon rocks are scaled uniformly from their source aspect ratio.
+# - Their BOTTOM edge is locked to the same seabed line.
+# - No upper/mid-water rocks are spawned, so nothing can float in open water.
+# - Horizontal occupied intervals are checked before any secondary floor rock
+#   is added, so separate rock sprites cannot intersect each other.
 #
-# The hook sits low in the camera while descending (camera travel is shorter
-# than hook travel). Therefore formations are placed by REAL world depth but
-# biased toward the camera-visible part of each depth band. This keeps the
-# 40-70 m view from becoming an empty blue screen while preserving 20-100 m
-# world anchoring.
+# This is visual terrain only; it intentionally has no collision yet.
 
 const TERRAIN_NODE_NAME := "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION := 22
+const LAYOUT_VERSION := 23
 
 const TOP_M := 20.0
 const BOTTOM_M := 100.0
+const SEABED_DEPTH_M := 100.0
 
 const FALLBACK_LEFT := -1000.0
 const FALLBACK_RIGHT := 11000.0
 const FALLBACK_PPM := 34.5
 const FALLBACK_ZERO_Y := 392.6
 
-# Legacy water is -9. Fish/gameplay live at >= 0. Keep terrain clearly above
-# water/background layers but safely behind gameplay sprites.
+# Water is -9. Keep the canyon above the water shader and behind gameplay.
 const TERRAIN_Z := -4
-const SEGMENT_WIDTH := 980.0
 
-const ROCK_SHALLOW_01 := "res://assets/environment/shallow/shallow_rock_01.png"
-const ROCK_SHALLOW_02 := "res://assets/environment/shallow/shallow_rock_02.png"
-const ROCK_OPEN_01 := "res://assets/environment/open_blue/open_blue_rock_01.png"
-const ROCK_OPEN_02 := "res://assets/environment/open_blue/open_blue_rock_02.png"
-const ROCK_DEEP_01 := "res://assets/environment/deep_sea/deep_sea_rock_01.png"
-const ROCK_DEEP_02 := "res://assets/environment/deep_sea/deep_sea_rock_02.png"
-const ROCK_ABYSS_CAVE := "res://assets/environment/abyss/abyss_cave_01.png"
+# Exact horizontal composition. With the current 1280 px viewport and the
+# natural width of the tall rock, this leaves a navigable open-water channel
+# without allowing multiple formations to pile on top of one another.
+const SPIRE_SPACING_X := 2200.0
+const FIRST_SPIRE_OFFSET_X := 900.0
+const MIN_HORIZONTAL_GAP := 90.0
+
+const ROCK_TALL := "res://assets/environment/deep_sea/deep_sea_rock_01.png"
+const ROCK_FLOOR := "res://assets/environment/deep_sea/deep_sea_rock_02.png"
+
+# Top edge of each seabed-connected spire. The pattern repeats across X.
+# These are not sprite center depths: they are the exact desired TOP depth.
+const SPIRE_TOP_DEPTH_PATTERN := [44.0, 48.0, 52.0, 46.0, 50.0, 45.0]
 
 var _scene_id := 0
 var _world: Node2D = null
@@ -43,12 +48,14 @@ var _root: Node2D = null
 var _last_ppm := -1.0
 var _last_left := INF
 var _last_right := INF
+
 var _textures: Dictionary = {}
+var _occupied_x: Array[Vector2] = []
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V22: DIRECT HQ PNG CANYON / 20-100M")
+	print("UNDERWATER TERRAIN V23: GROUNDED CANYON / NO FLOATING ROCKS / NO OVERLAP")
 
 
 func _process(_delta: float) -> void:
@@ -88,14 +95,15 @@ func _reset() -> void:
 	_last_ppm = -1.0
 	_last_left = INF
 	_last_right = INF
+	_occupied_x.clear()
 
 
 func _rebuild_terrain(bounds: Vector2, ppm: float) -> void:
 	_remove_old_terrain()
 	_cache_textures()
 
-	if _textures.is_empty():
-		push_error("Underwater terrain: kullanilabilir kaya texture'i bulunamadi.")
+	if not _textures.has(ROCK_TALL) or not _textures.has(ROCK_FLOOR):
+		push_error("Underwater terrain: gerekli HQ kaya texture'lari bulunamadi.")
 		return
 
 	_root = Node2D.new()
@@ -107,22 +115,25 @@ func _rebuild_terrain(bounds: Vector2, ppm: float) -> void:
 	_root.set_meta("camera_locked", false)
 	_root.set_meta("depth_top_m", TOP_M)
 	_root.set_meta("depth_bottom_m", BOTTOM_M)
-	_root.set_meta("terrain_source", "approved_hq_png_composite")
+	_root.set_meta("terrain_source", "grounded_hq_png_canyon")
 	_world.add_child(_root)
 
-	_build_canyon(bounds)
+	_occupied_x.clear()
+	_build_seabed_mass(bounds)
+	_build_grounded_spires(bounds)
+	_build_floor_detail(bounds)
 
 	_last_left = bounds.x
 	_last_right = bounds.y
 	_last_ppm = ppm
 
 	print(
-		"HQ CANYON ACTIVE: V%d / X %.0f..%.0f / %.2f px-m / %d sprites" % [
+		"HQ CANYON GROUNDED: V%d / X %.0f..%.0f / %.2f px-m / spires=%d" % [
 			LAYOUT_VERSION,
 			bounds.x,
 			bounds.y,
 			ppm,
-			_root.get_child_count()
+			_occupied_x.size()
 		]
 	)
 
@@ -131,17 +142,7 @@ func _cache_textures() -> void:
 	if not _textures.is_empty():
 		return
 
-	var paths := [
-		ROCK_SHALLOW_01,
-		ROCK_SHALLOW_02,
-		ROCK_OPEN_01,
-		ROCK_OPEN_02,
-		ROCK_DEEP_01,
-		ROCK_DEEP_02,
-		ROCK_ABYSS_CAVE
-	]
-
-	for path_variant in paths:
+	for path_variant in [ROCK_TALL, ROCK_FLOOR]:
 		var path := String(path_variant)
 		var texture := load(path) as Texture2D
 		if texture != null and texture.get_width() > 0 and texture.get_height() > 0:
@@ -150,116 +151,146 @@ func _cache_textures() -> void:
 			push_warning("Underwater terrain texture atlandi: " + path)
 
 
-func _build_canyon(bounds: Vector2) -> void:
-	var width := maxf(bounds.y - bounds.x, 1.0)
-	var segment_count := maxi(int(ceil(width / SEGMENT_WIDTH)), 1)
-
-	# The map is divided into overlapping ~980 px sections. A 1280 px camera
-	# therefore always intersects at least one major formation.
-	for i in range(segment_count + 1):
-		var segment_left := bounds.x + float(i) * SEGMENT_WIDTH
-		var center_x := segment_left + SEGMENT_WIDTH * 0.5
-		var phase := float(i % 4)
-		var flip_a := -1.0 if i % 2 == 1 else 1.0
-		var flip_b := -flip_a
-
-		# Upper canyon shelves: physically around 24-34 m. These remain visible
-		# while the hook display is roughly in the 30-45 m range.
-		var upper_path := ROCK_OPEN_02 if i % 3 == 0 else (ROCK_OPEN_01 if i % 3 == 1 else ROCK_SHALLOW_02)
-		_add_rock(
-			upper_path,
-			Vector2(center_x - 175.0 + phase * 38.0, _world_y_for_depth(25.5 + phase * 2.0)),
-			760.0 + phase * 55.0,
-			flip_a,
-			deg_to_rad(-7.0 + phase * 3.0),
-			Color(0.82, 0.92, 1.0, 0.94)
-		)
-
-		# Main 40-70 m canyon wall. The hook is near the bottom of the screen,
-		# so this band is centered around physical 48-54 m; at DERINLIK 59 m it
-		# lands near the camera center instead of below the viewport.
-		var middle_path := ROCK_DEEP_01 if i % 2 == 0 else ROCK_DEEP_02
-		_add_rock(
-			middle_path,
-			Vector2(center_x + 95.0 - phase * 32.0, _world_y_for_depth(48.5 + phase * 1.6)),
-			1120.0 + phase * 70.0,
-			flip_b,
-			deg_to_rad(5.0 - phase * 2.5),
-			Color(0.76, 0.86, 0.96, 1.0)
-		)
-
-		# Overlap a second rock so the formation reads as a canyon/land mass,
-		# not a single floating stone.
-		_add_rock(
-			ROCK_DEEP_02 if middle_path == ROCK_DEEP_01 else ROCK_DEEP_01,
-			Vector2(center_x - 355.0 + phase * 26.0, _world_y_for_depth(54.0 + phase * 1.2)),
-			820.0 + phase * 45.0,
-			flip_a,
-			deg_to_rad(-10.0 + phase * 3.4),
-			Color(0.69, 0.80, 0.92, 0.98)
-		)
-
-		# Deep/abyss wall: centered where the camera actually looks when the hook
-		# display reaches ~85-100 m.
-		var lower_path := ROCK_ABYSS_CAVE if i % 4 == 2 else ROCK_DEEP_01
-		_add_rock(
-			lower_path,
-			Vector2(center_x + 60.0 - phase * 44.0, _world_y_for_depth(78.0 + phase * 1.8)),
-			1280.0 + phase * 65.0,
-			flip_a,
-			deg_to_rad(-3.0 + phase * 2.0),
-			Color(0.58, 0.70, 0.84, 1.0)
-		)
-
-	_build_bottom_ridge(bounds)
-
-
-func _build_bottom_ridge(bounds: Vector2) -> void:
-	var spacing := 700.0
-	var x := bounds.x - 80.0
-	var index := 0
-
-	while x <= bounds.y + spacing:
-		_add_rock(
-			ROCK_DEEP_02,
-			Vector2(x, _world_y_for_depth(90.0) + 150.0),
-			940.0,
-			-1.0 if index % 2 == 1 else 1.0,
-			deg_to_rad(-4.0 if index % 2 == 1 else 4.0),
-			Color(0.50, 0.63, 0.77, 1.0)
-		)
-		x += spacing
-		index += 1
-
-
-func _add_rock(
-	path: String,
-	world_position: Vector2,
-	target_width: float,
-	flip_x: float,
-	rotation_radians: float,
-	tint: Color
-) -> void:
+func _build_seabed_mass(bounds: Vector2) -> void:
 	if not is_instance_valid(_root):
 		return
 
-	var texture := _textures.get(path) as Texture2D
+	var seabed_y := _world_y_for_depth(SEABED_DEPTH_M)
+	var bottom_y := seabed_y + 900.0
+	var width := bounds.y - bounds.x
+	var step := 400.0
+	var point_count := int(ceil(width / step)) + 1
+
+	var points := PackedVector2Array()
+
+	# A deterministic, low-amplitude contour. This is the solid visual mass that
+	# every canyon rock touches; it prevents a rock base from ever hanging in blue.
+	for i in range(point_count + 1):
+		var x := minf(bounds.x + float(i) * step, bounds.y)
+		var wave := sin(float(i) * 1.37) * 18.0 + sin(float(i) * 0.53) * 11.0
+		points.append(Vector2(x, seabed_y + wave))
+
+	points.append(Vector2(bounds.y, bottom_y))
+	points.append(Vector2(bounds.x, bottom_y))
+
+	var seabed := Polygon2D.new()
+	seabed.name = "SeabedMass"
+	seabed.polygon = points
+	seabed.color = Color(0.018, 0.055, 0.095, 1.0)
+	seabed.z_index = -1
+	_root.add_child(seabed)
+
+
+func _build_grounded_spires(bounds: Vector2) -> void:
+	var texture: Texture2D = _textures.get(ROCK_TALL) as Texture2D
 	if texture == null:
 		return
 
-	var texture_size := texture.get_size()
-	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+	var x := bounds.x + FIRST_SPIRE_OFFSET_X
+	var index := 0
+
+	# Include one formation slightly beyond the right edge so the world boundary
+	# never exposes a naked cut in the composition.
+	while x <= bounds.y + FIRST_SPIRE_OFFSET_X:
+		var top_depth := float(SPIRE_TOP_DEPTH_PATTERN[index % SPIRE_TOP_DEPTH_PATTERN.size()])
+		_add_grounded_spire(texture, x, top_depth, index)
+		x += SPIRE_SPACING_X
+		index += 1
+
+
+func _add_grounded_spire(texture: Texture2D, center_x: float, top_depth_m: float, index: int) -> void:
+	var source_size := texture.get_size()
+	if source_size.x <= 0.0 or source_size.y <= 0.0:
 		return
 
-	var scale_factor := target_width / texture_size.x
+	var top_y := _world_y_for_depth(top_depth_m)
+	var seabed_y := _seabed_y_at_x(center_x)
+	var target_height := maxf(seabed_y - top_y, 1.0)
+
+	# Uniform scale only: width is derived from the PNG's real aspect ratio.
+	# deep_sea_rock_01 is 520x560, so there is no arbitrary X/Y stretching.
+	var scale_factor := target_height / source_size.y
+	var rendered_width := source_size.x * scale_factor
+
+	var interval := Vector2(
+		center_x - rendered_width * 0.5,
+		center_x + rendered_width * 0.5
+	)
+
+	if not _reserve_interval(interval):
+		return
+
 	var sprite := Sprite2D.new()
+	sprite.name = "GroundedSpire_%02d" % index
 	sprite.texture = texture
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	sprite.position = world_position
-	sprite.rotation = rotation_radians
-	sprite.scale = Vector2(scale_factor * flip_x, scale_factor)
-	sprite.modulate = tint
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.position = Vector2(center_x, seabed_y - target_height * 0.5)
+	sprite.scale = Vector2(
+		-scale_factor if index % 2 == 1 else scale_factor,
+		scale_factor
+	)
+	sprite.rotation = 0.0
+	sprite.modulate = Color(0.76, 0.86, 0.97, 0.98)
+	sprite.set_meta("grounded", true)
+	sprite.set_meta("top_depth_m", top_depth_m)
+	sprite.set_meta("bottom_depth_m", SEABED_DEPTH_M)
 	_root.add_child(sprite)
+
+
+func _build_floor_detail(bounds: Vector2) -> void:
+	var texture: Texture2D = _textures.get(ROCK_FLOOR) as Texture2D
+	if texture == null:
+		return
+
+	var source_size := texture.get_size()
+	if source_size.x <= 0.0 or source_size.y <= 0.0:
+		return
+
+	# One small grounded boulder in the middle of each spire gap. Its exact width
+	# is intentionally capped so the interval check keeps a visible gap from the
+	# neighbouring spires. These only decorate the true 100 m seabed.
+	var x := bounds.x + FIRST_SPIRE_OFFSET_X + SPIRE_SPACING_X * 0.5
+	var index := 0
+	var target_width := 480.0
+	var scale_factor := target_width / source_size.x
+	var rendered_height := source_size.y * scale_factor
+
+	while x <= bounds.y:
+		var interval := Vector2(x - target_width * 0.5, x + target_width * 0.5)
+		if _reserve_interval(interval):
+			var seabed_y := _seabed_y_at_x(x)
+			var sprite := Sprite2D.new()
+			sprite.name = "SeabedRock_%02d" % index
+			sprite.texture = texture
+			sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			sprite.position = Vector2(x, seabed_y - rendered_height * 0.5)
+			sprite.scale = Vector2(
+				-scale_factor if index % 2 == 1 else scale_factor,
+				scale_factor
+			)
+			sprite.rotation = 0.0
+			sprite.modulate = Color(0.65, 0.76, 0.89, 1.0)
+			sprite.set_meta("grounded", true)
+			_root.add_child(sprite)
+
+		x += SPIRE_SPACING_X
+		index += 1
+
+
+func _reserve_interval(interval: Vector2) -> bool:
+	for used in _occupied_x:
+		if interval.x < used.y + MIN_HORIZONTAL_GAP and interval.y > used.x - MIN_HORIZONTAL_GAP:
+			return false
+
+	_occupied_x.append(interval)
+	return true
+
+
+func _seabed_y_at_x(world_x: float) -> float:
+	var bounds := _get_world_horizontal_bounds()
+	var normalized := (world_x - bounds.x) / 400.0
+	var wave := sin(normalized * 1.37) * 18.0 + sin(normalized * 0.53) * 11.0
+	return _world_y_for_depth(SEABED_DEPTH_M) + wave
 
 
 func _get_world_horizontal_bounds() -> Vector2:
