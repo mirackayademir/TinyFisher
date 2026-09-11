@@ -1,9 +1,9 @@
 extends Node
 
 # TinyFisher environment asset 9 / 36 - shallow_rock_01.png
-# V2: rocks are anchored to the real canyon alpha surface and parented directly
-# to the canyon terrain. This prevents floating/invisible placements and stops
-# the old MidDecor rebuild loop from printing every frame.
+# V3: rocks are smaller and seated on broad, solid canyon terraces instead of
+# the first opaque alpha pixel. This rejects thin baked plants/protrusions and
+# gives each decorative rock a slight world-space embed into the canyon.
 
 const ROOT_NAME: String = "ShallowRock01Art"
 const TEXTURE_PATH: String = "res://assets/environment/shallow/shallow_rock_01.png"
@@ -11,11 +11,18 @@ const TERRAIN_NAME: String = "UnderwaterCanyonTerrain20To100"
 const TERRAIN_SPRITE_NAME: String = "TerrainSpriteHQ"
 const ALPHA_THRESHOLD: float = 0.10
 
-const LEFT_RATIO: float = 0.16
-const RIGHT_RATIO: float = 0.84
-const LEFT_WORLD_HEIGHT: float = 360.0
-const RIGHT_WORLD_HEIGHT: float = 320.0
-const SURFACE_EMBED_LOCAL_PX: float = 10.0
+const LEFT_RATIO: float = 0.29
+const RIGHT_RATIO: float = 0.73
+const LEFT_WORLD_HEIGHT: float = 230.0
+const RIGHT_WORLD_HEIGHT: float = 205.0
+const SURFACE_EMBED_WORLD_PX: float = 24.0
+
+const SEARCH_RADIUS_RATIO: float = 0.055
+const SUPPORT_HALF_WIDTH_PX: int = 14
+const SUPPORT_DEPTH_PX: int = 30
+const MIN_SUPPORT_FILL: float = 0.58
+const FLATNESS_SAMPLE_PX: int = 18
+const MAX_SURFACE_ROUGHNESS_PX: int = 28
 
 var _scene_id: int = 0
 var _terrain_id: int = 0
@@ -25,7 +32,7 @@ var _root: Node2D = null
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("SHALLOW ROCK 01 RUNTIME V2: REAL CANYON SURFACE / ENVIRONMENT 9/36")
+	print("SHALLOW ROCK 01 RUNTIME V3: BROAD TERRACE SEATING / ENVIRONMENT 9/36")
 
 
 func _process(_delta: float) -> void:
@@ -81,10 +88,10 @@ func _build_rocks(terrain: Node2D) -> void:
 	if rock_size.x <= 0.0 or rock_size.y <= 0.0:
 		return
 
-	var left_surface: Vector2 = _find_surface_near_ratio(canyon_image, LEFT_RATIO)
-	var right_surface: Vector2 = _find_surface_near_ratio(canyon_image, RIGHT_RATIO)
+	var left_surface: Vector2 = _find_broad_surface_near_ratio(canyon_image, LEFT_RATIO)
+	var right_surface: Vector2 = _find_broad_surface_near_ratio(canyon_image, RIGHT_RATIO)
 	if left_surface.x < 0.0 or right_surface.x < 0.0:
-		push_warning("shallow_rock_01 canyon yuzeyi bulunamadi.")
+		push_warning("shallow_rock_01 icin genis canyon terasi bulunamadi.")
 		return
 
 	_root = Node2D.new()
@@ -92,23 +99,23 @@ func _build_rocks(terrain: Node2D) -> void:
 	_root.z_index = 3
 	_root.set_meta("environment_asset_index", 9)
 	_root.set_meta("environment_asset_total", 36)
-	_root.set_meta("placement", "alpha_surface_anchored")
+	_root.set_meta("placement", "broad_solid_terrace")
 	terrain.add_child(_root)
 
 	_add_rock_local(
 		rock_texture,
-		left_surface + Vector2(0.0, SURFACE_EMBED_LOCAL_PX),
+		left_surface,
 		LEFT_WORLD_HEIGHT,
-		0.018,
+		0.014,
 		false,
 		terrain,
 		"ShallowRock01_Left"
 	)
 	_add_rock_local(
 		rock_texture,
-		right_surface + Vector2(0.0, SURFACE_EMBED_LOCAL_PX),
+		right_surface,
 		RIGHT_WORLD_HEIGHT,
-		-0.022,
+		-0.018,
 		true,
 		terrain,
 		"ShallowRock01_Right"
@@ -117,7 +124,7 @@ func _build_rocks(terrain: Node2D) -> void:
 	var left_world: Vector2 = terrain.to_global(left_surface)
 	var right_world: Vector2 = terrain.to_global(right_surface)
 	print(
-		"ENVIRONMENT: 9/36 aktif - shallow_rock_01 / surface anchors=",
+		"ENVIRONMENT: 9/36 aktif - shallow_rock_01 V3 / terrace anchors=",
 		Vector2(snappedf(left_world.x, 1.0), snappedf(left_world.y, 1.0)),
 		" & ",
 		Vector2(snappedf(right_world.x, 1.0), snappedf(right_world.y, 1.0))
@@ -126,7 +133,7 @@ func _build_rocks(terrain: Node2D) -> void:
 
 func _add_rock_local(
 	texture: Texture2D,
-	bottom_anchor_local: Vector2,
+	surface_anchor_local: Vector2,
 	target_world_height: float,
 	rotation_value: float,
 	flip_x: bool,
@@ -139,62 +146,92 @@ func _add_rock_local(
 
 	var terrain_scale_y: float = maxf(absf(terrain.global_scale.y), 0.001)
 	var target_local_height: float = target_world_height / terrain_scale_y
+	var embed_local: float = SURFACE_EMBED_WORLD_PX / terrain_scale_y
 	var scale_value: float = target_local_height / size.y
 
 	var sprite: Sprite2D = Sprite2D.new()
 	sprite.name = node_name
 	sprite.texture = texture
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	sprite.position = Vector2(bottom_anchor_local.x, bottom_anchor_local.y - target_local_height * 0.5)
+	sprite.position = Vector2(
+		surface_anchor_local.x,
+		surface_anchor_local.y - target_local_height * 0.5 + embed_local
+	)
 	sprite.scale = Vector2(-scale_value if flip_x else scale_value, scale_value)
 	sprite.rotation = rotation_value
-	sprite.modulate = Color(0.92, 0.97, 1.0, 1.0)
+	sprite.modulate = Color(0.88, 0.94, 0.99, 0.98)
 	_root.add_child(sprite)
 
 
-func _find_surface_near_ratio(image: Image, ratio: float) -> Vector2:
+func _find_broad_surface_near_ratio(image: Image, ratio: float) -> Vector2:
 	var width: int = image.get_width()
 	var height: int = image.get_height()
 	if width <= 0 or height <= 0:
 		return Vector2(-1.0, -1.0)
 
 	var target_x: int = clampi(int(round(float(width - 1) * ratio)), 0, width - 1)
-	var search_radius: int = maxi(24, int(round(float(width) * 0.045)))
+	var radius: int = maxi(32, int(round(float(width) * SEARCH_RADIUS_RATIO)))
 	var best_x: int = -1
-	var best_y: int = height + 1
-	var best_distance: int = width + 1
+	var best_y: int = -1
+	var best_score: float = INF
 
-	for offset: int in range(search_radius + 1):
-		var candidates: Array[int] = [target_x + offset]
-		if offset > 0:
-			candidates.append(target_x - offset)
+	for x: int in range(maxi(0, target_x - radius), mini(width - 1, target_x + radius) + 1):
+		var y: int = _solid_surface_y(image, x)
+		if y < 0:
+			continue
 
-		for x: int in candidates:
-			if x < 0 or x >= width:
-				continue
-			var y: int = _top_opaque_y(image, x)
-			if y < 0:
-				continue
+		var left_y: int = _solid_surface_y(image, clampi(x - FLATNESS_SAMPLE_PX, 0, width - 1))
+		var right_y: int = _solid_surface_y(image, clampi(x + FLATNESS_SAMPLE_PX, 0, width - 1))
+		if left_y < 0 or right_y < 0:
+			continue
 
-			var distance: int = absi(x - target_x)
-			if distance < best_distance or (distance == best_distance and y < best_y):
-				best_x = x
-				best_y = y
-				best_distance = distance
+		var roughness: int = maxi(absi(y - left_y), absi(y - right_y))
+		if roughness > MAX_SURFACE_ROUGHNESS_PX:
+			continue
 
-		if best_x >= 0 and offset > 20:
-			break
+		var support: float = _support_fill_ratio(image, x, y)
+		var score: float = absf(float(x - target_x)) * 1.35 + float(roughness) * 2.0 - support * 38.0
+		if score < best_score:
+			best_score = score
+			best_x = x
+			best_y = y
 
 	if best_x < 0:
 		return Vector2(-1.0, -1.0)
 	return Vector2(float(best_x) + 0.5, float(best_y) + 0.5)
 
 
-func _top_opaque_y(image: Image, x: int) -> int:
+func _solid_surface_y(image: Image, x: int) -> int:
+	if x < 0 or x >= image.get_width():
+		return -1
+
 	for y: int in range(image.get_height()):
-		if image.get_pixel(x, y).a >= ALPHA_THRESHOLD:
+		if image.get_pixel(x, y).a < ALPHA_THRESHOLD:
+			continue
+		if _support_fill_ratio(image, x, y) >= MIN_SUPPORT_FILL:
 			return y
 	return -1
+
+
+func _support_fill_ratio(image: Image, source_x: int, surface_y: int) -> float:
+	var min_x: int = clampi(source_x - SUPPORT_HALF_WIDTH_PX, 0, image.get_width() - 1)
+	var max_x: int = clampi(source_x + SUPPORT_HALF_WIDTH_PX, 0, image.get_width() - 1)
+	var min_y: int = clampi(surface_y + 1, 0, image.get_height() - 1)
+	var max_y: int = clampi(surface_y + SUPPORT_DEPTH_PX, 0, image.get_height() - 1)
+	if max_x < min_x or max_y < min_y:
+		return 0.0
+
+	var opaque: int = 0
+	var total: int = 0
+	for y: int in range(min_y, max_y + 1):
+		for x: int in range(min_x, max_x + 1):
+			total += 1
+			if image.get_pixel(x, y).a >= ALPHA_THRESHOLD:
+				opaque += 1
+
+	if total <= 0:
+		return 0.0
+	return float(opaque) / float(total)
 
 
 func _crop_to_used_alpha(source_texture: Texture2D) -> Texture2D:
