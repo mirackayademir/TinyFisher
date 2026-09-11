@@ -1,21 +1,23 @@
 extends Node
 
-# TinyFisher accepted HQ canyon runtime.
-# The original 2048x682 lossless artwork is rebuilt from verified text chunks,
-# then fitted once across the real Water width and exact 20-100 m depth band.
-# No repeated rock towers and no direct dependency on the broken 14 KB WebP.
+# TinyFisher canyon runtime V28.
+#
+# The verified canyon is rendered from the HQ in-memory texture produced by
+# canyon_texture_loader.gd. It is never non-uniformly squeezed into an arbitrary
+# 20-100 m rectangle anymore. The canyon keeps its authored aspect ratio and its
+# natural bottom depth is calculated from the real Water width.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
 const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION: int = 27
+const LAYOUT_VERSION: int = 28
 const TOP_M: float = 20.0
-const BOTTOM_M: float = 100.0
+const WORLD_PIXELS_PER_METER: float = 34.5
 const FALLBACK_LEFT: float = -1000.0
 const FALLBACK_RIGHT: float = 11000.0
-const FALLBACK_PPM: float = 34.5
 const FALLBACK_ZERO_Y: float = 392.6
 const TERRAIN_Z: int = -7
+const DEEP_WATER_MARGIN_PX: float = 700.0
 
 var _scene_id: int = 0
 var _world: Node2D = null
@@ -32,7 +34,7 @@ var _last_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V27: VERIFIED LOSSLESS HQ CANYON / EXACT 20-100M FIT")
+	print("UNDERWATER TERRAIN V28: HQ CANYON / ASPECT LOCKED / AUTO DEPTH")
 
 
 func _process(_delta: float) -> void:
@@ -99,9 +101,10 @@ func _ensure_terrain() -> void:
 	_root.set_meta("collisionless", true)
 	_root.set_meta("camera_locked", false)
 	_root.set_meta("depth_top_m", TOP_M)
-	_root.set_meta("depth_bottom_m", BOTTOM_M)
-	_root.set_meta("terrain_source", "verified_hq_lossless_chunks")
+	_root.set_meta("terrain_source", "verified_v15_hq_lanczos")
 	_root.set_meta("source_region", _source_region)
+	_root.set_meta("aspect_locked", true)
+	_root.set_meta("world_pixels_per_meter", WORLD_PIXELS_PER_METER)
 	_root.set_meta("kelp_surface_adapter", "pending_hq_canyon_surface")
 	_world.add_child(_root)
 
@@ -127,8 +130,15 @@ func _fit_to_world(force: bool = false) -> void:
 	var left: float = bounds.x
 	var width: float = maxf(bounds.y - bounds.x, 1.0)
 	var top_y: float = _world_y_for_depth(TOP_M)
-	var bottom_y: float = _world_y_for_depth(BOTTOM_M)
-	var height: float = maxf(bottom_y - top_y, 1.0)
+
+	# One scale value for both axes. This is the important V28 change: the canyon
+	# can never be horizontally stretched and vertically crushed again.
+	var uniform_scale: float = width / _source_region.size.x
+	var height: float = _source_region.size.y * uniform_scale
+	var bottom_y: float = top_y + height
+	var bottom_m: float = TOP_M + (height / WORLD_PIXELS_PER_METER)
+
+	_extend_deep_water(bottom_y + DEEP_WATER_MARGIN_PX)
 
 	if not force \
 	and is_equal_approx(left, _last_left) \
@@ -138,15 +148,13 @@ func _fit_to_world(force: bool = false) -> void:
 		return
 
 	_root.global_position = Vector2(left, top_y)
-	_root.scale = Vector2(
-		width / _source_region.size.x,
-		height / _source_region.size.y
-	)
+	_root.scale = Vector2(uniform_scale, uniform_scale)
 
 	_root.set_meta("map_left_x", left)
 	_root.set_meta("map_right_x", bounds.y)
-	_root.set_meta("world_y_20m", top_y)
-	_root.set_meta("world_y_100m", bottom_y)
+	_root.set_meta("world_y_top", top_y)
+	_root.set_meta("world_y_bottom", bottom_y)
+	_root.set_meta("depth_bottom_m", bottom_m)
 	_root.set_meta("source_visible_size", _source_region.size)
 	_root.set_meta("fit_scale", _root.scale)
 
@@ -154,6 +162,26 @@ func _fit_to_world(force: bool = false) -> void:
 	_last_width = width
 	_last_top_y = top_y
 	_last_height = height
+
+	if force:
+		print(
+			"CANYON LAYOUT READY: top=", TOP_M,
+			"m bottom=", snappedf(bottom_m, 0.1),
+			"m world=", snappedf(width, 1.0), "x", snappedf(height, 1.0),
+			" scale=", snappedf(uniform_scale, 0.001)
+		)
+
+
+func _extend_deep_water(required_bottom_y: float) -> void:
+	if _world == null:
+		return
+
+	var water: Control = _world.get_node_or_null("Water") as Control
+	if water == null:
+		return
+
+	if water.offset_bottom < required_bottom_y:
+		water.offset_bottom = required_bottom_y
 
 
 func _get_world_horizontal_bounds() -> Vector2:
@@ -167,43 +195,21 @@ func _get_world_horizontal_bounds() -> Vector2:
 	return Vector2(FALLBACK_LEFT, FALLBACK_RIGHT)
 
 
-func _pixels_per_meter() -> float:
-	if _world == null:
-		return FALLBACK_PPM
-	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
-	if hook == null:
-		return FALLBACK_PPM
-
-	var pixels_variant: Variant = hook.get("max_depth")
-	var meters_variant: Variant = hook.get("max_depth_meters")
-
-	if not (pixels_variant is int or pixels_variant is float):
-		return FALLBACK_PPM
-	if not (meters_variant is int or meters_variant is float):
-		return FALLBACK_PPM
-
-	var max_depth_pixels = pixels_variant + 0.0
-	var max_depth_meters = meters_variant + 0.0
-	if max_depth_pixels <= 0.0 or max_depth_meters <= 0.0:
-		return FALLBACK_PPM
-	return max_depth_pixels / max_depth_meters
-
-
 func _world_y_for_depth(depth_meters: float) -> float:
 	if _world == null:
-		return FALLBACK_ZERO_Y + depth_meters * FALLBACK_PPM
+		return FALLBACK_ZERO_Y + depth_meters * WORLD_PIXELS_PER_METER
 
 	var boat: Node2D = _world.get_node_or_null("Boat") as Node2D
 	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
 	if boat == null or hook == null:
-		return FALLBACK_ZERO_Y + depth_meters * FALLBACK_PPM
+		return FALLBACK_ZERO_Y + depth_meters * WORLD_PIXELS_PER_METER
 
 	var hook_start_y: float = hook.position.y
 	var start_variant: Variant = hook.get("start_position")
 	if start_variant is Vector2:
 		hook_start_y = (start_variant as Vector2).y
 
-	return boat.global_position.y + hook_start_y + depth_meters * _pixels_per_meter()
+	return boat.global_position.y + hook_start_y + depth_meters * WORLD_PIXELS_PER_METER
 
 
 func _remove_old_terrain() -> void:
