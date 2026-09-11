@@ -6,22 +6,21 @@ extends Node
 # Water world bounds + live hook depth scale. It never follows the camera.
 
 const TERRAIN_NODE_NAME := "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION := 18
+const LAYOUT_VERSION := 19
 
 const TOP_M := 20.0
 const BOTTOM_M := 100.0
 const SOURCE_CROP_TOP_PX := 27
 const EXPECTED_SOURCE_WIDTH := 2048
 const EXPECTED_SOURCE_HEIGHT := 682
-const EXPECTED_BASE64_LENGTH := 165516
 
-# IMPORTANT: part_02a and part_02b are continuations of part_02, not
-# replacements. The complete verified payload order is therefore:
-# 00 -> 01 -> 02 -> 02a -> 02b -> 03 -> 04 -> 05 -> 06 -> 07.
+# part_02.txt was the damaged/overlapped upload. The later verified split
+# part_02a + part_02b replaces it. The final part also contains harmless
+# trailing transfer data; the RIFF header is used to cut the payload at the
+# exact original WebP byte length before decoding.
 const LOSSLESS_PART_PATHS := [
 	"res://assets/environment/terrain/runtime_data/hq_lossless/part_00.txt",
 	"res://assets/environment/terrain/runtime_data/hq_lossless/part_01.txt",
-	"res://assets/environment/terrain/runtime_data/hq_lossless/part_02.txt",
 	"res://assets/environment/terrain/runtime_data/hq_lossless/part_02a.txt",
 	"res://assets/environment/terrain/runtime_data/hq_lossless/part_02b.txt",
 	"res://assets/environment/terrain/runtime_data/hq_lossless/part_03.txt",
@@ -51,7 +50,7 @@ var _last_height := INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V18: LOSSLESS CHUNK RUNTIME / EXACT 20-100M MAP FIT")
+	print("UNDERWATER TERRAIN V19: VERIFIED LOSSLESS RIFF RUNTIME / EXACT 20-100M MAP FIT")
 
 
 func _process(_delta: float) -> void:
@@ -161,15 +160,43 @@ func _build_lossless_texture() -> Texture2D:
 		chunk = chunk.replace(" ", "")
 		payload += chunk
 
-	if payload.length() != EXPECTED_BASE64_LENGTH:
+	# A WebP begins with RIFF <little-endian file-size-minus-8> WEBP.
+	# Decoding only the first 16 base64 chars gives the complete 12-byte header,
+	# so we can recover the authoritative original file length even if a transfer
+	# chunk contains extra characters after the real image.
+	if payload.length() < 16:
+		push_error("HQ terrain payload RIFF basligi icin fazla kisa.")
+		return null
+
+	var header := Marshalls.base64_to_raw(payload.substr(0, 16))
+	if header.size() < 12:
+		push_error("HQ terrain RIFF basligi decode edilemedi.")
+		return null
+
+	if header[0] != 82 or header[1] != 73 or header[2] != 70 or header[3] != 70 \
+	or header[8] != 87 or header[9] != 69 or header[10] != 66 or header[11] != 80:
+		push_error("HQ terrain payload RIFF/WEBP imzasi gecersiz.")
+		return null
+
+	var riff_payload_size := int(header[4]) \
+		+ int(header[5]) * 256 \
+		+ int(header[6]) * 65536 \
+		+ int(header[7]) * 16777216
+	var expected_raw_size := riff_payload_size + 8
+	var expected_base64_length := int(ceil(float(expected_raw_size) / 3.0)) * 4
+
+	if expected_raw_size <= 12 or expected_base64_length > payload.length():
 		push_error(
-			"HQ terrain payload uzunlugu hatali. Beklenen=%d Gelen=%d" % [
-				EXPECTED_BASE64_LENGTH,
+			"HQ terrain payload eksik. RIFF=%d byte, gereken base64=%d, gelen=%d" % [
+				expected_raw_size,
+				expected_base64_length,
 				payload.length()
 			]
 		)
 		return null
 
+	# Cut only transfer garbage after the authoritative RIFF boundary.
+	payload = payload.substr(0, expected_base64_length)
 	if payload.length() % 4 != 0:
 		push_error("HQ terrain base64 payload 4-byte hizasinda degil.")
 		return null
@@ -179,14 +206,19 @@ func _build_lossless_texture() -> Texture2D:
 		push_error("HQ terrain base64 decode bos veri dondurdu.")
 		return null
 
+	if raw.size() != expected_raw_size:
+		push_error(
+			"HQ terrain RIFF boyutu uyusmuyor. Beklenen=%d Gelen=%d" % [
+				expected_raw_size,
+				raw.size()
+			]
+		)
+		return null
+
 	var image := Image.new()
 	var decode_error := image.load_webp_from_buffer(raw)
-	if decode_error != OK:
-		# Kept as a safety decoder only; the verified source is expected to be WebP.
-		decode_error = image.load_png_from_buffer(raw)
-
 	if decode_error != OK or image.is_empty():
-		push_error("HQ terrain runtime gorseli decode edilemedi. Error=%d" % decode_error)
+		push_error("HQ terrain runtime WebP decode edilemedi. Error=%d" % decode_error)
 		return null
 
 	if image.get_width() != EXPECTED_SOURCE_WIDTH or image.get_height() != EXPECTED_SOURCE_HEIGHT:
