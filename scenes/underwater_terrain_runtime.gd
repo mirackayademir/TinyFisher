@@ -1,9 +1,9 @@
 extends Node
 
 # TinyFisher canyon runtime V30.
-# Final transparent HQ canyon, compact 5500 px world, aspect ratio locked.
-# The texture is loaded directly at HQ resolution; runtime never enlarges the
-# source image itself. Only the scene transform fits it to the world.
+# Final transparent Q95 WebP canyon reconstructed from the shared Base64 chunk
+# loader, compact 5500 px world, aspect ratio locked. Runtime never resizes the
+# decoded source image itself; only the scene transform fits it to the world.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
@@ -33,7 +33,7 @@ var _last_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V30: FINAL TRANSPARENT HQ / COMPACT 5500PX / ASPECT LOCKED")
+	print("UNDERWATER TERRAIN V30: FINAL Q95 WEBP CHUNKS / COMPACT 5500PX / ASPECT LOCKED")
 
 
 func _process(_delta: float) -> void:
@@ -85,7 +85,7 @@ func _ensure_terrain() -> void:
 
 	_source_region = CanyonTextureLoader.visible_region(_terrain_texture)
 	if _source_region.size.x <= 0.0 or _source_region.size.y <= 0.0:
-		push_error("FINAL HQ canyon visible region gecersiz.")
+		push_error("FINAL Q95 canyon visible region gecersiz.")
 		return
 
 	var atlas: AtlasTexture = AtlasTexture.new()
@@ -100,7 +100,7 @@ func _ensure_terrain() -> void:
 	_root.set_meta("collisionless", true)
 	_root.set_meta("camera_locked", false)
 	_root.set_meta("depth_top_m", TOP_M)
-	_root.set_meta("terrain_source", "final_hq_transparent_png")
+	_root.set_meta("terrain_source", "final_q95_webp_chunks")
 	_root.set_meta("source_region", _source_region)
 	_root.set_meta("aspect_locked", true)
 	_root.set_meta("world_pixels_per_meter", WORLD_PIXELS_PER_METER)
