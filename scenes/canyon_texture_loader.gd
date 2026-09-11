@@ -2,8 +2,9 @@
 extends RefCounted
 
 # Single verified source of truth for the accepted 20-100 m HQ canyon artwork.
-# The binary .webp committed at assets/environment/terrain is incomplete, so we
-# rebuild the original lossless WebP in memory from the verified base64 chunks.
+# The original lossless WebP is rebuilt in memory from verified base64 chunks.
+# Transfer chunks can contain a couple of harmless trailing decoded bytes, so
+# the RIFF header is authoritative and the buffer is trimmed to that exact size.
 
 const SOURCE_CROP_TOP_PX: int = 27
 const EXPECTED_SOURCE_WIDTH: int = 2048
@@ -82,16 +83,36 @@ static func build_texture() -> Texture2D:
 		)
 		return null
 
-	# Trim only transfer garbage after the authoritative RIFF boundary.
+	# First trim textual transfer garbage to the base64 span required by RIFF.
 	payload = payload.substr(0, expected_base64_length)
 	if payload.length() % 4 != 0:
 		push_error("HQ canyon base64 payload 4-byte hizasinda degil.")
 		return null
 
 	var raw: PackedByteArray = Marshalls.base64_to_raw(payload)
+	if raw.size() < expected_raw_size:
+		push_error(
+			"HQ canyon decode verisi eksik. Beklenen en az=%d Gelen=%d" % [
+				expected_raw_size,
+				raw.size()
+			]
+		)
+		return null
+
+	# Some historical transfer chunks decode with 1-2 harmless bytes after the
+	# real RIFF payload. Never feed those bytes to the WebP decoder: the RIFF
+	# header is the authoritative file boundary.
+	if raw.size() > expected_raw_size:
+		print(
+			"HQ CANYON: RIFF sonrasi %d transfer byte kirpildi." % [
+				raw.size() - expected_raw_size
+			]
+		)
+		raw = raw.slice(0, expected_raw_size)
+
 	if raw.size() != expected_raw_size:
 		push_error(
-			"HQ canyon decode boyutu uyusmuyor. Beklenen=%d Gelen=%d" % [
+			"HQ canyon RIFF kirpma sonrasi boyut uyusmuyor. Beklenen=%d Gelen=%d" % [
 				expected_raw_size,
 				raw.size()
 			]
