@@ -1,22 +1,16 @@
 extends Node
 
 # TinyFisher accepted HQ canyon runtime.
-# Restores the single wide canyon artwork that was previously approved for the
-# 20-100 m band. No repeated rock towers, no procedural tiling.
-# The visible artwork is mapped mathematically to the real Water world width and
-# the live hook depth scale, so editor/runtime placement uses the same geometry.
+# The original 2048x682 lossless artwork is rebuilt from verified text chunks,
+# then fitted once across the real Water width and exact 20-100 m depth band.
+# No repeated rock towers and no direct dependency on the broken 14 KB WebP.
+
+const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
 const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To100"
-const TERRAIN_TEXTURE_PATH: String = "res://assets/environment/terrain/underwater_canyon_20_100_hq.webp"
-const LAYOUT_VERSION: int = 26
-
+const LAYOUT_VERSION: int = 27
 const TOP_M: float = 20.0
 const BOTTOM_M: float = 100.0
-
-# Accepted source is 2048x682. Rows 0..26 are fully transparent, therefore only
-# that empty strip is cropped. Every visible canyon pixel is preserved.
-const SOURCE_REGION: Rect2 = Rect2(0.0, 27.0, 2048.0, 655.0)
-
 const FALLBACK_LEFT: float = -1000.0
 const FALLBACK_RIGHT: float = 11000.0
 const FALLBACK_PPM: float = 34.5
@@ -27,6 +21,9 @@ var _scene_id: int = 0
 var _world: Node2D = null
 var _root: Node2D = null
 var _sprite: Sprite2D = null
+var _terrain_texture: Texture2D = null
+var _source_region: Rect2 = Rect2()
+var _texture_build_attempted: bool = false
 var _last_left: float = INF
 var _last_width: float = INF
 var _last_top_y: float = INF
@@ -35,13 +32,13 @@ var _last_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V26: ACCEPTED HQ CANYON RESTORED / EXACT 20-100M MAP FIT")
+	print("UNDERWATER TERRAIN V27: VERIFIED LOSSLESS HQ CANYON / EXACT 20-100M FIT")
 
 
 func _process(_delta: float) -> void:
 	var scene: Node = get_tree().current_scene
 	if scene == null:
-		_reset()
+		_reset_scene_state()
 		return
 
 	if scene.get_instance_id() != _scene_id:
@@ -61,7 +58,7 @@ func _process(_delta: float) -> void:
 	_fit_to_world()
 
 
-func _reset() -> void:
+func _reset_scene_state() -> void:
 	_scene_id = 0
 	_world = null
 	_root = null
@@ -78,24 +75,21 @@ func _ensure_terrain() -> void:
 
 	_remove_old_terrain()
 
-	var source_texture: Texture2D = load(TERRAIN_TEXTURE_PATH) as Texture2D
-	if source_texture == null:
-		push_error("HQ terrain texture bulunamadi: " + TERRAIN_TEXTURE_PATH)
+	if _terrain_texture == null and not _texture_build_attempted:
+		_texture_build_attempted = true
+		_terrain_texture = CanyonTextureLoader.build_texture()
+
+	if _terrain_texture == null:
 		return
 
-	var required_height: int = int(SOURCE_REGION.position.y + SOURCE_REGION.size.y)
-	if source_texture.get_width() < int(SOURCE_REGION.size.x) or source_texture.get_height() < required_height:
-		push_error(
-			"HQ terrain texture boyutu beklenenden kucuk: %dx%d" % [
-				source_texture.get_width(),
-				source_texture.get_height()
-			]
-		)
+	_source_region = CanyonTextureLoader.visible_region(_terrain_texture)
+	if _source_region.size.x <= 0.0 or _source_region.size.y <= 0.0:
+		push_error("HQ canyon visible region gecersiz.")
 		return
 
 	var atlas: AtlasTexture = AtlasTexture.new()
-	atlas.atlas = source_texture
-	atlas.region = SOURCE_REGION
+	atlas.atlas = _terrain_texture
+	atlas.region = _source_region
 
 	_root = Node2D.new()
 	_root.name = TERRAIN_NODE_NAME
@@ -106,8 +100,8 @@ func _ensure_terrain() -> void:
 	_root.set_meta("camera_locked", false)
 	_root.set_meta("depth_top_m", TOP_M)
 	_root.set_meta("depth_bottom_m", BOTTOM_M)
-	_root.set_meta("terrain_source", "accepted_hq_canyon_webp")
-	_root.set_meta("source_region", SOURCE_REGION)
+	_root.set_meta("terrain_source", "verified_hq_lossless_chunks")
+	_root.set_meta("source_region", _source_region)
 	_root.set_meta("kelp_surface_adapter", "pending_hq_canyon_surface")
 	_world.add_child(_root)
 
@@ -115,8 +109,6 @@ func _ensure_terrain() -> void:
 	_sprite.name = "TerrainSpriteHQ"
 	_sprite.centered = false
 	_sprite.texture = atlas
-	# This artwork is painted HQ terrain rather than a small pixel-art sprite.
-	# Linear filtering preserves the intended canyon silhouette when map-scaled.
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_sprite.position = Vector2.ZERO
 	_sprite.z_index = 0
@@ -127,6 +119,8 @@ func _ensure_terrain() -> void:
 
 func _fit_to_world(force: bool = false) -> void:
 	if not is_instance_valid(_root) or not is_instance_valid(_sprite) or _world == null:
+		return
+	if _source_region.size.x <= 0.0 or _source_region.size.y <= 0.0:
 		return
 
 	var bounds: Vector2 = _get_world_horizontal_bounds()
@@ -143,20 +137,17 @@ func _fit_to_world(force: bool = false) -> void:
 	and is_equal_approx(height, _last_height):
 		return
 
-	# Exact map fit, no hand-positioned guesses:
-	# X -> complete Water world width.
-	# Y -> exact live 20..100 m hook-depth band.
 	_root.global_position = Vector2(left, top_y)
 	_root.scale = Vector2(
-		width / SOURCE_REGION.size.x,
-		height / SOURCE_REGION.size.y
+		width / _source_region.size.x,
+		height / _source_region.size.y
 	)
 
 	_root.set_meta("map_left_x", left)
 	_root.set_meta("map_right_x", bounds.y)
 	_root.set_meta("world_y_20m", top_y)
 	_root.set_meta("world_y_100m", bottom_y)
-	_root.set_meta("source_visible_size", SOURCE_REGION.size)
+	_root.set_meta("source_visible_size", _source_region.size)
 	_root.set_meta("fit_scale", _root.scale)
 
 	_last_left = left
@@ -173,14 +164,12 @@ func _get_world_horizontal_bounds() -> Vector2:
 			var right: float = water.position.x + water.size.x
 			if right - left >= 1280.0:
 				return Vector2(left, right)
-
 	return Vector2(FALLBACK_LEFT, FALLBACK_RIGHT)
 
 
 func _pixels_per_meter() -> float:
 	if _world == null:
 		return FALLBACK_PPM
-
 	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
 	if hook == null:
 		return FALLBACK_PPM
@@ -189,7 +178,6 @@ func _pixels_per_meter() -> float:
 	var max_depth_meters: float = float(hook.get("max_depth_meters"))
 	if max_depth_pixels <= 0.0 or max_depth_meters <= 0.0:
 		return FALLBACK_PPM
-
 	return max_depth_pixels / max_depth_meters
 
 
