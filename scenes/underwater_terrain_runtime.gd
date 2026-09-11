@@ -1,20 +1,21 @@
 extends Node
 
-# TinyFisher canyon runtime V28.
+# TinyFisher canyon runtime V29.
 #
-# The verified canyon is rendered from the HQ in-memory texture produced by
-# canyon_texture_loader.gd. It is never non-uniformly squeezed into an arbitrary
-# 20-100 m rectangle anymore. The canyon keeps its authored aspect ratio and its
-# natural bottom depth is calculated from the real Water width.
+# The canyon is intentionally capped to the compact 5500 px world width. This
+# prevents the verified artwork from ever being stretched back across the old
+# 12k-wide prototype map. Aspect ratio stays locked and depth is derived from
+# that compact width.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
 const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION: int = 28
+const LAYOUT_VERSION: int = 29
 const TOP_M: float = 20.0
 const WORLD_PIXELS_PER_METER: float = 34.5
+const MAP_WIDTH_PX: float = 5500.0
 const FALLBACK_LEFT: float = -1000.0
-const FALLBACK_RIGHT: float = 11000.0
+const FALLBACK_RIGHT: float = 4500.0
 const FALLBACK_ZERO_Y: float = 392.6
 const TERRAIN_Z: int = -7
 const DEEP_WATER_MARGIN_PX: float = 700.0
@@ -34,7 +35,7 @@ var _last_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V28: HQ CANYON / ASPECT LOCKED / AUTO DEPTH")
+	print("UNDERWATER TERRAIN V29: COMPACT 5500PX MAP / HQ CANYON / ASPECT LOCKED")
 
 
 func _process(_delta: float) -> void:
@@ -105,6 +106,7 @@ func _ensure_terrain() -> void:
 	_root.set_meta("source_region", _source_region)
 	_root.set_meta("aspect_locked", true)
 	_root.set_meta("world_pixels_per_meter", WORLD_PIXELS_PER_METER)
+	_root.set_meta("compact_map_width_px", MAP_WIDTH_PX)
 	_root.set_meta("kelp_surface_adapter", "pending_hq_canyon_surface")
 	_world.add_child(_root)
 
@@ -112,7 +114,7 @@ func _ensure_terrain() -> void:
 	_sprite.name = "TerrainSpriteHQ"
 	_sprite.centered = false
 	_sprite.texture = atlas
-	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_sprite.position = Vector2.ZERO
 	_sprite.z_index = 0
 	_root.add_child(_sprite)
@@ -131,8 +133,6 @@ func _fit_to_world(force: bool = false) -> void:
 	var width: float = maxf(bounds.y - bounds.x, 1.0)
 	var top_y: float = _world_y_for_depth(TOP_M)
 
-	# One scale value for both axes. This is the important V28 change: the canyon
-	# can never be horizontally stretched and vertically crushed again.
 	var uniform_scale: float = width / _source_region.size.x
 	var height: float = _source_region.size.y * uniform_scale
 	var bottom_y: float = top_y + height
@@ -165,7 +165,7 @@ func _fit_to_world(force: bool = false) -> void:
 
 	if force:
 		print(
-			"CANYON LAYOUT READY: top=", TOP_M,
+			"CANYON COMPACT LAYOUT: top=", TOP_M,
 			"m bottom=", snappedf(bottom_m, 0.1),
 			"m world=", snappedf(width, 1.0), "x", snappedf(height, 1.0),
 			" scale=", snappedf(uniform_scale, 0.001)
@@ -189,7 +189,8 @@ func _get_world_horizontal_bounds() -> Vector2:
 		var water: Control = _world.get_node_or_null("Water") as Control
 		if water != null:
 			var left: float = water.position.x
-			var right: float = water.position.x + water.size.x
+			var water_right: float = water.position.x + water.size.x
+			var right: float = minf(water_right, left + MAP_WIDTH_PX)
 			if right - left >= 1280.0:
 				return Vector2(left, right)
 	return Vector2(FALLBACK_LEFT, FALLBACK_RIGHT)
