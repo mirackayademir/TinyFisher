@@ -1,33 +1,34 @@
 extends Node
 
 # TinyFisher environment asset 9 / 36 - shallow_rock_01.png
-# First controlled shallow-rock pass. Two copies only, anchored to the upper
-# canyon shoulders so the asset never floats in open water.
+# V2: rocks are anchored to the real canyon alpha surface and parented directly
+# to the canyon terrain. This prevents floating/invisible placements and stops
+# the old MidDecor rebuild loop from printing every frame.
 
 const ROOT_NAME: String = "ShallowRock01Art"
-const LAYER_PATH: String = "EnvironmentLayers/UnderwaterLayers/MidDecorLayer"
 const TEXTURE_PATH: String = "res://assets/environment/shallow/shallow_rock_01.png"
 const TERRAIN_NAME: String = "UnderwaterCanyonTerrain20To100"
+const TERRAIN_SPRITE_NAME: String = "TerrainSpriteHQ"
+const ALPHA_THRESHOLD: float = 0.10
 
-const FALLBACK_LEFT_X: float = -1000.0
-const FALLBACK_RIGHT_X: float = 4500.0
-const FALLBACK_CANYON_TOP_Y: float = 1082.6
+const LEFT_RATIO: float = 0.16
+const RIGHT_RATIO: float = 0.84
+const LEFT_WORLD_HEIGHT: float = 360.0
+const RIGHT_WORLD_HEIGHT: float = 320.0
+const SURFACE_EMBED_LOCAL_PX: float = 10.0
 
 var _scene_id: int = 0
+var _terrain_id: int = 0
 var _world: Node2D = null
 var _root: Node2D = null
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("SHALLOW ROCK 01 RUNTIME V1: ENVIRONMENT 9/36")
+	print("SHALLOW ROCK 01 RUNTIME V2: REAL CANYON SURFACE / ENVIRONMENT 9/36")
 
 
 func _process(_delta: float) -> void:
-	_ensure_art()
-
-
-func _ensure_art() -> void:
 	var scene: Node = get_tree().current_scene
 	if scene == null:
 		_reset()
@@ -36,26 +37,38 @@ func _ensure_art() -> void:
 	if scene.get_instance_id() != _scene_id:
 		_scene_id = scene.get_instance_id()
 		_world = scene as Node2D
+		_terrain_id = 0
 		_root = null
 
 	if _world == null:
 		return
-	if is_instance_valid(_root):
-		return
 
-	var layer: Node2D = _world.get_node_or_null(LAYER_PATH) as Node2D
-	if layer == null:
-		return
-
-	# Wait for the accepted canyon runtime. The rocks are positioned from its
-	# actual top Y, not from a guessed editor coordinate.
 	var terrain: Node2D = _world.get_node_or_null(TERRAIN_NAME) as Node2D
 	if terrain == null:
 		return
 
-	var existing: Node2D = layer.get_node_or_null(ROOT_NAME) as Node2D
+	if terrain.get_instance_id() != _terrain_id:
+		_terrain_id = terrain.get_instance_id()
+		_root = null
+
+	if is_instance_valid(_root):
+		return
+
+	var existing: Node2D = terrain.get_node_or_null(ROOT_NAME) as Node2D
 	if existing != null:
 		_root = existing
+		return
+
+	_build_rocks(terrain)
+
+
+func _build_rocks(terrain: Node2D) -> void:
+	var terrain_sprite: Sprite2D = terrain.get_node_or_null(TERRAIN_SPRITE_NAME) as Sprite2D
+	if terrain_sprite == null or terrain_sprite.texture == null:
+		return
+
+	var canyon_image: Image = terrain_sprite.texture.get_image()
+	if canyon_image == null or canyon_image.is_empty():
 		return
 
 	var source_texture: Texture2D = load(TEXTURE_PATH) as Texture2D
@@ -66,88 +79,122 @@ func _ensure_art() -> void:
 	var rock_texture: Texture2D = _crop_to_used_alpha(source_texture)
 	var rock_size: Vector2 = rock_texture.get_size()
 	if rock_size.x <= 0.0 or rock_size.y <= 0.0:
-		push_warning("shallow_rock_01 texture boyutu gecersiz.")
+		return
+
+	var left_surface: Vector2 = _find_surface_near_ratio(canyon_image, LEFT_RATIO)
+	var right_surface: Vector2 = _find_surface_near_ratio(canyon_image, RIGHT_RATIO)
+	if left_surface.x < 0.0 or right_surface.x < 0.0:
+		push_warning("shallow_rock_01 canyon yuzeyi bulunamadi.")
 		return
 
 	_root = Node2D.new()
 	_root.name = ROOT_NAME
+	_root.z_index = 3
 	_root.set_meta("environment_asset_index", 9)
 	_root.set_meta("environment_asset_total", 36)
-	_root.set_meta("depth_band_m", Vector2(18.0, 28.0))
-	_root.set_meta("placement", "upper_canyon_shoulders")
-	layer.add_child(_root)
+	_root.set_meta("placement", "alpha_surface_anchored")
+	terrain.add_child(_root)
 
-	var bounds: Vector2 = _world_bounds()
-	var width: float = bounds.y - bounds.x
-	var canyon_top_y: float = _terrain_top_y(terrain)
-
-	# Left shoulder: slightly larger, just inside the canyon wall.
-	_add_rock(
+	_add_rock_local(
 		rock_texture,
-		Vector2(bounds.x + width * 0.23, canyon_top_y + 95.0),
-		245.0,
-		0.025,
+		left_surface + Vector2(0.0, SURFACE_EMBED_LOCAL_PX),
+		LEFT_WORLD_HEIGHT,
+		0.018,
 		false,
+		terrain,
 		"ShallowRock01_Left"
 	)
-
-	# Right shoulder: smaller mirrored copy to avoid obvious repetition.
-	_add_rock(
+	_add_rock_local(
 		rock_texture,
-		Vector2(bounds.x + width * 0.82, canyon_top_y + 125.0),
-		205.0,
-		-0.035,
+		right_surface + Vector2(0.0, SURFACE_EMBED_LOCAL_PX),
+		RIGHT_WORLD_HEIGHT,
+		-0.022,
 		true,
+		terrain,
 		"ShallowRock01_Right"
 	)
 
+	var left_world: Vector2 = terrain.to_global(left_surface)
+	var right_world: Vector2 = terrain.to_global(right_surface)
 	print(
-		"ENVIRONMENT: 9/36 aktif - shallow_rock_01 / canyon_top_y=",
-		snappedf(canyon_top_y, 0.1),
-		" / bounds=", bounds.x, "..", bounds.y
+		"ENVIRONMENT: 9/36 aktif - shallow_rock_01 / surface anchors=",
+		Vector2(snappedf(left_world.x, 1.0), snappedf(left_world.y, 1.0)),
+		" & ",
+		Vector2(snappedf(right_world.x, 1.0), snappedf(right_world.y, 1.0))
 	)
 
 
-func _add_rock(
+func _add_rock_local(
 	texture: Texture2D,
-	bottom_anchor: Vector2,
-	target_height: float,
+	bottom_anchor_local: Vector2,
+	target_world_height: float,
 	rotation_value: float,
 	flip_x: bool,
+	terrain: Node2D,
 	node_name: String
 ) -> void:
 	var size: Vector2 = texture.get_size()
 	if size.x <= 0.0 or size.y <= 0.0:
 		return
 
-	var scale_value: float = target_height / size.y
+	var terrain_scale_y: float = maxf(absf(terrain.global_scale.y), 0.001)
+	var target_local_height: float = target_world_height / terrain_scale_y
+	var scale_value: float = target_local_height / size.y
+
 	var sprite: Sprite2D = Sprite2D.new()
 	sprite.name = node_name
 	sprite.texture = texture
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	sprite.position = Vector2(bottom_anchor.x, bottom_anchor.y - target_height * 0.5)
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	sprite.position = Vector2(bottom_anchor_local.x, bottom_anchor_local.y - target_local_height * 0.5)
 	sprite.scale = Vector2(-scale_value if flip_x else scale_value, scale_value)
 	sprite.rotation = rotation_value
-	sprite.modulate = Color(0.82, 0.91, 0.98, 0.94)
+	sprite.modulate = Color(0.92, 0.97, 1.0, 1.0)
 	_root.add_child(sprite)
 
 
-func _terrain_top_y(terrain: Node2D) -> float:
-	var value: Variant = terrain.get_meta("world_y_top", FALLBACK_CANYON_TOP_Y)
-	if value is int or value is float:
-		return value + 0.0
-	return FALLBACK_CANYON_TOP_Y
+func _find_surface_near_ratio(image: Image, ratio: float) -> Vector2:
+	var width: int = image.get_width()
+	var height: int = image.get_height()
+	if width <= 0 or height <= 0:
+		return Vector2(-1.0, -1.0)
+
+	var target_x: int = clampi(int(round(float(width - 1) * ratio)), 0, width - 1)
+	var search_radius: int = maxi(24, int(round(float(width) * 0.045)))
+	var best_x: int = -1
+	var best_y: int = height + 1
+	var best_distance: int = width + 1
+
+	for offset: int in range(search_radius + 1):
+		var candidates: Array[int] = [target_x + offset]
+		if offset > 0:
+			candidates.append(target_x - offset)
+
+		for x: int in candidates:
+			if x < 0 or x >= width:
+				continue
+			var y: int = _top_opaque_y(image, x)
+			if y < 0:
+				continue
+
+			var distance: int = absi(x - target_x)
+			if distance < best_distance or (distance == best_distance and y < best_y):
+				best_x = x
+				best_y = y
+				best_distance = distance
+
+		if best_x >= 0 and offset > 20:
+			break
+
+	if best_x < 0:
+		return Vector2(-1.0, -1.0)
+	return Vector2(float(best_x) + 0.5, float(best_y) + 0.5)
 
 
-func _world_bounds() -> Vector2:
-	if _world != null:
-		var water: Control = _world.get_node_or_null("Water") as Control
-		if water != null:
-			var left: float = water.position.x
-			var right: float = water.position.x + water.size.x
-			if right - left >= 1280.0:
-				return Vector2(left, right)
-	return Vector2(FALLBACK_LEFT_X, FALLBACK_RIGHT_X)
+func _top_opaque_y(image: Image, x: int) -> int:
+	for y: int in range(image.get_height()):
+		if image.get_pixel(x, y).a >= ALPHA_THRESHOLD:
+			return y
+	return -1
 
 
 func _crop_to_used_alpha(source_texture: Texture2D) -> Texture2D:
@@ -175,5 +222,6 @@ func _crop_to_used_alpha(source_texture: Texture2D) -> Texture2D:
 
 func _reset() -> void:
 	_scene_id = 0
+	_terrain_id = 0
 	_world = null
 	_root = null
