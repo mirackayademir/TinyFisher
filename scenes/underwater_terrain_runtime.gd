@@ -6,18 +6,19 @@ extends Node
 # Water world bounds + live hook depth scale. It never follows the camera.
 
 const TERRAIN_NODE_NAME := "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION := 19
+const LAYOUT_VERSION := 20
 
 const TOP_M := 20.0
 const BOTTOM_M := 100.0
 const SOURCE_CROP_TOP_PX := 27
 const EXPECTED_SOURCE_WIDTH := 2048
 const EXPECTED_SOURCE_HEIGHT := 682
+const MIN_MEANINGFUL_OVERLAP := 32
+const MAX_OVERLAP_SCAN := 8192
 
-# part_02.txt was the damaged/overlapped upload. The later verified split
-# part_02a + part_02b replaces it. The final part also contains harmless
-# trailing transfer data; the RIFF header is used to cut the payload at the
-# exact original WebP byte length before decoding.
+# part_02.txt is obsolete and intentionally ignored. The verified replacement
+# is part_02a + part_02b. Runtime also removes any accidental overlap between
+# adjacent transfer chunks before rebuilding the original WebP.
 const LOSSLESS_PART_PATHS := [
 	"res://assets/environment/terrain/runtime_data/hq_lossless/part_00.txt",
 	"res://assets/environment/terrain/runtime_data/hq_lossless/part_01.txt",
@@ -42,6 +43,7 @@ var _root: Node2D
 var _sprite: Sprite2D
 var _source_region := Rect2()
 var _terrain_texture: Texture2D
+var _terrain_build_attempted := false
 var _last_left := INF
 var _last_width := INF
 var _last_top_y := INF
@@ -50,7 +52,7 @@ var _last_height := INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V19: VERIFIED LOSSLESS RIFF RUNTIME / EXACT 20-100M MAP FIT")
+	print("UNDERWATER TERRAIN V20: OVERLAP-SAFE LOSSLESS RUNTIME / EXACT 20-100M MAP FIT")
 
 
 func _process(_delta: float) -> void:
@@ -64,6 +66,7 @@ func _process(_delta: float) -> void:
 		_world = scene as Node2D
 		_root = null
 		_sprite = null
+		_terrain_build_attempted = false
 		_last_left = INF
 		_last_width = INF
 		_last_top_y = INF
@@ -81,6 +84,7 @@ func _reset() -> void:
 	_world = null
 	_root = null
 	_sprite = null
+	_terrain_build_attempted = false
 	_last_left = INF
 	_last_width = INF
 	_last_top_y = INF
@@ -91,9 +95,13 @@ func _ensure_terrain() -> void:
 	if is_instance_valid(_root) and is_instance_valid(_sprite):
 		return
 
+	if _terrain_build_attempted and _terrain_texture == null:
+		return
+
 	_remove_old_terrain()
 
 	if _terrain_texture == null:
+		_terrain_build_attempted = true
 		_terrain_texture = _build_lossless_texture()
 	if _terrain_texture == null:
 		return
@@ -141,6 +149,7 @@ func _ensure_terrain() -> void:
 
 func _build_lossless_texture() -> Texture2D:
 	var payload := ""
+	var overlap_removed := 0
 
 	for path_variant in LOSSLESS_PART_PATHS:
 		var path := String(path_variant)
@@ -153,17 +162,20 @@ func _build_lossless_texture() -> Texture2D:
 			push_error("HQ terrain runtime parcasi acilamadi: " + path)
 			return null
 
-		var chunk := file.get_as_text()
-		chunk = chunk.replace("\n", "")
-		chunk = chunk.replace("\r", "")
-		chunk = chunk.replace("\t", "")
-		chunk = chunk.replace(" ", "")
-		payload += chunk
+		var chunk := _normalize_base64(file.get_as_text())
+		if chunk.is_empty():
+			push_error("HQ terrain runtime parcasi bos: " + path)
+			return null
 
-	# A WebP begins with RIFF <little-endian file-size-minus-8> WEBP.
-	# Decoding only the first 16 base64 chars gives the complete 12-byte header,
-	# so we can recover the authoritative original file length even if a transfer
-	# chunk contains extra characters after the real image.
+		if payload.is_empty():
+			payload = chunk
+		else:
+			var overlap := _find_transfer_overlap(payload, chunk)
+			if overlap > 0:
+				overlap_removed += overlap
+				chunk = chunk.substr(overlap)
+			payload += chunk
+
 	if payload.length() < 16:
 		push_error("HQ terrain payload RIFF basligi icin fazla kisa.")
 		return null
@@ -195,30 +207,31 @@ func _build_lossless_texture() -> Texture2D:
 		)
 		return null
 
-	# Cut only transfer garbage after the authoritative RIFF boundary.
-	payload = payload.substr(0, expected_base64_length)
-	if payload.length() % 4 != 0:
-		push_error("HQ terrain base64 payload 4-byte hizasinda degil.")
-		return null
-
-	var raw := Marshalls.base64_to_raw(payload)
-	if raw.is_empty():
-		push_error("HQ terrain base64 decode bos veri dondurdu.")
-		return null
-
-	if raw.size() != expected_raw_size:
+	# The transfer chunks contain the raw base64 stream without relying on final
+	# '=' padding. Decode enough encoded data, then obey the WebP's own RIFF
+	# length as the authoritative byte boundary. This is the exact fix for the
+	# previous 107932-vs-107934 error.
+	var encoded_image := payload.substr(0, expected_base64_length)
+	var raw := Marshalls.base64_to_raw(encoded_image)
+	if raw.size() < expected_raw_size:
 		push_error(
-			"HQ terrain RIFF boyutu uyusmuyor. Beklenen=%d Gelen=%d" % [
-				expected_raw_size,
-				raw.size()
-			]
+			"HQ terrain decode eksik. Beklenen=%d Gelen=%d" % [expected_raw_size, raw.size()]
 		)
 		return null
+
+	if raw.size() > expected_raw_size:
+		raw.resize(expected_raw_size)
 
 	var image := Image.new()
 	var decode_error := image.load_webp_from_buffer(raw)
 	if decode_error != OK or image.is_empty():
-		push_error("HQ terrain runtime WebP decode edilemedi. Error=%d" % decode_error)
+		push_error(
+			"HQ terrain runtime WebP decode edilemedi. Error=%d / overlap=%d / payload=%d" % [
+				decode_error,
+				overlap_removed,
+				payload.length()
+			]
+		)
 		return null
 
 	if image.get_width() != EXPECTED_SOURCE_WIDTH or image.get_height() != EXPECTED_SOURCE_HEIGHT:
@@ -233,9 +246,9 @@ func _build_lossless_texture() -> Texture2D:
 		return null
 
 	print(
-		"HQ TERRAIN OK: %d parca / %d base64 char / %d byte / %dx%d" % [
+		"HQ TERRAIN OK: %d parca / overlap=%d / %d byte / %dx%d" % [
 			LOSSLESS_PART_PATHS.size(),
-			payload.length(),
+			overlap_removed,
 			raw.size(),
 			image.get_width(),
 			image.get_height()
@@ -243,6 +256,29 @@ func _build_lossless_texture() -> Texture2D:
 	)
 
 	return ImageTexture.create_from_image(image)
+
+
+func _normalize_base64(text: String) -> String:
+	var clean := text
+	clean = clean.replace("\n", "")
+	clean = clean.replace("\r", "")
+	clean = clean.replace("\t", "")
+	clean = clean.replace(" ", "")
+	return clean
+
+
+func _find_transfer_overlap(existing: String, incoming: String) -> int:
+	var max_overlap := mini(existing.length(), incoming.length())
+	max_overlap = mini(max_overlap, MAX_OVERLAP_SCAN)
+	if max_overlap < MIN_MEANINGFUL_OVERLAP:
+		return 0
+
+	# Random base64 can share a few characters by chance. We only accept a
+	# substantial exact suffix/prefix match, scanning from largest to smallest.
+	for overlap in range(max_overlap, MIN_MEANINGFUL_OVERLAP - 1, -1):
+		if existing.substr(existing.length() - overlap, overlap) == incoming.substr(0, overlap):
+			return overlap
+	return 0
 
 
 func _fit_to_world(force := false) -> void:
@@ -265,11 +301,6 @@ func _fit_to_world(force := false) -> void:
 	and is_equal_approx(height, _last_height):
 		return
 
-	# Exact map fit:
-	# X -> complete Water width (-1000..11000 = 12000 px in world.tscn)
-	# Y -> exact live 20..100 m band (34.5 px/m in current full-depth test).
-	# Only the 27 fully-transparent source rows are cropped; every visible pixel
-	# is mapped directly into the requested world/depth footprint.
 	_root.global_position = Vector2(left, top_y)
 	_root.scale = Vector2(
 		width / _source_region.size.x,
