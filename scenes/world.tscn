@@ -30,7 +30,7 @@ material = SubResource("ShaderMaterial_sky")
 mouse_filter = 2
 offset_left = -1000.0
 offset_top = -500.0
-offset_right = 11000.0
+offset_right = 4500.0
 offset_bottom = 360.0
 color = Color(1, 1, 1, 1)
 
@@ -40,7 +40,7 @@ material = SubResource("ShaderMaterial_ocean")
 mouse_filter = 2
 offset_left = -1000.0
 offset_top = 360.0
-offset_right = 11000.0
+offset_right = 4500.0
 offset_bottom = 1860.0
 color = Color(1, 1, 1, 1)
 
