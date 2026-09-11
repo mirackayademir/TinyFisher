@@ -1,16 +1,14 @@
 extends Node
 
-# TinyFisher canyon runtime V29.
-#
-# The canyon is intentionally capped to the compact 5500 px world width. This
-# prevents the verified artwork from ever being stretched back across the old
-# 12k-wide prototype map. Aspect ratio stays locked and depth is derived from
-# that compact width.
+# TinyFisher canyon runtime V30.
+# Final transparent HQ canyon, compact 5500 px world, aspect ratio locked.
+# The texture is loaded directly at HQ resolution; runtime never enlarges the
+# source image itself. Only the scene transform fits it to the world.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
 const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION: int = 29
+const LAYOUT_VERSION: int = 30
 const TOP_M: float = 20.0
 const WORLD_PIXELS_PER_METER: float = 34.5
 const MAP_WIDTH_PX: float = 5500.0
@@ -35,7 +33,7 @@ var _last_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V29: COMPACT 5500PX MAP / HQ CANYON / ASPECT LOCKED")
+	print("UNDERWATER TERRAIN V30: FINAL TRANSPARENT HQ / COMPACT 5500PX / ASPECT LOCKED")
 
 
 func _process(_delta: float) -> void:
@@ -87,7 +85,7 @@ func _ensure_terrain() -> void:
 
 	_source_region = CanyonTextureLoader.visible_region(_terrain_texture)
 	if _source_region.size.x <= 0.0 or _source_region.size.y <= 0.0:
-		push_error("HQ canyon visible region gecersiz.")
+		push_error("FINAL HQ canyon visible region gecersiz.")
 		return
 
 	var atlas: AtlasTexture = AtlasTexture.new()
@@ -102,12 +100,11 @@ func _ensure_terrain() -> void:
 	_root.set_meta("collisionless", true)
 	_root.set_meta("camera_locked", false)
 	_root.set_meta("depth_top_m", TOP_M)
-	_root.set_meta("terrain_source", "verified_v15_hq_lanczos")
+	_root.set_meta("terrain_source", "final_hq_transparent_png")
 	_root.set_meta("source_region", _source_region)
 	_root.set_meta("aspect_locked", true)
 	_root.set_meta("world_pixels_per_meter", WORLD_PIXELS_PER_METER)
 	_root.set_meta("compact_map_width_px", MAP_WIDTH_PX)
-	_root.set_meta("kelp_surface_adapter", "pending_hq_canyon_surface")
 	_world.add_child(_root)
 
 	_sprite = Sprite2D.new()
@@ -165,10 +162,11 @@ func _fit_to_world(force: bool = false) -> void:
 
 	if force:
 		print(
-			"CANYON COMPACT LAYOUT: top=", TOP_M,
+			"FINAL CANYON LAYOUT: top=", TOP_M,
 			"m bottom=", snappedf(bottom_m, 0.1),
 			"m world=", snappedf(width, 1.0), "x", snappedf(height, 1.0),
-			" scale=", snappedf(uniform_scale, 0.001)
+			" scale=", snappedf(uniform_scale, 0.001),
+			" / source=", _source_region.size
 		)
 
 
