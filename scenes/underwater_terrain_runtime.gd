@@ -2,19 +2,18 @@ extends Node
 
 # TinyFisher grounded canyon compositor.
 #
-# V24 keeps the exact grounded canyon layout from V23 and adds the next
-# approved environment asset: shallow_kelp_01.png.
+# V25 removes approximate kelp placement completely.
+# Kelp roots are now pixel-locked to the ACTUAL visible rock surface:
+# - Rock PNG alpha is scanned to find a stable opaque upper surface point.
+# - Kelp PNG alpha is scanned to find the real bottom/root pixel.
+# - Both source pixels are transformed through the exact Sprite2D scale/flip.
+# - The two pixels are mapped to the same world coordinate.
 #
-# Important placement rule:
-# - The current map has no real solid 0-20 m shelf yet.
-# - Kelp is therefore NOT allowed to float in the shallow-water band.
-# - It is attached only to the highest existing solid canyon ledges.
-# - Each kelp pivot is anchored at its base, so sway animation cannot detach
-#   the plant from the rock surface.
-# - No collision is added; this remains visual terrain/decor only.
+# Result: transparent padding inside either PNG can no longer make kelp float.
+# This is visual terrain only; it intentionally has no collision yet.
 
 const TERRAIN_NODE_NAME := "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION := 24
+const LAYOUT_VERSION := 25
 
 const TOP_M := 20.0
 const BOTTOM_M := 100.0
@@ -28,9 +27,6 @@ const FALLBACK_ZERO_Y := 392.6
 # Water is -9. Keep the canyon above the water shader and behind gameplay.
 const TERRAIN_Z := -4
 
-# Exact horizontal composition. With the current 1280 px viewport and the
-# natural width of the tall rock, this leaves a navigable open-water channel
-# without allowing multiple formations to pile on top of one another.
 const SPIRE_SPACING_X := 2200.0
 const FIRST_SPIRE_OFFSET_X := 900.0
 const MIN_HORIZONTAL_GAP := 90.0
@@ -39,16 +35,25 @@ const ROCK_TALL := "res://assets/environment/deep_sea/deep_sea_rock_01.png"
 const ROCK_FLOOR := "res://assets/environment/deep_sea/deep_sea_rock_02.png"
 const KELP_TEXTURE := "res://assets/environment/shallow/shallow_kelp_01.png"
 
-# Top edge of each seabed-connected spire. The pattern repeats across X.
-# These are not sprite center depths: they are the exact desired TOP depth.
+# Top edge of each sprite rectangle. Visible rock pixels are calculated from
+# alpha and are NOT assumed to live on this rectangle edge.
 const SPIRE_TOP_DEPTH_PATTERN := [44.0, 48.0, 52.0, 46.0, 50.0, 45.0]
 
-# The map currently has no grounded 0-20 m shelf. Only the highest existing
-# ledges are eligible for kelp, so the shallow asset never floats in blue water.
+# There is still no real 0-20 m solid shelf. Only the highest existing canyon
+# formations receive kelp for now.
 const KELP_MAX_LEDGE_DEPTH_M := 48.0
 const KELP_TARGET_HEIGHT_PATTERN := [155.0, 132.0, 146.0, 125.0]
 const KELP_SWAY_SPEED := 0.85
 const KELP_SWAY_RADIANS := 0.035
+
+# Alpha geometry settings. Pixels below this threshold are treated as
+# transparent so anti-aliased fringe pixels do not become fake support points.
+const ALPHA_THRESHOLD := 0.18
+const ROCK_SCAN_MIN_X_RATIO := 0.16
+const ROCK_SCAN_MAX_X_RATIO := 0.84
+const ROCK_SURFACE_WINDOW_RATIO := 0.035
+const ROCK_MAX_LOCAL_ROUGHNESS_PX := 34
+const KELP_BASE_SAMPLE_ROWS := 8
 
 var _scene_id := 0
 var _world: Node2D = null
@@ -62,10 +67,15 @@ var _occupied_x: Array[Vector2] = []
 var _kelp_pivots: Array[Node2D] = []
 var _kelp_time := 0.0
 
+# Cached source-pixel anchors. These are actual visible alpha pixels, not
+# guessed world/depth coordinates.
+var _rock_surface_source_px := Vector2(-1.0, -1.0)
+var _kelp_base_source_px := Vector2(-1.0, -1.0)
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V24: GROUNDED CANYON + GROUNDED KELP / NO FLOATING DECOR")
+	print("UNDERWATER TERRAIN V25: PIXEL-LOCKED ROCK/KELP GROUNDING")
 
 
 func _process(delta: float) -> void:
@@ -115,6 +125,7 @@ func _reset() -> void:
 func _rebuild_terrain(bounds: Vector2, ppm: float) -> void:
 	_remove_old_terrain()
 	_cache_textures()
+	_cache_alpha_geometry()
 
 	if not _textures.has(ROCK_TALL) or not _textures.has(ROCK_FLOOR):
 		push_error("Underwater terrain: gerekli HQ kaya texture'lari bulunamadi.")
@@ -130,7 +141,7 @@ func _rebuild_terrain(bounds: Vector2, ppm: float) -> void:
 	_root.set_meta("depth_top_m", TOP_M)
 	_root.set_meta("depth_bottom_m", BOTTOM_M)
 	_root.set_meta("terrain_source", "grounded_hq_png_canyon")
-	_root.set_meta("environment_asset_kelp", true)
+	_root.set_meta("kelp_grounding", "alpha_pixel_lock")
 	_world.add_child(_root)
 
 	_occupied_x.clear()
@@ -145,13 +156,17 @@ func _rebuild_terrain(bounds: Vector2, ppm: float) -> void:
 	_last_ppm = ppm
 
 	print(
-		"HQ CANYON GROUNDED: V%d / X %.0f..%.0f / %.2f px-m / terrain=%d / kelp=%d" % [
+		"HQ CANYON V%d / X %.0f..%.0f / %.2f px-m / terrain=%d / kelp=%d / rock_px=(%.1f,%.1f) / kelp_base_px=(%.1f,%.1f)" % [
 			LAYOUT_VERSION,
 			bounds.x,
 			bounds.y,
 			ppm,
 			_occupied_x.size(),
-			_kelp_pivots.size()
+			_kelp_pivots.size(),
+			_rock_surface_source_px.x,
+			_rock_surface_source_px.y,
+			_kelp_base_source_px.x,
+			_kelp_base_source_px.y
 		]
 	)
 
@@ -169,6 +184,33 @@ func _cache_textures() -> void:
 			push_warning("Underwater terrain texture atlandi: " + path)
 
 
+func _cache_alpha_geometry() -> void:
+	if _rock_surface_source_px.x >= 0.0 and _kelp_base_source_px.x >= 0.0:
+		return
+
+	var rock_texture := _textures.get(ROCK_TALL) as Texture2D
+	var kelp_texture := _textures.get(KELP_TEXTURE) as Texture2D
+	if rock_texture == null or kelp_texture == null:
+		return
+
+	var rock_image := rock_texture.get_image()
+	var kelp_image := kelp_texture.get_image()
+	if rock_image == null or rock_image.is_empty():
+		push_warning("Rock alpha geometry okunamadi.")
+		return
+	if kelp_image == null or kelp_image.is_empty():
+		push_warning("Kelp alpha geometry okunamadi.")
+		return
+
+	_rock_surface_source_px = _find_stable_rock_surface_pixel(rock_image)
+	_kelp_base_source_px = _find_kelp_base_pixel(kelp_image)
+
+	if _rock_surface_source_px.x < 0.0:
+		push_warning("Gercek kaya yuzey pikseli bulunamadi.")
+	if _kelp_base_source_px.x < 0.0:
+		push_warning("Gercek kelp kok pikseli bulunamadi.")
+
+
 func _build_seabed_mass(bounds: Vector2) -> void:
 	if not is_instance_valid(_root):
 		return
@@ -178,11 +220,8 @@ func _build_seabed_mass(bounds: Vector2) -> void:
 	var width := bounds.y - bounds.x
 	var step := 400.0
 	var point_count := int(ceil(width / step)) + 1
-
 	var points := PackedVector2Array()
 
-	# A deterministic, low-amplitude contour. This is the solid visual mass that
-	# every canyon rock touches; it prevents a rock base from ever hanging in blue.
 	for i in range(point_count + 1):
 		var x := minf(bounds.x + float(i) * step, bounds.y)
 		var wave := sin(float(i) * 1.37) * 18.0 + sin(float(i) * 0.53) * 11.0
@@ -200,15 +239,13 @@ func _build_seabed_mass(bounds: Vector2) -> void:
 
 
 func _build_grounded_spires(bounds: Vector2) -> void:
-	var texture: Texture2D = _textures.get(ROCK_TALL) as Texture2D
+	var texture := _textures.get(ROCK_TALL) as Texture2D
 	if texture == null:
 		return
 
 	var x := bounds.x + FIRST_SPIRE_OFFSET_X
 	var index := 0
 
-	# Include one formation slightly beyond the right edge so the world boundary
-	# never exposes a naked cut in the composition.
 	while x <= bounds.y + FIRST_SPIRE_OFFSET_X:
 		var top_depth := float(SPIRE_TOP_DEPTH_PATTERN[index % SPIRE_TOP_DEPTH_PATTERN.size()])
 		_add_grounded_spire(texture, x, top_depth, index)
@@ -224,9 +261,6 @@ func _add_grounded_spire(texture: Texture2D, center_x: float, top_depth_m: float
 	var top_y := _world_y_for_depth(top_depth_m)
 	var seabed_y := _seabed_y_at_x(center_x)
 	var target_height := maxf(seabed_y - top_y, 1.0)
-
-	# Uniform scale only: width is derived from the PNG's real aspect ratio.
-	# deep_sea_rock_01 is 520x560, so there is no arbitrary X/Y stretching.
 	var scale_factor := target_height / source_size.y
 	var rendered_width := source_size.x * scale_factor
 
@@ -234,7 +268,6 @@ func _add_grounded_spire(texture: Texture2D, center_x: float, top_depth_m: float
 		center_x - rendered_width * 0.5,
 		center_x + rendered_width * 0.5
 	)
-
 	if not _reserve_interval(interval):
 		return
 
@@ -256,7 +289,7 @@ func _add_grounded_spire(texture: Texture2D, center_x: float, top_depth_m: float
 
 
 func _build_floor_detail(bounds: Vector2) -> void:
-	var texture: Texture2D = _textures.get(ROCK_FLOOR) as Texture2D
+	var texture := _textures.get(ROCK_FLOOR) as Texture2D
 	if texture == null:
 		return
 
@@ -264,9 +297,6 @@ func _build_floor_detail(bounds: Vector2) -> void:
 	if source_size.x <= 0.0 or source_size.y <= 0.0:
 		return
 
-	# One small grounded boulder in the middle of each spire gap. Its exact width
-	# is intentionally capped so the interval check keeps a visible gap from the
-	# neighbouring spires. These only decorate the true 100 m seabed.
 	var x := bounds.x + FIRST_SPIRE_OFFSET_X + SPIRE_SPACING_X * 0.5
 	var index := 0
 	var target_width := 480.0
@@ -296,13 +326,16 @@ func _build_floor_detail(bounds: Vector2) -> void:
 
 
 func _build_grounded_kelp(bounds: Vector2) -> void:
-	var texture: Texture2D = _textures.get(KELP_TEXTURE) as Texture2D
-	if texture == null:
+	var kelp_texture := _textures.get(KELP_TEXTURE) as Texture2D
+	if kelp_texture == null:
 		push_warning("Kelp texture bulunamadi; terrain kelpsiz devam ediyor.")
 		return
+	if _rock_surface_source_px.x < 0.0 or _kelp_base_source_px.x < 0.0:
+		push_warning("Alpha anchor geometry hazir degil; kelp spawn iptal edildi.")
+		return
 
-	var source_size := texture.get_size()
-	if source_size.x <= 0.0 or source_size.y <= 0.0:
+	var kelp_size := kelp_texture.get_size()
+	if kelp_size.x <= 0.0 or kelp_size.y <= 0.0:
 		return
 
 	var x := bounds.x + FIRST_SPIRE_OFFSET_X
@@ -311,46 +344,176 @@ func _build_grounded_kelp(bounds: Vector2) -> void:
 
 	while x <= bounds.y:
 		var top_depth := float(SPIRE_TOP_DEPTH_PATTERN[spire_index % SPIRE_TOP_DEPTH_PATTERN.size()])
-
-		# Only the highest solid ledges receive this asset. We intentionally do not
-		# fake a shallow floor just to place kelp at 0-20 m.
 		if top_depth <= KELP_MAX_LEDGE_DEPTH_M:
-			var anchor_y := _world_y_for_depth(top_depth) + 7.0
-			var target_height := float(
-				KELP_TARGET_HEIGHT_PATTERN[kelp_index % KELP_TARGET_HEIGHT_PATTERN.size()]
-			)
-			var scale_factor := target_height / source_size.y
+			var spire := _root.get_node_or_null("GroundedSpire_%02d" % spire_index) as Sprite2D
+			if spire != null:
+				var rock_size := spire.texture.get_size()
+				var rock_anchor_local := _source_pixel_to_rendered_offset(
+					_rock_surface_source_px,
+					rock_size,
+					spire.scale
+				)
+				var exact_anchor := spire.position + rock_anchor_local
 
-			var pivot := Node2D.new()
-			pivot.name = "GroundedKelpPivot_%02d" % kelp_index
-			pivot.position = Vector2(x, anchor_y)
-			pivot.z_index = 2
-			pivot.set_meta("grounded", true)
-			pivot.set_meta("anchor_depth_m", top_depth)
-			pivot.set_meta("environment_asset", "shallow_kelp_01.png")
-			pivot.set_meta("sway_phase", float(kelp_index) * 1.73)
-			_root.add_child(pivot)
+				var target_height := float(
+					KELP_TARGET_HEIGHT_PATTERN[kelp_index % KELP_TARGET_HEIGHT_PATTERN.size()]
+				)
+				var kelp_scale_factor := target_height / kelp_size.y
+				var kelp_scale := Vector2(
+					-kelp_scale_factor if kelp_index % 2 == 1 else kelp_scale_factor,
+					kelp_scale_factor
+				)
 
-			# Sprite origin sits half a rendered plant above the pivot, making the
-			# pivot itself the root/base of the kelp. Rotation therefore never makes
-			# the root slide away from the rock.
-			var sprite := Sprite2D.new()
-			sprite.name = "KelpVisual"
-			sprite.texture = texture
-			sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			sprite.position = Vector2(0.0, -target_height * 0.5)
-			sprite.scale = Vector2(
-				-scale_factor if kelp_index % 2 == 1 else scale_factor,
-				scale_factor
-			)
-			sprite.modulate = Color(0.62, 0.84, 0.78, 0.88)
-			pivot.add_child(sprite)
+				var pivot := Node2D.new()
+				pivot.name = "GroundedKelpPivot_%02d" % kelp_index
+				pivot.position = exact_anchor
+				pivot.z_index = 2
+				pivot.set_meta("grounded", true)
+				pivot.set_meta("grounding_method", "rock_alpha_pixel_to_kelp_alpha_pixel")
+				pivot.set_meta("rock_source_pixel", _rock_surface_source_px)
+				pivot.set_meta("kelp_base_source_pixel", _kelp_base_source_px)
+				pivot.set_meta("source_spire", spire.name)
+				pivot.set_meta("sway_phase", float(kelp_index) * 1.73)
+				_root.add_child(pivot)
 
-			_kelp_pivots.append(pivot)
-			kelp_index += 1
+				var sprite := Sprite2D.new()
+				sprite.name = "KelpVisual"
+				sprite.texture = kelp_texture
+				sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+				sprite.scale = kelp_scale
+
+				# Shift the sprite so its REAL bottom opaque/root pixel lands exactly on
+				# the pivot. This removes all transparent PNG bottom padding mathematically.
+				var kelp_base_rendered := _source_pixel_to_rendered_offset(
+					_kelp_base_source_px,
+					kelp_size,
+					kelp_scale
+				)
+				sprite.position = -kelp_base_rendered
+				sprite.modulate = Color(0.62, 0.84, 0.78, 0.88)
+				pivot.add_child(sprite)
+
+				_kelp_pivots.append(pivot)
+				kelp_index += 1
 
 		x += SPIRE_SPACING_X
 		spire_index += 1
+
+
+func _find_stable_rock_surface_pixel(image: Image) -> Vector2:
+	var width := image.get_width()
+	var height := image.get_height()
+	if width <= 0 or height <= 0:
+		return Vector2(-1.0, -1.0)
+
+	var min_x := clampi(int(round(float(width) * ROCK_SCAN_MIN_X_RATIO)), 0, width - 1)
+	var max_x := clampi(int(round(float(width) * ROCK_SCAN_MAX_X_RATIO)), 0, width - 1)
+	var window := maxi(4, int(round(float(width) * ROCK_SURFACE_WINDOW_RATIO)))
+
+	var best_x := -1
+	var best_y := -1
+	var best_score := INF
+
+	# Pick a high but locally stable opaque surface point. We intentionally avoid
+	# a lone spike/anti-alias pixel by comparing neighboring surface columns.
+	for x in range(min_x, max_x + 1, 2):
+		var y := _top_opaque_y(image, x)
+		if y < 0:
+			continue
+
+		var left_x := clampi(x - window, 0, width - 1)
+		var right_x := clampi(x + window, 0, width - 1)
+		var left_y := _top_opaque_y(image, left_x)
+		var right_y := _top_opaque_y(image, right_x)
+		if left_y < 0 or right_y < 0:
+			continue
+
+		var roughness := maxi(abs(y - left_y), abs(y - right_y))
+		if roughness > ROCK_MAX_LOCAL_ROUGHNESS_PX:
+			continue
+
+		var slope_penalty := float(abs(right_y - left_y)) * 2.5
+		var roughness_penalty := float(roughness) * 4.0
+		var center_penalty := abs(float(x) - float(width) * 0.5) * 0.035
+		var score := float(y) + slope_penalty + roughness_penalty + center_penalty
+
+		if score < best_score:
+			best_score = score
+			best_x = x
+			best_y = y
+
+	# Fallback still uses a real alpha pixel; never a guessed depth coordinate.
+	if best_x < 0:
+		for x in range(min_x, max_x + 1):
+			var y := _top_opaque_y(image, x)
+			if y >= 0 and (best_y < 0 or y < best_y):
+				best_x = x
+				best_y = y
+
+	if best_x < 0 or best_y < 0:
+		return Vector2(-1.0, -1.0)
+
+	# Pixel-center coordinates are used for exact Sprite2D transform math.
+	return Vector2(float(best_x) + 0.5, float(best_y) + 0.5)
+
+
+func _find_kelp_base_pixel(image: Image) -> Vector2:
+	var width := image.get_width()
+	var height := image.get_height()
+	if width <= 0 or height <= 0:
+		return Vector2(-1.0, -1.0)
+
+	var bottom_y := -1
+	for y in range(height - 1, -1, -1):
+		var found := false
+		for x in range(width):
+			if image.get_pixel(x, y).a >= ALPHA_THRESHOLD:
+				bottom_y = y
+				found = true
+				break
+		if found:
+			break
+
+	if bottom_y < 0:
+		return Vector2(-1.0, -1.0)
+
+	# Average the opaque root pixels across the last few real rows. This gives the
+	# actual visual root center even if the PNG has asymmetric transparent padding.
+	var start_y := maxi(0, bottom_y - KELP_BASE_SAMPLE_ROWS + 1)
+	var x_sum := 0.0
+	var count := 0
+	for y in range(start_y, bottom_y + 1):
+		for x in range(width):
+			if image.get_pixel(x, y).a >= ALPHA_THRESHOLD:
+				x_sum += float(x) + 0.5
+				count += 1
+
+	var root_x := float(width) * 0.5
+	if count > 0:
+		root_x = x_sum / float(count)
+
+	return Vector2(root_x, float(bottom_y) + 0.5)
+
+
+func _top_opaque_y(image: Image, x: int) -> int:
+	if x < 0 or x >= image.get_width():
+		return -1
+
+	for y in range(image.get_height()):
+		if image.get_pixel(x, y).a >= ALPHA_THRESHOLD:
+			return y
+	return -1
+
+
+func _source_pixel_to_rendered_offset(
+	source_pixel: Vector2,
+	texture_size: Vector2,
+	sprite_scale: Vector2
+) -> Vector2:
+	# Sprite2D is centered by default. source_pixel is already a pixel-center
+	# coordinate, therefore this maps the exact source pixel through scale/flip.
+	var centered := source_pixel - texture_size * 0.5
+	return Vector2(centered.x * sprite_scale.x, centered.y * sprite_scale.y)
 
 
 func _animate_kelp(delta: float) -> void:
@@ -358,11 +521,9 @@ func _animate_kelp(delta: float) -> void:
 		return
 
 	_kelp_time += delta
-
 	for pivot in _kelp_pivots:
 		if not is_instance_valid(pivot):
 			continue
-
 		var phase := float(pivot.get_meta("sway_phase", 0.0))
 		pivot.rotation = sin(_kelp_time * KELP_SWAY_SPEED + phase) * KELP_SWAY_RADIANS
 
