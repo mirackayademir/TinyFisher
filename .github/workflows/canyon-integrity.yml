@@ -12,6 +12,7 @@ on:
       - "scenes/underwater_terrain_runtime.gd"
       - "tools/canyon_final_builder.py"
       - "tools/canyon_payload_audit.py"
+      - "tools/canyon_prefix_checkpoint.py"
       - ".github/workflows/canyon-integrity.yml"
   pull_request:
     paths:
@@ -21,6 +22,7 @@ on:
       - "scenes/underwater_terrain_runtime.gd"
       - "tools/canyon_final_builder.py"
       - "tools/canyon_payload_audit.py"
+      - "tools/canyon_prefix_checkpoint.py"
       - ".github/workflows/canyon-integrity.yml"
 
 permissions:
@@ -43,7 +45,11 @@ jobs:
 
       - name: Compile canyon tools
         run: |
-          python -m py_compile tools/canyon_final_builder.py tools/canyon_payload_audit.py
+          python -m py_compile tools/canyon_final_builder.py tools/canyon_payload_audit.py tools/canyon_prefix_checkpoint.py
+
+      - name: Verify approved source prefix
+        run: |
+          python tools/canyon_prefix_checkpoint.py
 
       - name: Audit current canyon payload
         run: |
