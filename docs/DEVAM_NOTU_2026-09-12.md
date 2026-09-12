@@ -2,165 +2,111 @@
 
 **Tarih:** 2026-09-12  
 **Branch:** `eski`  
-**Amaç:** Yeni sohbette bu dosyadan doğrudan devam etmek.
+**Amaç:** Yeni sohbette doğrudan gerçek Git durumundan devam etmek.
 
-## KALDIĞIMIZ YER — EN GÜNCEL DURUM
+## KALDIĞIMIZ YER — GERÇEK EN GÜNCEL DURUM
 
-Eski düşük çözünürlüklü canyon görseli bırakıldı. Miraç yeni, şeffaf arka planlı canyon görselini onayladı ve bu görsel artık **final canyon tabanı** olarak kullanılacak.
+Eski düşük çözünürlüklü canyon bırakıldı. Miraç'ın onayladığı yeni, şeffaf arka planlı HQ canyon final taban olarak kullanılacak.
 
-Onaylanan yeni canyon özellikleri:
-- Şeffaf arka plan / RGBA
-- Kayalık + mercan + yosun detayları görselin kendi içinde mevcut
-- Eski 965×722 V15 canyon aktif tasarımdan çıkarılacak
-- Eklenen `shallow_rock_01` test kayaları şimdilik kapatıldı; yeni canyon tek başına temiz değerlendirilecek
-
-## YENİ CANYON DOSYASI — REPOYA PARÇA PARÇA YÜKLEME
-
-GitHub bağlantısı büyük binary görseli doğrudan rahat yükleyemediği için final canyon bir **WebP + Base64 chunk** sistemiyle repo içine aktarılıyor.
-
-Aktif hazırlanan dosya:
-- Yerel çalışma dosyası: `canyon_q95.webp`
+Onaylanan canyon kaynak özellikleri:
+- Kaynak çalışma adı: `canyon_q95.webp`
 - Boyut: **1226×1283**
 - Renk modu: **RGBA**
-- Şeffaflık: **VAR**
+- Şeffaflık: **var**
 - Binary boyutu: **481946 byte**
 - Base64 uzunluğu: **642596 karakter**
 - SHA-256: `b00865a0d42d6488159f9ecf4cbde30df86873d96036f6630d548ec68f429679`
+- Beklenen final çıktı: `assets/environment/terrain/canyon_final_hq_transparent.png`
 
-Chunk planı:
-- Her parça: yaklaşık `16000` Base64 karakteri
-- Toplam parça: **41 adet** (`part00` → `part40`)
-- Repo klasörü:
-  `assets/environment/terrain/runtime_data_final/`
+## GITHUB'DAKİ AKTARIM DURUMU
 
-### Şu ana kadar GitHub'a yüklenen final canyon parçaları
+Final görsel büyük binary olduğu için WebP Base64 verisi `assets/environment/terrain/runtime_data_final/` içine parça parça aktarılmaya başlanmıştı.
 
-Aşağıdakiler mevcut:
-- `canyon_final_q95_part00.txt`
-- `canyon_final_q95_part01.txt`
-- `canyon_final_q95_part02.txt`
-- `canyon_final_q95_part03.txt`
-- `canyon_final_q95_part04.txt`
-- `canyon_final_q95_part05.txt`
-- `canyon_final_q95_part06.txt`
-- `canyon_final_q95_part07.txt`
-- `canyon_final_q95_part08.txt`
+2026-09-12 kontrolünde `eski` branch'te mevcut geçici veri dosyaları:
 
-**Yani 9 / 41 parça tamamlandı.**
+### Canonical `part` dosyaları
+- `canyon_final_q95_part00.txt` → `part08.txt`: 9 × 16000 byte
+- `canyon_final_q95_part09.txt`: 15975 byte
+- `canyon_final_q95_part10.txt`: 3985 byte
 
-Son branch ucu:
-- `1ecb9dca6dcfad19a8988df7bd5c32b46498d87b`
-- Commit mesajı: `Add final canyon data part 08`
+### Geçici `tail` dosyaları
+- `canyon_final_q95_tail00.txt`: 27999 byte
+- `canyon_final_q95_tail01.txt` → `tail07.txt`: 7 × 19999 byte
 
-### KALAN PARÇALAR
+Repo dosya boyutlarına göre şu ana kadar taşınmış toplam Base64 veri:
 
-Yeni sohbette ilk büyük iş:
+**331952 / 642596 karakter = yaklaşık %51.66**
 
-`part09` → `part40`
+Eksik veri:
 
-arasındaki **32 parçayı** aynı klasöre eklemek.
+**310644 karakter**
 
-## LOADER DURUMU — ÖNEMLİ
+Son veri commit'i:
+- `3335064cc8994d506305067bcfa57e09dc7bb7cb`
+- `Add final canyon data tail 07`
 
-`scenes/canyon_texture_loader.gd` şu an geçici olarak doğrudan şu dosyayı bekliyor:
+Bu nedenle final WebP şu an reconstruct edilemez. Eksik kaynak veri Git geçmişinde de bulunamadı; `canyon_final_hq_transparent.png` hiçbir eski committe mevcut değil.
 
-`res://assets/environment/terrain/canyon_final_hq_transparent.png`
+## LOADER DURUMU — ÖNCEKİ NOTTAN DAHA İLERİ
 
-Bu **henüz final çalışma yöntemi değil**. PNG repo içinde mevcut olmadığı için bu haliyle loader final canyon'u açamaz.
+`scenes/canyon_texture_loader.gd` artık final reconstruction mantığına hazırlanmış durumda.
 
-### Yeni sohbette yapılacak loader işi
+Loader:
+- `PART_COUNT = 41`
+- `EXPECTED_BASE64_LENGTH = 642596`
+- `EXPECTED_RAW_BYTES = 481946`
+- Beklenen SHA-256 = `b00865a0d42d6488159f9ecf4cbde30df86873d96036f6630d548ec68f429679`
+- Kaynak format = WebP
+- `part00` → `part40` isimlerini sırayla okumayı bekliyor
+- uzunluk / byte / SHA doğrulaması yapıyor
+- doğrulanmış buffer'ı WebP olarak decode ediyor
 
-Tüm `part00..part40` yüklenince `canyon_texture_loader.gd` şu sisteme geçirilecek:
+**Önemli:** Geçici `tail00..tail07` dosyaları loader tarafından okunmuyor. Bunlar yalnızca yarım kalmış veri aktarımının taşıma parçaları. Kaynak tamamlanınca veri tek stream olarak doğrulanmalı ve canonical `part00..part40` biçimine yeniden bölünmeli.
 
-1. `runtime_data_final/canyon_final_q95_part00.txt` → `part40.txt` sırayla okunacak.
-2. Base64 string tek parça halinde birleştirilecek.
-3. Beklenen Base64 uzunluğu `642596` olarak doğrulanacak.
-4. Decode edilen raw byte boyutu `481946` olarak doğrulanacak.
-5. SHA-256 şu değerle doğrulanacak:
-   `b00865a0d42d6488159f9ecf4cbde30df86873d96036f6630d548ec68f429679`
-6. Godot buffer'dan WebP decode edecek.
-7. Decode edilen texture **1226×1283 RGBA** olmalı.
-8. Görselin alpha alanı korunacak.
-9. Runtime'da ikinci kez resize/upscale yapılmayacak; mümkün olduğunca kaynak kalite korunacak.
+## EDITOR PREVIEW + RUNTIME
 
-Beklenen Output benzeri:
+Kod tarafındaki bağlantı hazır:
+- `scenes/canyon_texture_loader.gd`
+- `scenes/editor_environment_preview.gd`
+- `scenes/underwater_terrain_runtime.gd`
 
-`FINAL CANYON VERIFIED: 41 parts / 481946 bytes / SHA256=OK / 1226x1283 RGBA`
+Editor Preview ve runtime aynı canyon loader'ını ve aynı aspect-lock / yaklaşık 5500 px dünya ölçeği matematiğini kullanıyor.
 
-## HARİTA / ÖLÇEK DURUMU
+Dolayısıyla şu aşamada canyon kodunu yeniden tasarlamak gerekmiyor. Asıl blokaj eksik görsel verisi.
 
-Mevcut dünya hâlâ yaklaşık **5500 px genişlik** düzeninde.
-
-Daha önce 3600 px'e düşürme fikri konuşuldu ancak **henüz uygulanmadı**.
-
-Yeni canyon entegrasyonu tamamlanmadan harita genişliğini tekrar değiştirme.
-
-Doğru sıra:
-1. Final canyon'u tamamen reconstruct et.
-2. Editor Preview'da tek başına göster.
-3. F5 runtime'da aynı görünümü göster.
-4. Görüntünün kalite ve oranına bak.
-5. Gerekirse **o zaman** dünya genişliği/derinlik ölçeği ayarla.
+Kontrol sahnesi:
+`res://scenes/world_editor_preview.tscn`
 
 ## 9/36 SHALLOW ROCK DURUMU
 
-`shallow_rock_01` ile iki ayrı küçük kaya canyon üzerine eklenmişti.
+Küçük `shallow_rock_01` test kayaları yeni canyon ile pixel/detay seviyesi uyuşmadığı için kapalı kalacak.
 
-Sorun:
-- Eski canyon ile küçük kaya asset'i arasında çok büyük pixel/detay farkı vardı.
-- Görsel yapıştırılmış gibi duruyordu.
-- Konum düzeltmeleri bile kalite uyumsuzluğunu çözemedi.
+- `ShallowRock01Runtime` autoload dışı.
+- Final canyon haritaya düzgün oturmadan 9/36 veya sonraki environment asset yerleşimine geçme.
 
-Karar:
-- Yeni canyon kendi kayalık detaylarını içerdiği için **9/36 küçük kaya testi şimdilik kapalı**.
-- `project.godot` autoload içinden `ShallowRock01Runtime` çıkarıldı.
-- Final canyon onaylanmadan 9/36 veya 10/36 asset yerleşimine devam etme.
+## DEVAM SIRASI
 
-## EDITOR PREVIEW
+1. Miraç'ın onayladığı **aynı final canyon kaynak görselini** yeniden erişilebilir hale getir.
+2. Kaynaktan WebP Q95 RGBA payload'ı yeniden üret veya eldeki veriyle birebir aynı SHA'yı doğrula.
+3. Base64'ü temiz şekilde `part00..part40` olarak yeniden oluştur.
+4. Toplam Base64 = **642596**, raw = **481946**, SHA-256 = **b00865a0...** doğrulansın.
+5. Geçici `tailXX` taşıma dosyalarını ancak doğrulama tamamlandıktan sonra temizle.
+6. `world_editor_preview.tscn` ile Editor Preview kontrolü yap.
+7. F5 runtime'da aynı canyon konumu/ölçeğini doğrula.
+8. Miraç ekran görüntüsüyle görsel sonucu onayladıktan sonra 36 environment asset yerleşimine devam et.
 
-Kullanılacak kontrol sahnesi:
+## KULLANICIYA GEREKEN TEK ŞEY
 
-`res://scenes/world_editor_preview.tscn`
-
-İlgili dosyalar:
-- `scenes/editor_environment_preview.gd`
-- `scenes/canyon_texture_loader.gd`
-- `scenes/underwater_terrain_runtime.gd`
-
-Editor Preview ve runtime **aynı texture loader ve aynı konum/ölçek hesabını** kullanmalı.
-
-## ŞU AN KULLANICI NE YAPMALI?
-
-**Şimdilik `git pull` çekip test isteme.**
-
-Çünkü final canyon entegrasyonu henüz tamamlanmadı. Önce kalan veri parçaları + loader tamamlanmalı.
-
-## YENİ SOHBETTE İLK YAPILACAKLAR
-
-Sıra kesin olarak:
-
-1. GitHub `eski` branch'i kontrol et; uç commit `1ecb9dca` veya bu notu kaydeden daha yeni commit olmalı.
-2. `runtime_data_final` içinde `part00..part08` mevcut olduğunu doğrula.
-3. `part09..part40` parçalarını GitHub'a ekle.
-4. `canyon_texture_loader.gd` dosyasını final chunk reconstruction sistemine çevir.
-5. `editor_environment_preview.gd` ve `underwater_terrain_runtime.gd` ile yeni canyon'un aynı matematikte kullanıldığını doğrula.
-6. Küçük kaya 9/36 kapalı kalacak.
-7. Sonra Miraç'a `git pull` yaptır ve `world_editor_preview.tscn` ekran görüntüsü iste.
-8. Canyon haritaya kaliteli ve düzgün oturunca 36 environment asset sırasına geri dön.
+Kod veya Git işlemi isteme. Eksik payload GitHub'da veya File Library'de bulunamadığı için yalnızca onaylanan son HQ canyon görselinin yeniden sohbete yüklenmesi / erişilebilir hale gelmesi gerekiyor. Görsel geldiğinde tüm reconstruction + Git entegrasyonunu doğrudan tamamla.
 
 ## ÇALIŞMA KURALLARI
 
 - Branch: **`eski`**
 - Büyük değişiklik olmadıkça yeni branch açma.
 - Yeni branch gerekiyorsa önce Miraç'a sor.
-- Mümkün olan işleri doğrudan GitHub'a işle; kullanıcıya gereksiz görev verme.
+- Mümkün olan işleri doğrudan GitHub'a işle.
+- Kullanıcıya gereksiz kod/Git işi yükleme.
 - Godot tarafında tahmini yerleşim yerine texture/kod matematiğini kullan.
 - Görsel kalitesini bozacak gereksiz upscale/downscale zinciri kurma.
 - Her tamamlanan işten sonra kısa rapor ver.
 - Kullanıcı açıkça istemedikçe Work moduna geçme.
-
----
-
-# Yeni sohbet için tek cümlelik başlangıç
-
-**`eski` branch'te yeni şeffaf final canyon için Q95 RGBA WebP Base64 parçaları yükleniyor; toplam 41 parçanın `part00..part08` kısmı GitHub'da, son uç `1ecb9dca`, sıradaki iş `part09..part40` yüklemek ve `canyon_texture_loader.gd`yi 642596 Base64 / 481946 byte / SHA256=b00865a0... doğrulamalı reconstruction sistemine geçirip Editor Preview + runtime'da final canyon'u test etmek; 9/36 küçük kaya şimdilik kapalı.**
