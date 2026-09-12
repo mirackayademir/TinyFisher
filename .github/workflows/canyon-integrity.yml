@@ -1,0 +1,50 @@
+name: Canyon Integrity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - eski
+    paths:
+      - "assets/environment/terrain/runtime_data_final/**"
+      - "scenes/canyon_texture_loader.gd"
+      - "scenes/editor_environment_preview.gd"
+      - "scenes/underwater_terrain_runtime.gd"
+      - "tools/canyon_final_builder.py"
+      - "tools/canyon_payload_audit.py"
+      - ".github/workflows/canyon-integrity.yml"
+  pull_request:
+    paths:
+      - "assets/environment/terrain/runtime_data_final/**"
+      - "scenes/canyon_texture_loader.gd"
+      - "scenes/editor_environment_preview.gd"
+      - "scenes/underwater_terrain_runtime.gd"
+      - "tools/canyon_final_builder.py"
+      - "tools/canyon_payload_audit.py"
+      - ".github/workflows/canyon-integrity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Validate canyon tooling and payload
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile canyon tools
+        run: |
+          python -m py_compile tools/canyon_final_builder.py tools/canyon_payload_audit.py
+
+      - name: Audit current canyon payload
+        run: |
+          python tools/canyon_payload_audit.py
