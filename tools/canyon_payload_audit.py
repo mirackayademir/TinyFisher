@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import base64
+import hashlib
 import re
 import struct
 import sys
@@ -230,7 +231,24 @@ def main() -> int:
                 raise AuditError("Canonical 41-part set exists but chunk lengths are wrong.")
             if total_chars != EXPECTED_BASE64_LENGTH:
                 raise AuditError("Canonical 41-part set exists but total Base64 length is wrong.")
-            print("state: CANONICAL 41-PART SET PRESENT; run canyon_final_builder.py verify")
+
+            try:
+                raw_full = base64.b64decode(combined, validate=True)
+            except Exception as exc:
+                raise AuditError(f"Canonical full Base64 decode failed: {exc}") from exc
+
+            if len(raw_full) != EXPECTED_RAW_BYTES:
+                raise AuditError(
+                    f"Canonical raw size mismatch: got={len(raw_full)} expected={EXPECTED_RAW_BYTES}"
+                )
+
+            actual_sha = hashlib.sha256(raw_full).hexdigest()
+            if actual_sha != EXPECTED_SHA256:
+                raise AuditError(
+                    f"Canonical SHA256 mismatch: got={actual_sha} expected={EXPECTED_SHA256}"
+                )
+
+            print("state: CANONICAL 41-PART SET VERIFIED / FULL SHA256=OK")
         else:
             print("state: PARTIAL TRANSFER (known blocker: exact source is not available)")
 
