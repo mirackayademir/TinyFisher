@@ -1,22 +1,23 @@
 extends Node
 
-# TinyFisher canyon runtime V31.
-# Uses the approved single-file HQ canyon asset through the shared loader.
-# The scene transform fits the original imported texture to the compact 5500 px world;
-# the source image itself is never resized or rebuilt at runtime.
+# TinyFisher canyon runtime V32.
+# Uses the approved single-file HQ canyon asset and locks it to the authored
+# gameplay band 20-180 m. The 180-250 m abyss is handled by AbyssDepthRuntime.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
-const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION: int = 31
+const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To180"
+const LAYOUT_VERSION: int = 32
 const TOP_M: float = 20.0
+const BOTTOM_M: float = 180.0
+const WORLD_MAX_DEPTH_M: float = 250.0
 const WORLD_PIXELS_PER_METER: float = 34.5
 const MAP_WIDTH_PX: float = 5500.0
 const FALLBACK_LEFT: float = -1000.0
 const FALLBACK_RIGHT: float = 4500.0
 const FALLBACK_ZERO_Y: float = 392.6
 const TERRAIN_Z: int = -7
-const DEEP_WATER_MARGIN_PX: float = 700.0
+const DEEP_WATER_MARGIN_PX: float = 760.0
 
 var _scene_id: int = 0
 var _world: Node2D = null
@@ -33,7 +34,7 @@ var _last_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V31: SINGLE-FILE HQ CANYON / COMPACT 5500PX / ASPECT LOCKED")
+	print("UNDERWATER TERRAIN V32: HQ CANYON LOCKED 20-180M / ABYSS BELOW")
 
 
 func _process(_delta: float) -> void:
@@ -100,9 +101,10 @@ func _ensure_terrain() -> void:
 	_root.set_meta("collisionless", true)
 	_root.set_meta("camera_locked", false)
 	_root.set_meta("depth_top_m", TOP_M)
+	_root.set_meta("depth_bottom_m", BOTTOM_M)
 	_root.set_meta("terrain_source", "single_file_hq_canyon")
 	_root.set_meta("source_region", _source_region)
-	_root.set_meta("aspect_locked", true)
+	_root.set_meta("exact_depth_band", true)
 	_root.set_meta("world_pixels_per_meter", WORLD_PIXELS_PER_METER)
 	_root.set_meta("compact_map_width_px", MAP_WIDTH_PX)
 	_world.add_child(_root)
@@ -129,13 +131,10 @@ func _fit_to_world(force: bool = false) -> void:
 	var left: float = bounds.x
 	var width: float = maxf(bounds.y - bounds.x, 1.0)
 	var top_y: float = _world_y_for_depth(TOP_M)
+	var bottom_y: float = _world_y_for_depth(BOTTOM_M)
+	var height: float = maxf(bottom_y - top_y, 1.0)
 
-	var uniform_scale: float = width / _source_region.size.x
-	var height: float = _source_region.size.y * uniform_scale
-	var bottom_y: float = top_y + height
-	var bottom_m: float = TOP_M + (height / WORLD_PIXELS_PER_METER)
-
-	_extend_deep_water(bottom_y + DEEP_WATER_MARGIN_PX)
+	_extend_deep_water(_world_y_for_depth(WORLD_MAX_DEPTH_M) + DEEP_WATER_MARGIN_PX)
 
 	if not force \
 	and is_equal_approx(left, _last_left) \
@@ -145,13 +144,15 @@ func _fit_to_world(force: bool = false) -> void:
 		return
 
 	_root.global_position = Vector2(left, top_y)
-	_root.scale = Vector2(uniform_scale, uniform_scale)
+	_root.scale = Vector2(
+		width / _source_region.size.x,
+		height / _source_region.size.y
+	)
 
 	_root.set_meta("map_left_x", left)
 	_root.set_meta("map_right_x", bounds.y)
 	_root.set_meta("world_y_top", top_y)
 	_root.set_meta("world_y_bottom", bottom_y)
-	_root.set_meta("depth_bottom_m", bottom_m)
 	_root.set_meta("source_visible_size", _source_region.size)
 	_root.set_meta("fit_scale", _root.scale)
 
@@ -162,10 +163,9 @@ func _fit_to_world(force: bool = false) -> void:
 
 	if force:
 		print(
-			"HQ CANYON LAYOUT: top=", TOP_M,
-			"m bottom=", snappedf(bottom_m, 0.1),
+			"HQ CANYON LOCKED: ", TOP_M, "-", BOTTOM_M,
 			"m world=", snappedf(width, 1.0), "x", snappedf(height, 1.0),
-			" scale=", snappedf(uniform_scale, 0.001),
+			" scale=", _root.scale,
 			" / source=", _source_region.size
 		)
 
@@ -178,8 +178,7 @@ func _extend_deep_water(required_bottom_y: float) -> void:
 	if water == null:
 		return
 
-	if water.offset_bottom < required_bottom_y:
-		water.offset_bottom = required_bottom_y
+	water.offset_bottom = maxf(water.offset_bottom, required_bottom_y)
 
 
 func _get_world_horizontal_bounds() -> Vector2:
@@ -218,6 +217,7 @@ func _remove_old_terrain() -> void:
 	var old_names: Array[String] = [
 		"UnderwaterReefTerrain20To100",
 		"UnderwaterTerrainFoundation",
+		"UnderwaterCanyonTerrain20To100",
 		TERRAIN_NODE_NAME
 	]
 
