@@ -1,14 +1,14 @@
 extends Node
 
-# TinyFisher canyon runtime V30.
-# Final transparent Q95 WebP canyon reconstructed from the shared Base64 chunk
-# loader, compact 5500 px world, aspect ratio locked. Runtime never resizes the
-# decoded source image itself; only the scene transform fits it to the world.
+# TinyFisher canyon runtime V31.
+# Uses the approved single-file HQ canyon asset through the shared loader.
+# The scene transform fits the original imported texture to the compact 5500 px world;
+# the source image itself is never resized or rebuilt at runtime.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
 const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To100"
-const LAYOUT_VERSION: int = 30
+const LAYOUT_VERSION: int = 31
 const TOP_M: float = 20.0
 const WORLD_PIXELS_PER_METER: float = 34.5
 const MAP_WIDTH_PX: float = 5500.0
@@ -33,7 +33,7 @@ var _last_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V30: FINAL Q95 WEBP CHUNKS / COMPACT 5500PX / ASPECT LOCKED")
+	print("UNDERWATER TERRAIN V31: SINGLE-FILE HQ CANYON / COMPACT 5500PX / ASPECT LOCKED")
 
 
 func _process(_delta: float) -> void:
@@ -85,7 +85,7 @@ func _ensure_terrain() -> void:
 
 	_source_region = CanyonTextureLoader.visible_region(_terrain_texture)
 	if _source_region.size.x <= 0.0 or _source_region.size.y <= 0.0:
-		push_error("FINAL Q95 canyon visible region gecersiz.")
+		push_error("HQ canyon visible region gecersiz.")
 		return
 
 	var atlas: AtlasTexture = AtlasTexture.new()
@@ -100,7 +100,7 @@ func _ensure_terrain() -> void:
 	_root.set_meta("collisionless", true)
 	_root.set_meta("camera_locked", false)
 	_root.set_meta("depth_top_m", TOP_M)
-	_root.set_meta("terrain_source", "final_q95_webp_chunks")
+	_root.set_meta("terrain_source", "single_file_hq_canyon")
 	_root.set_meta("source_region", _source_region)
 	_root.set_meta("aspect_locked", true)
 	_root.set_meta("world_pixels_per_meter", WORLD_PIXELS_PER_METER)
@@ -162,7 +162,7 @@ func _fit_to_world(force: bool = false) -> void:
 
 	if force:
 		print(
-			"FINAL CANYON LAYOUT: top=", TOP_M,
+			"HQ CANYON LAYOUT: top=", TOP_M,
 			"m bottom=", snappedf(bottom_m, 0.1),
 			"m world=", snappedf(width, 1.0), "x", snappedf(height, 1.0),
 			" scale=", snappedf(uniform_scale, 0.001),
