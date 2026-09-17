@@ -1,9 +1,9 @@
 @tool
 extends Node2D
 
-# Editor preview V35.
+# Editor preview V35.1.
 # Shows the approved HQ canyon at its original aspect ratio in the 20-180 m band
-# and previews the softened 180-250 m abyss transition used at runtime.
+# and previews the softened, readable 180-250 m abyss used at runtime.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
@@ -91,7 +91,6 @@ func _rebuild_preview() -> void:
 	var world_width: float = maxf(bounds.y - bounds.x, 1.0)
 	var canyon_height: float = maxf(canyon_bottom_y - canyon_top_y, 1.0)
 
-	# Lock the source aspect ratio to the exact 20-180 m vertical gameplay band.
 	var uniform_scale: float = canyon_height / _source_region.size.y
 	var drawn_width: float = _source_region.size.x * uniform_scale
 	var horizontal_padding: float = maxf((world_width - drawn_width) * 0.5, 0.0)
@@ -135,7 +134,7 @@ func _rebuild_preview() -> void:
 	_preview_root.set_meta("compact_map_width_px", MAP_WIDTH_PX)
 
 	print(
-		"EDITOR CANYON V35: HQ 20-180M ASPECT LOCKED / ABYSS 180-250M / source=", _source_region.size,
+		"EDITOR CANYON V35.1: HQ 20-180M ASPECT LOCKED / ABYSS 180-250M / source=", _source_region.size,
 		" scale=", snappedf(uniform_scale, 0.001),
 		" pad=", snappedf(horizontal_padding, 1.0),
 		"px / ENV 9/36=OFF"
@@ -162,8 +161,7 @@ func _build_editor_deep_water(bounds: Vector2, required_bottom_y: float) -> void
 	if existing_bottom_y >= required_bottom_y:
 		return
 
-	var deep_water: Polygon2D = Node2D.new() as Polygon2D
-	deep_water = Polygon2D.new()
+	var deep_water: Polygon2D = Polygon2D.new()
 	deep_water.name = "EditorDeepWaterExtension"
 	deep_water.z_as_relative = false
 	deep_water.z_index = -9
@@ -180,10 +178,9 @@ func _build_editor_deep_water(bounds: Vector2, required_bottom_y: float) -> void
 func _build_editor_abyss(bounds: Vector2, top_y: float, bottom_y: float) -> void:
 	var width: float = bounds.y - bounds.x
 
-	# Background depth gradient.
-	var top_color: Color = Color(0.004, 0.028, 0.060, 0.82)
-	var middle_color: Color = Color(0.003, 0.018, 0.040, 0.92)
-	var bottom_color: Color = Color(0.001, 0.006, 0.016, 0.99)
+	var top_color: Color = Color(0.015, 0.060, 0.110, 0.88)
+	var middle_color: Color = Color(0.008, 0.035, 0.075, 0.95)
+	var bottom_color: Color = Color(0.003, 0.012, 0.030, 0.99)
 	for i: int in range(14):
 		var t0: float = float(i) / 14.0
 		var t1: float = float(i + 1) / 14.0
@@ -204,12 +201,11 @@ func _build_editor_abyss(bounds: Vector2, top_y: float, bottom_y: float) -> void
 		band.color = color_t
 		_preview_root.add_child(band, false, Node.INTERNAL_MODE_BACK)
 
-	# Canyon-like lower wall silhouettes.
 	var left_far: Polygon2D = Polygon2D.new()
 	left_far.name = "EditorAbyssLeftWall"
 	left_far.z_as_relative = false
 	left_far.z_index = ABYSS_ROCK_Z
-	left_far.color = Color(0.004, 0.026, 0.050, 0.96)
+	left_far.color = Color(0.015, 0.070, 0.120, 0.96)
 	left_far.polygon = PackedVector2Array([
 		Vector2(bounds.x, _world_y_for_depth(176.0)),
 		Vector2(bounds.x + width * 0.040, _world_y_for_depth(183.0)),
@@ -227,7 +223,7 @@ func _build_editor_abyss(bounds: Vector2, top_y: float, bottom_y: float) -> void
 	right_far.name = "EditorAbyssRightWall"
 	right_far.z_as_relative = false
 	right_far.z_index = ABYSS_ROCK_Z
-	right_far.color = Color(0.004, 0.026, 0.050, 0.96)
+	right_far.color = Color(0.015, 0.070, 0.120, 0.96)
 	right_far.polygon = PackedVector2Array([
 		Vector2(bounds.y, _world_y_for_depth(176.0)),
 		Vector2(bounds.y - width * 0.038, _world_y_for_depth(184.0)),
@@ -241,11 +237,47 @@ func _build_editor_abyss(bounds: Vector2, top_y: float, bottom_y: float) -> void
 	])
 	_preview_root.add_child(right_far, false, Node.INTERNAL_MODE_BACK)
 
+	var left_inner: Polygon2D = Polygon2D.new()
+	left_inner.name = "EditorAbyssLeftInnerRidge"
+	left_inner.z_as_relative = false
+	left_inner.z_index = ABYSS_ROCK_Z
+	left_inner.color = Color(0.025, 0.10, 0.16, 0.78)
+	left_inner.polygon = PackedVector2Array([
+		Vector2(bounds.x, bottom_y),
+		Vector2(bounds.x + width * 0.080, _world_y_for_depth(194.0)),
+		Vector2(bounds.x + width * 0.110, _world_y_for_depth(201.0)),
+		Vector2(bounds.x + width * 0.135, _world_y_for_depth(210.0)),
+		Vector2(bounds.x + width * 0.170, _world_y_for_depth(219.0)),
+		Vector2(bounds.x + width * 0.205, _world_y_for_depth(229.0)),
+		Vector2(bounds.x + width * 0.245, _world_y_for_depth(239.0)),
+		Vector2(bounds.x + width * 0.285, _world_y_for_depth(248.0)),
+		Vector2(bounds.x + width * 0.305, bottom_y)
+	])
+	_preview_root.add_child(left_inner, false, Node.INTERNAL_MODE_BACK)
+
+	var right_inner: Polygon2D = Polygon2D.new()
+	right_inner.name = "EditorAbyssRightInnerRidge"
+	right_inner.z_as_relative = false
+	right_inner.z_index = ABYSS_ROCK_Z
+	right_inner.color = Color(0.025, 0.10, 0.16, 0.78)
+	right_inner.polygon = PackedVector2Array([
+		Vector2(bounds.y, bottom_y),
+		Vector2(bounds.y - width * 0.078, _world_y_for_depth(195.0)),
+		Vector2(bounds.y - width * 0.108, _world_y_for_depth(202.0)),
+		Vector2(bounds.y - width * 0.134, _world_y_for_depth(211.0)),
+		Vector2(bounds.y - width * 0.168, _world_y_for_depth(220.0)),
+		Vector2(bounds.y - width * 0.202, _world_y_for_depth(230.0)),
+		Vector2(bounds.y - width * 0.242, _world_y_for_depth(240.0)),
+		Vector2(bounds.y - width * 0.282, _world_y_for_depth(248.0)),
+		Vector2(bounds.y - width * 0.302, bottom_y)
+	])
+	_preview_root.add_child(right_inner, false, Node.INTERNAL_MODE_BACK)
+
 	var floor: Polygon2D = Polygon2D.new()
 	floor.name = "EditorAbyssFloorRidge"
 	floor.z_as_relative = false
 	floor.z_index = ABYSS_ROCK_Z
-	floor.color = Color(0.003, 0.020, 0.036, 0.98)
+	floor.color = Color(0.008, 0.035, 0.065, 0.98)
 	floor.polygon = PackedVector2Array([
 		Vector2(bounds.x, bottom_y),
 		Vector2(bounds.x, _world_y_for_depth(245.0)),
@@ -263,7 +295,6 @@ func _build_editor_abyss(bounds: Vector2, top_y: float, bottom_y: float) -> void
 	])
 	_preview_root.add_child(floor, false, Node.INTERNAL_MODE_BACK)
 
-	# Faint depth haze.
 	var haze_depths: Array[float] = [188.0, 204.0, 221.0, 236.0]
 	for i: int in range(haze_depths.size()):
 		var center_m: float = haze_depths[i]
@@ -277,10 +308,9 @@ func _build_editor_abyss(bounds: Vector2, top_y: float, bottom_y: float) -> void
 		haze.name = "EditorAbyssHaze%02d" % i
 		haze.z_as_relative = false
 		haze.z_index = ABYSS_BLEND_Z
-		haze.color = Color(0.025, 0.095, 0.145, 0.035 + float(i) * 0.012)
+		haze.color = Color(0.030, 0.12, 0.20, 0.045 + float(i) * 0.012)
 		_preview_root.add_child(haze, false, Node.INTERNAL_MODE_BACK)
 
-	# Bioluminescent particles.
 	for i: int in range(36):
 		var x_ratio: float = fmod(float(i * 37 + 11), 103.0) / 102.0
 		var depth_m: float = 190.0 + fmod(float(i * 23 + 7), 57.0)
@@ -299,16 +329,15 @@ func _build_editor_abyss(bounds: Vector2, top_y: float, bottom_y: float) -> void
 		])
 		match i % 4:
 			0:
-				speck.color = Color(0.18, 0.82, 1.0, 0.48)
+				speck.color = Color(0.18, 0.82, 1.0, 0.52)
 			1:
-				speck.color = Color(0.30, 0.62, 1.0, 0.40)
+				speck.color = Color(0.30, 0.62, 1.0, 0.44)
 			2:
-				speck.color = Color(0.42, 0.38, 1.0, 0.32)
+				speck.color = Color(0.42, 0.38, 1.0, 0.36)
 			_:
-				speck.color = Color(0.18, 0.68, 0.78, 0.36)
+				speck.color = Color(0.18, 0.68, 0.78, 0.40)
 		_preview_root.add_child(speck, false, Node.INTERNAL_MODE_BACK)
 
-	# Foreground fade hides the hard lower edge of the source canyon.
 	var fade_start_y: float = _world_y_for_depth(CANYON_FADE_START_M)
 	var fade_end_y: float = _world_y_for_depth(CANYON_FADE_END_M)
 	for i: int in range(10):
@@ -323,7 +352,7 @@ func _build_editor_abyss(bounds: Vector2, top_y: float, bottom_y: float) -> void
 		fade.name = "EditorCanyonToAbyssBlend%02d" % i
 		fade.z_as_relative = false
 		fade.z_index = ABYSS_BLEND_Z
-		fade.color = Color(0.003, 0.018, 0.038, lerpf(0.015, 0.82, pow(t1, 1.65)))
+		fade.color = Color(0.006, 0.025, 0.050, lerpf(0.015, 0.82, pow(t1, 1.65)))
 		_preview_root.add_child(fade, false, Node.INTERNAL_MODE_BACK)
 
 
