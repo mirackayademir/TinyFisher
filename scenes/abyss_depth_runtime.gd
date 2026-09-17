@@ -1,9 +1,9 @@
 extends Node
 
-# TinyFisher depth expansion runtime V2.
+# TinyFisher depth expansion runtime V2.1.
 # Expands the playable ocean to 250 m and builds a continuous abyss biome under
-# the approved 20-180 m HQ canyon. The canyon edge is deliberately blended into
-# the abyss so 180 m does not read as a hard horizontal cut.
+# the approved 20-180 m HQ canyon. Runtime colors are intentionally authored a
+# little brighter because DeepSeaCanvasModulate darkens the whole world at depth.
 
 const WORLD_PIXELS_PER_METER: float = 34.5
 const WORLD_MAX_DEPTH_M: int = 250
@@ -21,10 +21,7 @@ const ABYSS_ROCK_Z: int = -7
 const ABYSS_BLEND_Z: int = -6
 const WATER_BOTTOM_MARGIN_PX: float = 760.0
 
-# level 0 + five upgrade levels
 const DEPTH_LEVELS_METERS: Array[int] = [60, 100, 150, 200, 225, 250]
-
-# Keep full depth open while we place environment/fish content.
 const TEST_FULL_DEPTH_UNLOCK: bool = true
 
 var _scene_id: int = 0
@@ -38,7 +35,7 @@ var _last_bottom_y: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("ABYSS DEPTH V2: 250M WORLD / CANYON FADE 168-194M / ABYSS 180-250M")
+	print("ABYSS DEPTH V2.1: 250M WORLD / CANYON FADE 168-194M / READABLE DEEP BIOME")
 
 
 func _process(_delta: float) -> void:
@@ -140,16 +137,16 @@ func _ensure_abyss_zone() -> void:
 	_last_bottom_y = bottom_y
 
 	print(
-		"ABYSS V2 READY: ", ABYSS_TOP_M, "-", ABYSS_BOTTOM_M,
+		"ABYSS V2.1 READY: ", ABYSS_TOP_M, "-", ABYSS_BOTTOM_M,
 		"m / fade=", CANYON_FADE_START_M, "-", CANYON_FADE_END_M,
 		"m / world_bottom=", snappedf(bottom_y, 1.0), "px"
 	)
 
 
 func _build_depth_backdrop(bounds: Vector2, top_y: float, bottom_y: float) -> void:
-	var top_color: Color = Color(0.004, 0.028, 0.060, 0.82)
-	var middle_color: Color = Color(0.003, 0.018, 0.040, 0.92)
-	var bottom_color: Color = Color(0.001, 0.006, 0.016, 0.99)
+	var top_color: Color = Color(0.055, 0.18, 0.30, 0.92)
+	var middle_color: Color = Color(0.030, 0.11, 0.20, 0.96)
+	var bottom_color: Color = Color(0.015, 0.055, 0.12, 0.99)
 	var band_count: int = 14
 
 	for i: int in range(band_count):
@@ -176,13 +173,11 @@ func _build_side_continuation(bounds: Vector2, bottom_y: float) -> void:
 	var right: float = bounds.y
 	var width: float = right - left
 
-	# Far walls continue the visual language of the HQ canyon without trying to
-	# redraw the detailed source art. They are intentionally silhouette-like.
 	var left_far: Polygon2D = Polygon2D.new()
 	left_far.name = "AbyssLeftFarWall"
 	left_far.z_as_relative = false
 	left_far.z_index = ABYSS_ROCK_Z
-	left_far.color = Color(0.004, 0.026, 0.050, 0.96)
+	left_far.color = Color(0.060, 0.20, 0.32, 0.98)
 	left_far.polygon = PackedVector2Array([
 		Vector2(left, _world_y_for_depth(176.0)),
 		Vector2(left + width * 0.040, _world_y_for_depth(183.0)),
@@ -200,7 +195,7 @@ func _build_side_continuation(bounds: Vector2, bottom_y: float) -> void:
 	right_far.name = "AbyssRightFarWall"
 	right_far.z_as_relative = false
 	right_far.z_index = ABYSS_ROCK_Z
-	right_far.color = Color(0.004, 0.026, 0.050, 0.96)
+	right_far.color = Color(0.060, 0.20, 0.32, 0.98)
 	right_far.polygon = PackedVector2Array([
 		Vector2(right, _world_y_for_depth(176.0)),
 		Vector2(right - width * 0.038, _world_y_for_depth(184.0)),
@@ -214,13 +209,11 @@ func _build_side_continuation(bounds: Vector2, bottom_y: float) -> void:
 	])
 	_abyss_root.add_child(right_far)
 
-	# Slightly brighter inner ridges keep the lower biome readable instead of a
-	# single black rectangle.
 	var left_inner: Polygon2D = Polygon2D.new()
 	left_inner.name = "AbyssLeftInnerRidge"
 	left_inner.z_as_relative = false
 	left_inner.z_index = ABYSS_ROCK_Z
-	left_inner.color = Color(0.008, 0.045, 0.078, 0.74)
+	left_inner.color = Color(0.10, 0.30, 0.45, 0.80)
 	left_inner.polygon = PackedVector2Array([
 		Vector2(left, bottom_y),
 		Vector2(left + width * 0.080, _world_y_for_depth(194.0)),
@@ -238,7 +231,7 @@ func _build_side_continuation(bounds: Vector2, bottom_y: float) -> void:
 	right_inner.name = "AbyssRightInnerRidge"
 	right_inner.z_as_relative = false
 	right_inner.z_index = ABYSS_ROCK_Z
-	right_inner.color = Color(0.008, 0.045, 0.078, 0.74)
+	right_inner.color = Color(0.10, 0.30, 0.45, 0.80)
 	right_inner.polygon = PackedVector2Array([
 		Vector2(right, bottom_y),
 		Vector2(right - width * 0.078, _world_y_for_depth(195.0)),
@@ -259,7 +252,7 @@ func _build_floor_ridge(bounds: Vector2, bottom_y: float) -> void:
 	floor.name = "AbyssFloorRidge"
 	floor.z_as_relative = false
 	floor.z_index = ABYSS_ROCK_Z
-	floor.color = Color(0.003, 0.020, 0.036, 0.98)
+	floor.color = Color(0.040, 0.13, 0.23, 0.99)
 	floor.polygon = PackedVector2Array([
 		Vector2(bounds.x, bottom_y),
 		Vector2(bounds.x, _world_y_for_depth(245.0)),
@@ -279,7 +272,6 @@ func _build_floor_ridge(bounds: Vector2, bottom_y: float) -> void:
 
 
 func _build_depth_haze(bounds: Vector2) -> void:
-	# Sparse low-alpha haze bands add depth without hiding future fish.
 	var haze_depths: Array[float] = [188.0, 204.0, 221.0, 236.0]
 	for i: int in range(haze_depths.size()):
 		var center_m: float = haze_depths[i]
@@ -293,13 +285,11 @@ func _build_depth_haze(bounds: Vector2) -> void:
 		haze.name = "AbyssHaze%02d" % i
 		haze.z_as_relative = false
 		haze.z_index = ABYSS_BLEND_Z
-		haze.color = Color(0.025, 0.095, 0.145, 0.035 + float(i) * 0.012)
+		haze.color = Color(0.08, 0.25, 0.40, 0.08 + float(i) * 0.018)
 		_abyss_root.add_child(haze)
 
 
 func _build_canyon_blend(bounds: Vector2) -> void:
-	# This overlay is intentionally above the canyon sprite. It starts almost
-	# invisible before 180 m and gradually covers the hard source-image bottom.
 	var start_y: float = _world_y_for_depth(CANYON_FADE_START_M)
 	var end_y: float = _world_y_for_depth(CANYON_FADE_END_M)
 	var steps: int = 10
@@ -317,7 +307,7 @@ func _build_canyon_blend(bounds: Vector2) -> void:
 		band.z_as_relative = false
 		band.z_index = ABYSS_BLEND_Z
 		var alpha: float = lerpf(0.015, 0.82, pow(t1, 1.65))
-		band.color = Color(0.003, 0.018, 0.038, alpha)
+		band.color = Color(0.010, 0.050, 0.095, alpha)
 		_abyss_root.add_child(band)
 
 
@@ -346,13 +336,13 @@ func _build_bioluminescent_specks(bounds: Vector2) -> void:
 		])
 		match i % 4:
 			0:
-				speck.color = Color(0.18, 0.82, 1.0, 0.48)
+				speck.color = Color(0.18, 0.82, 1.0, 0.62)
 			1:
-				speck.color = Color(0.30, 0.62, 1.0, 0.40)
+				speck.color = Color(0.30, 0.62, 1.0, 0.54)
 			2:
-				speck.color = Color(0.42, 0.38, 1.0, 0.32)
+				speck.color = Color(0.42, 0.38, 1.0, 0.46)
 			_:
-				speck.color = Color(0.18, 0.68, 0.78, 0.36)
+				speck.color = Color(0.18, 0.68, 0.78, 0.50)
 		_abyss_root.add_child(speck)
 
 
