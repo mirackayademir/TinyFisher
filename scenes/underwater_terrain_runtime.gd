@@ -1,24 +1,25 @@
 extends Node
 
-# TinyFisher canyon runtime V33.
+# TinyFisher canyon runtime V34.
 # Uses the approved single-file HQ canyon asset and locks it to the authored
 # gameplay band 20-180 m without stretching the source image out of proportion.
-# The 180-250 m abyss is handled by AbyssDepthRuntime.
+# The playable ocean now ends at the canyon floor; only a tiny visual bottom cap
+# is allowed below it by DepthCapRuntime.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
 const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To180"
-const LAYOUT_VERSION: int = 33
+const LAYOUT_VERSION: int = 34
 const TOP_M: float = 20.0
 const BOTTOM_M: float = 180.0
-const WORLD_MAX_DEPTH_M: float = 250.0
+const WORLD_MAX_DEPTH_M: float = 180.0
 const WORLD_PIXELS_PER_METER: float = 34.5
 const MAP_WIDTH_PX: float = 5500.0
 const FALLBACK_LEFT: float = -1000.0
 const FALLBACK_RIGHT: float = 4500.0
 const FALLBACK_ZERO_Y: float = 392.6
 const TERRAIN_Z: int = -7
-const DEEP_WATER_MARGIN_PX: float = 760.0
+const DEEP_WATER_MARGIN_PX: float = 96.0
 
 var _scene_id: int = 0
 var _world: Node2D = null
@@ -35,7 +36,7 @@ var _last_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V33: HQ CANYON 20-180M / ASPECT LOCKED / ABYSS BELOW")
+	print("UNDERWATER TERRAIN V34: HQ CANYON 20-180M / ASPECT LOCKED / WORLD ENDS AT FLOOR")
 
 
 func _process(_delta: float) -> void:
@@ -136,14 +137,10 @@ func _fit_to_world(force: bool = false) -> void:
 	var bottom_y: float = _world_y_for_depth(BOTTOM_M)
 	var height: float = maxf(bottom_y - top_y, 1.0)
 
-	# Depth is the authored gameplay constraint. Scale uniformly from height so the
-	# canyon remains exactly 20-180 m while preserving the original image ratio.
 	var uniform_scale: float = height / _source_region.size.y
 	var drawn_width: float = _source_region.size.x * uniform_scale
 	var horizontal_padding: float = maxf((width - drawn_width) * 0.5, 0.0)
 
-	# If a future asset becomes wider than the map, fall back to width-fit while
-	# preserving aspect ratio. Current approved source fits with ~106 px per side.
 	if drawn_width > width:
 		uniform_scale = width / _source_region.size.x
 		drawn_width = width
