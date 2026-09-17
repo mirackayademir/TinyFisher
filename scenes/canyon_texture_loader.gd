@@ -1,25 +1,13 @@
 @tool
 extends RefCounted
 
-# TinyFisher canyon source loader.
-#
-# Priority:
-# 1) Use the approved final Q95 RGBA canyon only when all 41 chunks are complete
-#    and the full payload passes byte length, SHA-256, WebP, size and alpha checks.
-# 2) If that transfer is still incomplete/corrupt, automatically fall back to the
-#    older V15 canyon whose complete binary is already hash-verified in the repo.
-#
-# This keeps editor preview/runtime usable without inventing missing HQ bytes.
+# TinyFisher canyon texture loader.
+# Primary source is the approved single-file HQ canyon asset.
+# The historical hash-verified V15 payload is kept only as an emergency fallback.
 
-const FINAL_DATA_DIR: String = "res://assets/environment/terrain/runtime_data_final"
-const FINAL_PART_PREFIX: String = "canyon_final_q95_part"
-const FINAL_PART_COUNT: int = 41
-const FINAL_CHUNK_BASE64_LENGTH: int = 16000
-const FINAL_EXPECTED_BASE64_LENGTH: int = 642596
-const FINAL_EXPECTED_RAW_BYTES: int = 481946
-const FINAL_EXPECTED_WIDTH: int = 1226
-const FINAL_EXPECTED_HEIGHT: int = 1283
-const FINAL_EXPECTED_SHA256: String = "b00865a0d42d6488159f9ecf4cbde30df86873d96036f6630d548ec68f429679"
+const HQ_ASSET_PATH: String = "res://assets/environment/terrain/canyon_hq.webp"
+const HQ_EXPECTED_WIDTH: int = 1226
+const HQ_EXPECTED_HEIGHT: int = 1283
 
 const FALLBACK_EXPECTED_B64: int = 74540
 const FALLBACK_EXPECTED_BYTES: int = 55904
@@ -50,123 +38,63 @@ const FALLBACK_PART_PATHS: Array[String] = [
 
 
 static func build_texture() -> Texture2D:
-	var final_texture: Texture2D = _try_build_final_texture()
-	if final_texture != null:
-		return final_texture
+	var hq_texture: Texture2D = _load_hq_asset()
+	if hq_texture != null:
+		return hq_texture
 
 	push_warning(
-		"FINAL CANYON transferi tamamlanmamis veya dogrulanamadi; "
-		+ "SHA-256 ile dogrulanmis V15 canyon fallback kullaniliyor."
+		"HQ canyon asset kullanilamadi; SHA-256 ile dogrulanmis V15 emergency fallback kullaniliyor."
 	)
 
 	var fallback_texture: Texture2D = _build_verified_fallback_texture()
 	if fallback_texture != null:
 		return fallback_texture
 
-	push_error("CANYON yuklenemedi: final Q95 ve verified V15 fallback kullanilamiyor.")
+	push_error("CANYON yuklenemedi: HQ asset ve verified fallback kullanilamiyor.")
 	return null
 
 
-static func _try_build_final_texture() -> Texture2D:
-	var chunks: PackedStringArray = PackedStringArray()
-	var final_chunk_length: int = FINAL_EXPECTED_BASE64_LENGTH - (FINAL_CHUNK_BASE64_LENGTH * (FINAL_PART_COUNT - 1))
+static func _load_hq_asset() -> Texture2D:
+	if not ResourceLoader.exists(HQ_ASSET_PATH):
+		return null
 
-	for part_index: int in range(FINAL_PART_COUNT):
-		var part_path: String = "%s/%s%02d.txt" % [FINAL_DATA_DIR, FINAL_PART_PREFIX, part_index]
-		if not FileAccess.file_exists(part_path):
-			push_warning("FINAL CANYON incomplete: part%02d bulunamadi." % part_index)
-			return null
+	var resource: Resource = ResourceLoader.load(HQ_ASSET_PATH)
+	var texture: Texture2D = resource as Texture2D
+	if texture == null:
+		push_warning("HQ canyon asset Texture2D olarak yuklenemedi: " + HQ_ASSET_PATH)
+		return null
 
-		var file: FileAccess = FileAccess.open(part_path, FileAccess.READ)
-		if file == null:
-			push_warning("FINAL CANYON incomplete: part%02d okunamadi." % part_index)
-			return null
-
-		var chunk: String = file.get_as_text().strip_edges()
-		var expected_chunk_length: int = FINAL_CHUNK_BASE64_LENGTH
-		if part_index == FINAL_PART_COUNT - 1:
-			expected_chunk_length = final_chunk_length
-
-		if chunk.length() != expected_chunk_length:
-			push_warning(
-				"FINAL CANYON incomplete: part%02d length=%d expected=%d." % [
-					part_index,
-					chunk.length(),
-					expected_chunk_length
-				]
-			)
-			return null
-
-		chunks.append(chunk)
-
-	var encoded: String = "".join(chunks)
-	if encoded.length() != FINAL_EXPECTED_BASE64_LENGTH:
+	if texture.get_width() != HQ_EXPECTED_WIDTH or texture.get_height() != HQ_EXPECTED_HEIGHT:
 		push_warning(
-			"FINAL CANYON incomplete: base64 length=%d expected=%d." % [
-				encoded.length(), FINAL_EXPECTED_BASE64_LENGTH
+			"HQ canyon asset boyutu uyusmuyor: got=%dx%d expected=%dx%d" % [
+				texture.get_width(),
+				texture.get_height(),
+				HQ_EXPECTED_WIDTH,
+				HQ_EXPECTED_HEIGHT
 			]
 		)
 		return null
 
-	var raw: PackedByteArray = Marshalls.base64_to_raw(encoded)
-	if raw.size() != FINAL_EXPECTED_RAW_BYTES:
-		push_warning(
-			"FINAL CANYON incomplete: raw bytes=%d expected=%d." % [
-				raw.size(), FINAL_EXPECTED_RAW_BYTES
-			]
-		)
-		return null
-
-	var hash_context: HashingContext = HashingContext.new()
-	var hash_start_error: Error = hash_context.start(HashingContext.HASH_SHA256)
-	if hash_start_error != OK:
-		push_warning("FINAL CANYON SHA256 baslatilamadi: " + error_string(hash_start_error))
-		return null
-
-	var hash_update_error: Error = hash_context.update(raw)
-	if hash_update_error != OK:
-		push_warning("FINAL CANYON SHA256 hesaplanamadi: " + error_string(hash_update_error))
-		return null
-
-	var actual_sha256: String = hash_context.finish().hex_encode()
-	if actual_sha256 != FINAL_EXPECTED_SHA256:
-		push_warning("FINAL CANYON SHA256 uyusmuyor; verified fallback kullanilacak.")
-		return null
-
-	var image: Image = Image.new()
-	var decode_error: Error = image.load_webp_from_buffer(raw)
-	if decode_error != OK or image.is_empty():
-		push_warning("FINAL CANYON WebP decode edilemedi; verified fallback kullanilacak.")
-		return null
-
-	if image.get_width() != FINAL_EXPECTED_WIDTH or image.get_height() != FINAL_EXPECTED_HEIGHT:
-		push_warning(
-			"FINAL CANYON size=%dx%d expected=%dx%d; verified fallback kullanilacak." % [
-				image.get_width(), image.get_height(), FINAL_EXPECTED_WIDTH, FINAL_EXPECTED_HEIGHT
-			]
-		)
+	var image: Image = texture.get_image()
+	if image == null or image.is_empty():
+		push_warning("HQ canyon asset image verisi okunamadi.")
 		return null
 
 	if image.detect_alpha() == Image.ALPHA_NONE:
-		push_warning("FINAL CANYON alpha kanali yok; verified fallback kullanilacak.")
+		push_warning("HQ canyon asset alpha kanali olmadan import edilmis.")
 		return null
 
 	var used_rect: Rect2i = image.get_used_rect()
 	if used_rect.size.x <= 0 or used_rect.size.y <= 0:
-		push_warning("FINAL CANYON alpha alani bos; verified fallback kullanilacak.")
-		return null
-
-	var texture: ImageTexture = ImageTexture.create_from_image(image)
-	if texture == null:
-		push_warning("FINAL CANYON texture olusturulamadi; verified fallback kullanilacak.")
+		push_warning("HQ canyon asset gorunur alpha alani bos.")
 		return null
 
 	print(
-		"FINAL CANYON VERIFIED: %d parts / %d bytes / SHA256=OK / %dx%d RGBA" % [
-			FINAL_PART_COUNT,
-			raw.size(),
-			image.get_width(),
-			image.get_height()
+		"HQ CANYON ASSET OK: %dx%d RGBA / alpha_used=%dx%d / single-file" % [
+			texture.get_width(),
+			texture.get_height(),
+			used_rect.size.x,
+			used_rect.size.y
 		]
 	)
 	return texture
