@@ -25,6 +25,7 @@ EnvironmentLayers="*res://scenes/environment_layers.gd"
 SunRaysRuntime="*res://scenes/sun_rays_runtime.gd"
 SurfaceFoamSync="*res://scenes/surface_foam_sync.gd"
 UnderwaterTerrainRuntime="*res://scenes/underwater_terrain_runtime.gd"
+CanyonCuratedSet="*res://scenes/canyon_curated_set.gd"
 
 [display]
 
