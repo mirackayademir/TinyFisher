@@ -60,7 +60,7 @@ Sebep:
 
 Canyon için ayrı, küçük ve özel bir **Canyon Curated Set** hazırlanacak.
 
-## 5. Canyon Curated Set — Sıradaki Tasarım Yönü
+## 5. Canyon Curated Set — V1 TESTİ AKTİF
 
 İlk etapta yaklaşık `8–12` adet, canyon stiline özel asset hedefleniyor.
 
@@ -81,18 +81,39 @@ Canyon için ayrı, küçük ve özel bir **Canyon Curated Set** hazırlanacak.
 
 Assetler her yere serpiştirilmeyecek. Bunun yerine az sayıda **POI (Point of Interest)** oluşturulacak.
 
-Örnek:
-
-- 45–65 m: küçük enkaz + çapa
-- 85–105 m: zincir + eski fener
-- 120–145 m: iskelet / gizemli kalıntı
-- 155–175 m: karanlık mağara / Leviathan foreshadow alanı
-
-Amaç:
+Hedef dağılım:
 
 - `%70` doğal canyon
 - `%20` gizemli kalıntı
 - `%10` özel hikâye / boss / nadir obje hissi
+
+### 2026-09-17 — V1 test uygulaması
+
+Yeni runtime:
+
+- `res://scenes/canyon_curated_set.gd`
+- `project.godot` autoload: `CanyonCuratedSet`
+
+İlk üç test asseti mevcut HQ kaynaklardan seçildi:
+
+- `res://assets/environment/abyss/abyss_anchor_01.png`
+- `res://assets/environment/deep_sea/deep_sea_chain_01_TEMP.png`
+- `res://assets/environment/deep_sea/deep_sea_wreck_01.png`
+
+Test POI yerleşimi:
+
+- `55 m`: yarı gömülü çapa
+- `58 m`: küçük enkaz
+- `96 m`: eski zincir
+
+Üçüne de aynı görsel uyum materyali uygulanıyor:
+
+- hafif saturation düşürme,
+- canyon tonuna yakın mavi/gri tint,
+- hafif brightness düşürme,
+- linear + mipmap filtreleme.
+
+Amaç eski assetleri canyon üzerine yığmak değil; yalnızca ilk 3 parçanın stil uyumunu F5 screenshot ile değerlendirmek.
 
 ## 6. Büyük Batık Gemi Kararı
 
@@ -106,16 +127,12 @@ Amaç:
 
 ## 7. Sıradaki Net İş
 
-Yeni sohbette buradan devam edilecek:
-
-1. `Canyon Curated Set v1` listesini kesinleştir.
-2. İlk 3 uyumlu asseti üret:
-   - çapa,
-   - zincir,
-   - küçük kırık enkaz.
-3. Bunları farklı derinliklerde canyon içine test amaçlı yerleştir.
-4. Screenshot ile stil ve yoğunluk kontrolü yap.
-5. Yakışırsa kalan curated assetlere geç.
+1. Kullanıcı `git pull` yapacak.
+2. Godot F5 ile canyonu açacak.
+3. 55–58 m POI ile 96 m zincirin screenshot'ı alınacak.
+4. Stil/boyut/pozisyon kontrolü yapılacak.
+5. Uyum iyiyse kalan curated assetlere geçilecek.
+6. Uyum kötüyse sistem korunup yalnız asset görselleri özel HQ versiyonlarla değiştirilecek.
 
 ## 8. Git / Workflow Notları
 
@@ -133,4 +150,7 @@ Yeni sohbette buradan devam edilecek:
 - 250 m Abyss planı: ❌ iptal
 - Canyon oranı: ✅
 - Eski 36 assets canyon üzerine topluca yerleştirme: ❌ önerilmiyor
-- Yeni Canyon Curated Set: ⏳ sıradaki ana iş
+- Canyon Curated Set runtime: ✅
+- İlk test POI (çapa + küçük enkaz): ✅ 55–58 m
+- İkinci test POI (zincir): ✅ 96 m
+- Görsel onay: ⏳ F5 screenshot bekleniyor
