@@ -1,13 +1,14 @@
 extends Node
 
-# TinyFisher canyon runtime V32.
+# TinyFisher canyon runtime V33.
 # Uses the approved single-file HQ canyon asset and locks it to the authored
-# gameplay band 20-180 m. The 180-250 m abyss is handled by AbyssDepthRuntime.
+# gameplay band 20-180 m without stretching the source image out of proportion.
+# The 180-250 m abyss is handled by AbyssDepthRuntime.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
 
 const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To180"
-const LAYOUT_VERSION: int = 32
+const LAYOUT_VERSION: int = 33
 const TOP_M: float = 20.0
 const BOTTOM_M: float = 180.0
 const WORLD_MAX_DEPTH_M: float = 250.0
@@ -34,7 +35,7 @@ var _last_height: float = INF
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("UNDERWATER TERRAIN V32: HQ CANYON LOCKED 20-180M / ABYSS BELOW")
+	print("UNDERWATER TERRAIN V33: HQ CANYON 20-180M / ASPECT LOCKED / ABYSS BELOW")
 
 
 func _process(_delta: float) -> void:
@@ -105,6 +106,7 @@ func _ensure_terrain() -> void:
 	_root.set_meta("terrain_source", "single_file_hq_canyon")
 	_root.set_meta("source_region", _source_region)
 	_root.set_meta("exact_depth_band", true)
+	_root.set_meta("aspect_locked", true)
 	_root.set_meta("world_pixels_per_meter", WORLD_PIXELS_PER_METER)
 	_root.set_meta("compact_map_width_px", MAP_WIDTH_PX)
 	_world.add_child(_root)
@@ -134,6 +136,19 @@ func _fit_to_world(force: bool = false) -> void:
 	var bottom_y: float = _world_y_for_depth(BOTTOM_M)
 	var height: float = maxf(bottom_y - top_y, 1.0)
 
+	# Depth is the authored gameplay constraint. Scale uniformly from height so the
+	# canyon remains exactly 20-180 m while preserving the original image ratio.
+	var uniform_scale: float = height / _source_region.size.y
+	var drawn_width: float = _source_region.size.x * uniform_scale
+	var horizontal_padding: float = maxf((width - drawn_width) * 0.5, 0.0)
+
+	# If a future asset becomes wider than the map, fall back to width-fit while
+	# preserving aspect ratio. Current approved source fits with ~106 px per side.
+	if drawn_width > width:
+		uniform_scale = width / _source_region.size.x
+		drawn_width = width
+		horizontal_padding = 0.0
+
 	_extend_deep_water(_world_y_for_depth(WORLD_MAX_DEPTH_M) + DEEP_WATER_MARGIN_PX)
 
 	if not force \
@@ -143,11 +158,8 @@ func _fit_to_world(force: bool = false) -> void:
 	and is_equal_approx(height, _last_height):
 		return
 
-	_root.global_position = Vector2(left, top_y)
-	_root.scale = Vector2(
-		width / _source_region.size.x,
-		height / _source_region.size.y
-	)
+	_root.global_position = Vector2(left + horizontal_padding, top_y)
+	_root.scale = Vector2(uniform_scale, uniform_scale)
 
 	_root.set_meta("map_left_x", left)
 	_root.set_meta("map_right_x", bounds.y)
@@ -155,6 +167,8 @@ func _fit_to_world(force: bool = false) -> void:
 	_root.set_meta("world_y_bottom", bottom_y)
 	_root.set_meta("source_visible_size", _source_region.size)
 	_root.set_meta("fit_scale", _root.scale)
+	_root.set_meta("drawn_width_px", drawn_width)
+	_root.set_meta("horizontal_padding_px", horizontal_padding)
 
 	_last_left = left
 	_last_width = width
@@ -163,9 +177,11 @@ func _fit_to_world(force: bool = false) -> void:
 
 	if force:
 		print(
-			"HQ CANYON LOCKED: ", TOP_M, "-", BOTTOM_M,
-			"m world=", snappedf(width, 1.0), "x", snappedf(height, 1.0),
-			" scale=", _root.scale,
+			"HQ CANYON ASPECT LOCKED: ", TOP_M, "-", BOTTOM_M,
+			"m map=", snappedf(width, 1.0),
+			"px drawn=", snappedf(drawn_width, 1.0),
+			"px pad=", snappedf(horizontal_padding, 1.0),
+			"px scale=", snappedf(uniform_scale, 0.001),
 			" / source=", _source_region.size
 		)
 
