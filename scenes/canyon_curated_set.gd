@@ -1,31 +1,46 @@
 extends Node
 
-# TinyFisher — Canyon Curated Set v1
-# First POI pass for the locked HQ canyon (20-180 m).
-# Uses only three curated props and keeps the canyon itself untouched.
+# TinyFisher — Canyon Curated Set V2
+# Prototype-approved placement pass. Props are positioned in HQ canyon local
+# source coordinates so they stay locked to the same ledges when the terrain
+# is fitted/scaled to the 20–180 m gameplay band.
 
-const ROOT_NAME: String = "CanyonCuratedSetV1"
-const LAYOUT_VERSION: int = 1
-const WORLD_PIXELS_PER_METER: float = 34.5
-const MAP_WIDTH_PX: float = 5500.0
-const FALLBACK_LEFT: float = -1000.0
-const FALLBACK_RIGHT: float = 4500.0
-const FALLBACK_ZERO_Y: float = 392.6
+const TERRAIN_NODE_NAME: String = "UnderwaterCanyonTerrain20To180"
+const ROOT_NAME: String = "CanyonCuratedSetV2"
+const LAYOUT_VERSION: int = 2
 
-const ANCHOR_TEXTURE: String = "res://assets/environment/abyss/abyss_anchor_01.png"
-const CHAIN_TEXTURE: String = "res://assets/environment/deep_sea/deep_sea_chain_01_TEMP.png"
-const WRECK_TEXTURE: String = "res://assets/environment/deep_sea/deep_sea_wreck_01.png"
+const SHEET_WIDTH: int = 768
+const SHEET_HEIGHT: int = 256
+const CELL_SIZE: Vector2 = Vector2(256.0, 256.0)
+
+const SHEET_PART_PATHS: Array[String] = [
+	"res://assets/environment/terrain/runtime_data/canyon_curated_sheet_part00.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_curated_sheet_part01.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_curated_sheet_part02.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_curated_sheet_part03.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_curated_sheet_part04.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_curated_sheet_part05.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_curated_sheet_part06.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_curated_sheet_part07.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_curated_sheet_part08.txt",
+	"res://assets/environment/terrain/runtime_data/canyon_curated_sheet_part09.txt"
+]
+
+const CELL_ANCHOR: Rect2 = Rect2(0.0, 0.0, 256.0, 256.0)
+const CELL_CHAIN: Rect2 = Rect2(256.0, 0.0, 256.0, 256.0)
+const CELL_WRECK: Rect2 = Rect2(512.0, 0.0, 256.0, 256.0)
 
 var _scene_id: int = 0
 var _world: Node2D = null
+var _terrain: Node2D = null
 var _root: Node2D = null
-var _style_material: ShaderMaterial = null
+var _sheet_texture: Texture2D = null
+var _sheet_build_attempted: bool = false
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_style_material = _build_style_material()
-	print("CANYON CURATED SET V1: anchor + chain + small wreck")
+	print("CANYON CURATED SET V2: PROTOTYPE PLACEMENT / 7 POI / CANYON-LOCKED")
 
 
 func _process(_delta: float) -> void:
@@ -37,6 +52,7 @@ func _process(_delta: float) -> void:
 	if scene.get_instance_id() != _scene_id:
 		_scene_id = scene.get_instance_id()
 		_world = scene as Node2D
+		_terrain = null
 		_root = null
 
 	if _world == null:
@@ -48,6 +64,7 @@ func _process(_delta: float) -> void:
 func _reset_scene_state() -> void:
 	_scene_id = 0
 	_world = null
+	_terrain = null
 	_root = null
 
 
@@ -55,167 +72,136 @@ func _ensure_curated_set() -> void:
 	if is_instance_valid(_root):
 		return
 
-	var underwater_layers: Node = _world.get_node_or_null("EnvironmentLayers/UnderwaterLayers")
-	if underwater_layers == null:
+	_terrain = _world.get_node_or_null(TERRAIN_NODE_NAME) as Node2D
+	if _terrain == null:
+		return
+	if _terrain.get_node_or_null("TerrainSpriteHQ") == null:
 		return
 
-	var landmark_layer: Node2D = underwater_layers.get_node_or_null("LandmarkDecorLayer") as Node2D
-	var mid_layer: Node2D = underwater_layers.get_node_or_null("MidDecorLayer") as Node2D
-	if landmark_layer == null or mid_layer == null:
+	if _sheet_texture == null and not _sheet_build_attempted:
+		_sheet_build_attempted = true
+		_sheet_texture = _build_sheet_texture()
+	if _sheet_texture == null:
 		return
 
-	_remove_old_curated_set()
+	_remove_old_curated_nodes()
 
 	_root = Node2D.new()
 	_root.name = ROOT_NAME
+	_root.z_as_relative = true
+	_root.z_index = 1
 	_root.set_meta("layout_version", LAYOUT_VERSION)
-	_root.set_meta("canyon_locked", true)
-	_root.set_meta("curated_assets", PackedStringArray(["anchor", "chain", "small_wreck"]))
-	landmark_layer.add_child(_root)
+	_root.set_meta("prototype_locked", true)
+	_root.set_meta("placement_space", "canyon_local_source_px")
+	_root.set_meta("canyon_priority", "hero_environment")
+	_terrain.add_child(_root)
 
-	var bounds: Vector2 = _get_world_horizontal_bounds()
-	var width: float = maxf(bounds.y - bounds.x, 1.0)
+	# Placement follows the user's marked prototype. All coordinates are local
+	# to the visible HQ canyon artwork, not arbitrary world/depth coordinates.
+	# Props stay intentionally restrained so the canyon remains the hero.
+	_add_prop("POI_01_LeftUpperChain", CELL_CHAIN, Vector2(156.0, 689.0), 92.0, -11.0, 0.88, false)
+	_add_prop("POI_02_RightUpperWreck", CELL_WRECK, Vector2(1030.0, 731.0), 112.0, 7.0, 0.90, true)
+	_add_prop("POI_03_DistantCenterAnchor", CELL_ANCHOR, Vector2(644.0, 1015.0), 48.0, -4.0, 0.68, false)
+	_add_prop("POI_04_InnerRightChain", CELL_CHAIN, Vector2(756.0, 1021.0), 68.0, 12.0, 0.80, true)
+	_add_prop("POI_05_LeftLowerAnchor", CELL_ANCHOR, Vector2(332.0, 1093.0), 126.0, -9.0, 0.94, false)
+	_add_prop("POI_06_RightLowerAnchor", CELL_ANCHOR, Vector2(920.0, 1088.0), 120.0, 9.0, 0.93, true)
+	_add_prop("POI_07_BottomLeftWreck", CELL_WRECK, Vector2(579.0, 1142.0), 132.0, 8.0, 0.92, false)
 
-	# POI 1 — 45-65 m: small wreck + half-buried anchor.
-	var wreck_x: float = bounds.x + width * 0.33
-	var wreck_y: float = _world_y_for_depth(58.0)
-	_add_prop(
-		_root,
-		"CuratedSmallWreck_58m",
-		WRECK_TEXTURE,
-		Vector2(wreck_x, wreck_y),
-		420.0,
-		deg_to_rad(-7.0),
-		0.88
-	)
+	print("CANYON CURATED SET V2 READY: 7 prototype POIs locked to HQ canyon source")
 
-	var anchor_x: float = bounds.x + width * 0.405
-	var anchor_y: float = _world_y_for_depth(55.0)
-	_add_prop(
-		_root,
-		"CuratedAnchor_55m",
-		ANCHOR_TEXTURE,
-		Vector2(anchor_x, anchor_y),
-		190.0,
-		deg_to_rad(13.0),
-		0.92
-	)
 
-	# POI 2 — 85-105 m: lone old chain hinting at something deeper.
-	var chain_root: Node2D = Node2D.new()
-	chain_root.name = "CuratedChainPOI_96m"
-	mid_layer.add_child(chain_root)
-	var chain_x: float = bounds.x + width * 0.68
-	var chain_y: float = _world_y_for_depth(96.0)
-	_add_prop(
-		chain_root,
-		"CuratedOldChain_96m",
-		CHAIN_TEXTURE,
-		Vector2(chain_x, chain_y),
-		300.0,
-		deg_to_rad(-18.0),
-		0.82
-	)
-	_root.set_meta("chain_runtime_path", chain_root.get_path())
+func _build_sheet_texture() -> Texture2D:
+	var encoded: String = ""
 
-	print(
-		"CANYON CURATED SET READY: wreck=58m anchor=55m chain=96m / bounds=",
-		bounds.x, "..", bounds.y
-	)
+	for path: String in SHEET_PART_PATHS:
+		if not FileAccess.file_exists(path):
+			push_error("CANYON CURATED sheet part missing: " + path)
+			return null
+
+		var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			push_error("CANYON CURATED sheet part cannot open: " + path)
+			return null
+		encoded += file.get_as_text().strip_edges()
+
+	var raw: PackedByteArray = Marshalls.base64_to_raw(encoded)
+	if raw.is_empty():
+		push_error("CANYON CURATED sheet base64 decode failed")
+		return null
+
+	var image: Image = Image.new()
+	var decode_error: Error = image.load_webp_from_buffer(raw)
+	if decode_error != OK or image.is_empty():
+		push_error("CANYON CURATED WebP decode failed: " + error_string(decode_error))
+		return null
+
+	if image.get_width() != SHEET_WIDTH or image.get_height() != SHEET_HEIGHT:
+		push_error(
+			"CANYON CURATED sheet size mismatch: got=%dx%d expected=%dx%d" % [
+				image.get_width(), image.get_height(), SHEET_WIDTH, SHEET_HEIGHT
+			]
+		)
+		return null
+
+	if not image.has_mipmaps():
+		var mip_error: Error = image.generate_mipmaps()
+		if mip_error != OK:
+			push_warning("CANYON CURATED mipmap generation failed: " + error_string(mip_error))
+
+	var texture: ImageTexture = ImageTexture.create_from_image(image)
+	if texture == null:
+		push_error("CANYON CURATED ImageTexture creation failed")
+		return null
+	return texture
 
 
 func _add_prop(
-	parent: Node2D,
 	node_name: String,
-	texture_path: String,
-	world_position: Vector2,
+	region: Rect2,
+	local_position: Vector2,
 	target_long_side_px: float,
-	rotation_radians: float,
-	alpha: float
-) -> Sprite2D:
-	var texture: Texture2D = load(texture_path) as Texture2D
-	if texture == null:
-		push_warning("Canyon curated asset missing: " + texture_path)
-		return null
+	rotation_degrees: float,
+	alpha: float,
+	flip_h: bool
+) -> void:
+	if _root == null or _sheet_texture == null:
+		return
 
-	var texture_size: Vector2 = texture.get_size()
-	var long_side: float = maxf(texture_size.x, texture_size.y)
-	if long_side <= 0.0:
-		return null
+	var atlas: AtlasTexture = AtlasTexture.new()
+	atlas.atlas = _sheet_texture
+	atlas.region = region
 
 	var sprite: Sprite2D = Sprite2D.new()
 	sprite.name = node_name
-	sprite.texture = texture
+	sprite.texture = atlas
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	sprite.global_position = world_position
-	sprite.rotation = rotation_radians
-	sprite.scale = Vector2.ONE * (target_long_side_px / long_side)
-	sprite.modulate = Color(1.0, 1.0, 1.0, alpha)
-	sprite.material = _style_material
+	sprite.centered = true
+	sprite.position = local_position
+	sprite.rotation = deg_to_rad(rotation_degrees)
+	sprite.scale = Vector2.ONE * (target_long_side_px / CELL_SIZE.x)
+	sprite.flip_h = flip_h
+	sprite.modulate = Color(0.94, 0.98, 1.0, alpha)
+	sprite.z_index = 0
 	sprite.set_meta("canyon_curated", true)
-	sprite.set_meta("source_texture", texture_path)
-	parent.add_child(sprite)
-	return sprite
+	sprite.set_meta("prototype_position", local_position)
+	sprite.set_meta("target_long_side_px", target_long_side_px)
+	_root.add_child(sprite)
 
 
-func _build_style_material() -> ShaderMaterial:
-	var shader: Shader = Shader.new()
-	shader.code = (
-		"shader_type canvas_item;\n"
-		+ "uniform float saturation = 0.78;\n"
-		+ "uniform float brightness = 0.92;\n"
-		+ "uniform vec3 tint = vec3(0.88, 0.95, 1.00);\n"
-		+ "void fragment() {\n"
-		+ "    vec4 tex = texture(TEXTURE, UV);\n"
-		+ "    float luma = dot(tex.rgb, vec3(0.299, 0.587, 0.114));\n"
-		+ "    vec3 rgb = mix(vec3(luma), tex.rgb, saturation);\n"
-		+ "    rgb *= tint * brightness;\n"
-		+ "    COLOR = vec4(rgb, tex.a);\n"
-		+ "}\n"
-	)
-
-	var material: ShaderMaterial = ShaderMaterial.new()
-	material.shader = shader
-	return material
-
-
-func _get_world_horizontal_bounds() -> Vector2:
-	if _world != null:
-		var water: Control = _world.get_node_or_null("Water") as Control
-		if water != null:
-			var left: float = water.position.x
-			var water_right: float = water.position.x + water.size.x
-			var right: float = minf(water_right, left + MAP_WIDTH_PX)
-			if right - left >= 1280.0:
-				return Vector2(left, right)
-	return Vector2(FALLBACK_LEFT, FALLBACK_RIGHT)
-
-
-func _world_y_for_depth(depth_meters: float) -> float:
-	if _world == null:
-		return FALLBACK_ZERO_Y + depth_meters * WORLD_PIXELS_PER_METER
-
-	var boat: Node2D = _world.get_node_or_null("Boat") as Node2D
-	var hook: Node2D = _world.get_node_or_null("Boat/Hook") as Node2D
-	if boat == null or hook == null:
-		return FALLBACK_ZERO_Y + depth_meters * WORLD_PIXELS_PER_METER
-
-	var hook_start_y: float = hook.position.y
-	var start_variant: Variant = hook.get("start_position")
-	if start_variant is Vector2:
-		hook_start_y = (start_variant as Vector2).y
-
-	return boat.global_position.y + hook_start_y + depth_meters * WORLD_PIXELS_PER_METER
-
-
-func _remove_old_curated_set() -> void:
+func _remove_old_curated_nodes() -> void:
 	if _world == null:
 		return
 
-	var old_root: Node = _world.get_node_or_null("EnvironmentLayers/UnderwaterLayers/LandmarkDecorLayer/" + ROOT_NAME)
-	if old_root != null:
-		old_root.queue_free()
+	var old_paths: Array[String] = [
+		TERRAIN_NODE_NAME + "/CanyonCuratedSetV1",
+		TERRAIN_NODE_NAME + "/" + ROOT_NAME,
+		"EnvironmentLayers/UnderwaterLayers/LandmarkDecorLayer/CanyonCuratedSetV1",
+		"EnvironmentLayers/UnderwaterLayers/LandmarkDecorLayer/" + ROOT_NAME,
+		"EnvironmentLayers/UnderwaterLayers/MidDecorLayer/CuratedChainPOI_96m"
+	]
 
-	var old_chain: Node = _world.get_node_or_null("EnvironmentLayers/UnderwaterLayers/MidDecorLayer/CuratedChainPOI_96m")
-	if old_chain != null:
-		old_chain.queue_free()
+	for path: String in old_paths:
+		var old: Node = _world.get_node_or_null(path)
+		if old != null:
+			old.get_parent().remove_child(old)
+			old.queue_free()
