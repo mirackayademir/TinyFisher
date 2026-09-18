@@ -388,9 +388,45 @@ static func get_target_count(fish_type: String) -> int:
 
 static func get_texture(fish_type: String) -> Texture2D:
 	var texture_path: String = String(get_profile(fish_type).get("texture_path", ""))
-	if texture_path.is_empty() or not ResourceLoader.exists(texture_path):
+	if texture_path.is_empty():
+		push_error("FISH TEXTURE: empty texture path for " + fish_type)
 		return null
-	return ResourceLoader.load(texture_path) as Texture2D
+
+	# Normal Godot import yolu. Proje icinde .godot/imported hazirsa en hizli yol budur.
+	if ResourceLoader.exists(texture_path):
+		var resource: Resource = ResourceLoader.load(texture_path)
+		var imported_texture: Texture2D = resource as Texture2D
+		if imported_texture != null:
+			return imported_texture
+
+	# Git pull sonrasi Godot henuz PNG'yi import etmediyse kaynak dosyayi
+	# dogrudan decode et. Boylece yeni baliklar Sardalya fallback'ine dusmez.
+	var absolute_path: String = ProjectSettings.globalize_path(texture_path)
+	if not FileAccess.file_exists(absolute_path):
+		push_error("FISH TEXTURE FILE NOT FOUND: " + fish_type + " -> " + texture_path)
+		return null
+
+	var image: Image = Image.new()
+	var load_error: Error = image.load(absolute_path)
+	if load_error != OK or image.is_empty():
+		push_error(
+			"FISH TEXTURE DECODE FAILED: %s -> %s (%s)" % [
+				fish_type,
+				texture_path,
+				error_string(load_error)
+			]
+		)
+		return null
+
+	print(
+		"FISH TEXTURE DIRECT LOAD OK: %s -> %s [%dx%d]" % [
+			fish_type,
+			texture_path,
+			image.get_width(),
+			image.get_height()
+		]
+	)
+	return ImageTexture.create_from_image(image)
 
 
 static func random_profile_range(fish_type: String, key: String, fallback: float = 0.0) -> float:
