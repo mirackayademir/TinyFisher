@@ -56,6 +56,9 @@ var rig_tail: Node2D
 var rig_rear_body: Node2D
 var rig_core_body: Node2D
 var rig_head: Node2D
+var rig_moray_tail_tip: Node2D
+var rig_moray_mid_tail: Node2D
+var rig_moray_front_body: Node2D
 var rig_gill: Line2D
 var rig_jaw: Line2D
 var rig_texture_size: Vector2 = Vector2.ZERO
@@ -626,6 +629,9 @@ func _setup_articulated_rig() -> void:
 	rig_rear_body = null
 	rig_core_body = null
 	rig_head = null
+	rig_moray_tail_tip = null
+	rig_moray_mid_tail = null
+	rig_moray_front_body = null
 	rig_gill = null
 	rig_jaw = null
 	rig_time = 0.0
@@ -651,12 +657,15 @@ func _setup_articulated_rig() -> void:
 		rig_head = _create_rig_region("Head", 0.68, 1.00, 0.70, 4)
 		_setup_barracuda_face_details()
 	elif fish_type == "Müren":
-		# Müren: uzun gövde boyunca daha geniş örtüşme.
-		# Böylece dönüşler kesik değil, baştan kuyruğa akan S kıvrımı gibi görünür.
-		rig_tail = _create_rig_region("MorayTail", 0.00, 0.30, 0.27, 1)
-		rig_rear_body = _create_rig_region("MorayRear", 0.18, 0.50, 0.46, 2)
-		rig_core_body = _create_rig_region("MorayCore", 0.38, 0.72, 0.68, 3)
-		rig_head = _create_rig_region("MorayHead", 0.60, 1.00, 0.64, 4)
+		# Müren: 6 eklemli uzun gövde.
+		# Faz farkları bütün silüette kuyruktan başa akan belirgin S eğrisi üretir.
+		rig_moray_tail_tip = _create_rig_region("MorayTailTip", 0.00, 0.20, 0.18, 1)
+		rig_tail = _create_rig_region("MorayTail", 0.10, 0.34, 0.31, 2)
+		rig_moray_mid_tail = _create_rig_region("MorayMidTail", 0.23, 0.49, 0.46, 3)
+		rig_rear_body = _create_rig_region("MorayRear", 0.38, 0.64, 0.61, 4)
+		rig_core_body = _create_rig_region("MorayCore", 0.53, 0.79, 0.76, 5)
+		rig_moray_front_body = _create_rig_region("MorayFront", 0.67, 0.90, 0.86, 6)
+		rig_head = _create_rig_region("MorayHead", 0.78, 1.00, 0.81, 7)
 		_setup_moray_face_details()
 
 	fish_sprite.visible = false
@@ -810,53 +819,75 @@ func _update_barracuda_rig(delta: float, speed_ratio: float) -> void:
 
 
 func _update_moray_rig(delta: float, speed_ratio: float) -> void:
-	var speed_factor: float = clampf(speed_ratio, 0.40, 2.9)
-	var motion_rate: float = lerpf(0.68, 1.65, (speed_factor - 0.40) / 2.50)
+	var speed_factor: float = clampf(speed_ratio, 0.35, 3.0)
+	var motion_rate: float = lerpf(0.72, 1.82, (speed_factor - 0.35) / 2.65)
 	if was_dashing:
-		motion_rate *= 1.28
+		motion_rate *= 1.34
 	rig_time += delta * motion_rate
 
-	# Müren yılan gibi bütün gövdeyi kullanır.
-	# Faz farkları S kıvrımını kuyruktan başa doğru taşır.
-	var core_wave: float = sin(rig_time * 3.35 + swim_phase)
-	var rear_wave: float = sin(rig_time * 3.35 + swim_phase + 0.92)
-	var tail_wave: float = sin(rig_time * 3.35 + swim_phase + 1.82)
-	var head_wave: float = sin(rig_time * 3.35 + swim_phase - 0.38)
-	var breath: float = (sin(rig_time * 1.28 + swim_phase) + 1.0) * 0.5
+	# Tam yılanvari S hareketi:
+	# aynı dalganın farklı fazları 6 gövde eklemine sırayla uygulanır.
+	# Kuyrukta açı büyük, başa yaklaştıkça azalır.
+	var wave_speed: float = 3.05
+	var p0: float = rig_time * wave_speed + swim_phase
+	var wave_head: float = sin(p0 - 0.28)
+	var wave_front: float = sin(p0 + 0.18)
+	var wave_core: float = sin(p0 + 0.72)
+	var wave_rear: float = sin(p0 + 1.28)
+	var wave_mid_tail: float = sin(p0 + 1.86)
+	var wave_tail: float = sin(p0 + 2.42)
+	var wave_tip: float = sin(p0 + 2.98)
+	var breath: float = (sin(rig_time * 1.22 + swim_phase) + 1.0) * 0.5
 
-	var body_amp: float = deg_to_rad(7.0 + minf(speed_factor, 2.4) * 3.1)
+	var body_amp: float = deg_to_rad(8.5 + minf(speed_factor, 2.5) * 3.5)
 	if was_dashing:
-		body_amp *= 1.35
+		body_amp *= 1.42
 
+	# Rotasyon + küçük dikey eklem kaymaları birlikte tam S silüeti üretir.
+	if rig_moray_tail_tip != null:
+		rig_moray_tail_tip.rotation = wave_tip * body_amp * 1.22
+		rig_moray_tail_tip.position.y = wave_tip * 3.8
 	if rig_tail != null:
-		rig_tail.rotation = tail_wave * body_amp * 1.00
+		rig_tail.rotation = wave_tail * body_amp * 1.02
+		rig_tail.position.y = wave_tail * 3.1
+	if rig_moray_mid_tail != null:
+		rig_moray_mid_tail.rotation = wave_mid_tail * body_amp * 0.82
+		rig_moray_mid_tail.position.y = wave_mid_tail * 2.5
 	if rig_rear_body != null:
-		rig_rear_body.rotation = rear_wave * body_amp * 0.72
+		rig_rear_body.rotation = wave_rear * body_amp * 0.62
+		rig_rear_body.position.y = wave_rear * 1.9
 	if rig_core_body != null:
-		rig_core_body.rotation = core_wave * body_amp * 0.42
+		rig_core_body.rotation = wave_core * body_amp * 0.42
+		rig_core_body.position.y = wave_core * 1.35
+	if rig_moray_front_body != null:
+		rig_moray_front_body.rotation = wave_front * body_amp * 0.24
+		rig_moray_front_body.position.y = wave_front * 0.8
 	if rig_head != null:
-		# Baş gövdeyi takip eder ama avı görebilmek için daha stabil kalır.
-		rig_head.rotation = head_wave * body_amp * 0.13
+		# Baş hedefe bakarken vücudu takip eder; hareket var ama en az burada.
+		rig_head.rotation = wave_head * body_amp * 0.10
+		rig_head.position.y = wave_head * 0.35
 
-	# Yılanvari hareket sırasında tüm silüet çok hafif yukarı-aşağı nefes alır.
-	articulated_rig.position.y = sin(rig_time * 1.62 + swim_phase) * 0.85
+	# Tüm balıkta çok hafif yükselip alçalma; S kıvrımının üstüne binmez.
+	articulated_rig.position.y = sin(rig_time * 1.15 + swim_phase) * 0.55
 
+	# Müren nefes alırken solungaç yarığı belirgin şekilde çalışır.
 	if rig_gill != null:
-		rig_gill.scale.x = lerpf(0.88, 1.16, breath)
-		rig_gill.scale.y = lerpf(0.94, 1.10, breath)
-		rig_gill.default_color.a = lerpf(0.36, 0.78, breath)
+		rig_gill.scale.x = lerpf(0.86, 1.20, breath)
+		rig_gill.scale.y = lerpf(0.92, 1.12, breath)
+		rig_gill.default_color.a = lerpf(0.34, 0.82, breath)
 
+	# Çene normalde hafif açık; saldırıda ekstra açılır.
 	if rig_jaw != null:
 		var jaw_points: PackedVector2Array = rig_jaw.points
 		if jaw_points.size() == 3:
-			var base_open: float = lerpf(1.0, 2.8, breath)
-			var attack_open: float = 3.8 if was_dashing else 0.0
+			var base_open: float = lerpf(1.0, 3.0, breath)
+			var attack_open: float = 4.2 if was_dashing else 0.0
 			var jaw_open: float = base_open + attack_open
 			var jaw_y: float = -rig_texture_size.y * 0.5 + rig_texture_size.y * 0.56
 			jaw_points[1].y = jaw_y + 2.0 + jaw_open
-			jaw_points[2].y = jaw_y + 0.8 + jaw_open * 0.62
+			jaw_points[2].y = jaw_y + 0.8 + jaw_open * 0.64
 			rig_jaw.points = jaw_points
-		rig_jaw.default_color.a = 0.62 if was_dashing else lerpf(0.36, 0.55, breath)
+		rig_jaw.default_color.a = 0.66 if was_dashing else lerpf(0.36, 0.58, breath)
 
 	_update_rig_direction()
 
@@ -1028,4 +1059,16 @@ func release_from_hook() -> void:
 		articulated_rig.rotation = 0.0
 		articulated_rig.position = Vector2.ZERO
 		articulated_rig.modulate = Color.WHITE
+		for rig_node: Node2D in [
+			rig_moray_tail_tip,
+			rig_tail,
+			rig_moray_mid_tail,
+			rig_rear_body,
+			rig_core_body,
+			rig_moray_front_body,
+			rig_head
+		]:
+			if rig_node != null:
+				rig_node.rotation = 0.0
+				rig_node.position.y = 0.0
 		_update_rig_direction()
