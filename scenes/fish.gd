@@ -60,6 +60,7 @@ var rig_moray_tail_tip: Node2D
 var rig_moray_mid_tail: Node2D
 var rig_moray_front_body: Node2D
 var rig_moray_mesh: MeshInstance2D
+var rig_ray_mesh: MeshInstance2D
 var rig_gill: Line2D
 var rig_jaw: Line2D
 var rig_texture_size: Vector2 = Vector2.ZERO
@@ -634,12 +635,13 @@ func _setup_articulated_rig() -> void:
 	rig_moray_mid_tail = null
 	rig_moray_front_body = null
 	rig_moray_mesh = null
+	rig_ray_mesh = null
 	rig_gill = null
 	rig_jaw = null
 	rig_time = 0.0
 
 	# Wave-1 animasyonlarını tek tek ekliyoruz.
-	if fish_type not in ["Barakuda", "Müren"] or fish_sprite.texture == null:
+	if fish_type not in ["Barakuda", "Müren", "Vatoz"] or fish_sprite.texture == null:
 		return
 
 	rig_texture_size = fish_sprite.texture.get_size()
@@ -663,6 +665,10 @@ func _setup_articulated_rig() -> void:
 		# 48 kolonlu deformasyon mesh'i gövde + kuyruğu tek parça S şeklinde kıvırır.
 		rig_moray_mesh = _create_moray_wave_mesh()
 		_setup_moray_face_details()
+	elif fish_type == "Vatoz":
+		# Vatozda itişi kuyruk değil geniş pektoral yüzgeçler üretir.
+		# İnce mesh, kanat kenarlarına doğru büyüyen ilerleyen dalga ile süzülme hissi verir.
+		rig_ray_mesh = _create_ray_fin_mesh()
 
 	fish_sprite.visible = false
 	_update_rig_direction()
@@ -821,6 +827,117 @@ void fragment() {
 	return mesh_instance
 
 
+func _create_ray_fin_mesh() -> MeshInstance2D:
+	var mesh_instance := MeshInstance2D.new()
+	mesh_instance.name = "RayPectoralFinMesh"
+	mesh_instance.z_index = 4
+	articulated_rig.add_child(mesh_instance)
+
+	# Daha sık dikey grid: geniş kanatların kenar kıvrımı daha yumuşak olsun.
+	var columns: int = 48
+	var rows: int = 12
+	var vertices := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+
+	for y_index in range(rows + 1):
+		var v: float = float(y_index) / float(rows)
+		var local_y: float = (v - 0.5) * rig_texture_size.y
+		for x_index in range(columns + 1):
+			var u: float = float(x_index) / float(columns)
+			var local_x: float = (u - 0.5) * rig_texture_size.x
+			vertices.append(Vector2(local_x, local_y))
+			uvs.append(Vector2(u, v))
+
+	for y_index in range(rows):
+		for x_index in range(columns):
+			var row_width: int = columns + 1
+			var a: int = y_index * row_width + x_index
+			var b: int = a + 1
+			var c_index: int = a + row_width
+			var d: int = c_index + 1
+			indices.append(a)
+			indices.append(c_index)
+			indices.append(b)
+			indices.append(b)
+			indices.append(c_index)
+			indices.append(d)
+
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh_instance.mesh = mesh
+
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform sampler2D fish_texture : source_color, filter_linear;
+uniform float flap_phase = 0.0;
+uniform float flap_amplitude = 9.0;
+uniform float tail_amplitude = 3.0;
+uniform float glide_lift = 0.0;
+
+void vertex() {
+	// Kaynak çizimde baş sağda, kuyruk solda.
+	float center_y = 0.535;
+	float y_delta = UV.y - center_y;
+	float edge_distance = abs(y_delta);
+
+	// Gövde merkezi sabit kalsın, dış kanat kenarlarına gidildikçe hareket büyüsün.
+	float edge_mask = smoothstep(0.075, 0.34, edge_distance);
+	float body_core = 1.0 - smoothstep(0.03, 0.115, edge_distance);
+
+	// Pektoral yüzgeç bölgesi: kuyruğu ve baş ucunu mümkün olduğunca dışarıda bırak.
+	float rear_fade = smoothstep(0.18, 0.34, UV.x);
+	float head_fade = 1.0 - smoothstep(0.76, 0.96, UV.x);
+	float wing_mask = edge_mask * rear_fade * head_fade;
+
+	// Gerçek vatozda dalga ön kenardan arka kenara doğru ilerler.
+	// Üst ve alt kanatlar zıt yönde bükülerek disk silüetini açıp kapatır.
+	float travel = (1.0 - UV.x) * 6.15;
+	float wing_wave = sin(flap_phase + travel);
+	float side = y_delta >= 0.0 ? 1.0 : -1.0;
+	VERTEX.y += side * wing_wave * flap_amplitude * wing_mask;
+
+	// Kanat aşağı-yukarı hareket ederken yatayda çok hafif esneme:
+	// 2D resimde hacim hissi verir, fakat merkez gövdeyi bozmaz.
+	VERTEX.x += cos(flap_phase + travel + 0.85) * flap_amplitude * 0.075 * wing_mask;
+
+	// Uzun kuyruk itiş üretmiyor; kanat dalgasını gecikmeli ve çok küçük takip ediyor.
+	float tail_x = 1.0 - smoothstep(0.16, 0.52, UV.x);
+	float tail_y = 1.0 - smoothstep(0.055, 0.18, abs(UV.y - 0.43));
+	float tail_mask = tail_x * tail_y;
+	float tail_wave = sin(flap_phase * 0.72 + UV.x * 8.8 + 1.35);
+	VERTEX.y += tail_wave * tail_amplitude * tail_mask;
+
+	// Merkez disk solunum/yüzdürme için yalnızca çok küçük yukarı-aşağı hareket eder.
+	VERTEX.y += glide_lift * body_core * head_fade;
+}
+
+void fragment() {
+	vec4 tex = texture(fish_texture, UV);
+	COLOR = tex * COLOR;
+}
+"""
+
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("fish_texture", fish_sprite.texture)
+	material.set_shader_parameter("flap_phase", 0.0)
+	material.set_shader_parameter("flap_amplitude", 9.0)
+	material.set_shader_parameter("tail_amplitude", 3.0)
+	material.set_shader_parameter("glide_lift", 0.0)
+	mesh_instance.material = material
+	return mesh_instance
+
+
 func _setup_moray_face_details() -> void:
 	# Mürenin solungaç deliği küçük ama ritmik görünür.
 	rig_gill = Line2D.new()
@@ -864,6 +981,8 @@ func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
 			_update_barracuda_rig(delta, speed_ratio)
 		"Müren":
 			_update_moray_rig(delta, speed_ratio)
+		"Vatoz":
+			_update_ray_rig(delta, speed_ratio)
 
 
 func _update_barracuda_rig(delta: float, speed_ratio: float) -> void:
@@ -948,6 +1067,34 @@ func _update_moray_rig(delta: float, speed_ratio: float) -> void:
 			jaw_points[2].y = jaw_y + 0.8 + jaw_open * 0.64
 			rig_jaw.points = jaw_points
 		rig_jaw.default_color.a = 0.66 if was_dashing else lerpf(0.36, 0.58, breath)
+
+	_update_rig_direction()
+
+
+func _update_ray_rig(delta: float, speed_ratio: float) -> void:
+	if rig_ray_mesh == null:
+		return
+
+	var speed_factor: float = clampf(speed_ratio, 0.35, 2.2)
+	# Vatoz hızlandıkça kanatlarını biraz daha sık vurur; normalde ağır ve sakin süzülür.
+	var flap_rate: float = lerpf(1.55, 2.65, clampf((speed_factor - 0.35) / 1.85, 0.0, 1.0))
+	rig_time += delta
+
+	var ray_material: ShaderMaterial = rig_ray_mesh.material as ShaderMaterial
+	if ray_material != null:
+		var phase: float = rig_time * flap_rate + swim_phase
+		var amplitude: float = lerpf(7.5, 11.5, clampf(speed_factor / 2.0, 0.0, 1.0))
+		var tail_amount: float = lerpf(2.0, 3.8, clampf(speed_factor / 2.0, 0.0, 1.0))
+		var lift: float = sin(phase * 0.52 + 0.6) * 0.75
+
+		ray_material.set_shader_parameter("flap_phase", phase)
+		ray_material.set_shader_parameter("flap_amplitude", amplitude)
+		ray_material.set_shader_parameter("tail_amplitude", tail_amount)
+		ray_material.set_shader_parameter("glide_lift", lift)
+
+	# Disk gövdesi kanat vuruşuna karşı çok hafif dengeler; baş sabit kalır.
+	articulated_rig.rotation += sin(rig_time * flap_rate + swim_phase + 1.1) * deg_to_rad(0.16)
+	articulated_rig.position.y = sin(rig_time * 0.72 + swim_phase) * 0.55
 
 	_update_rig_direction()
 
@@ -1135,4 +1282,9 @@ func release_from_hook() -> void:
 			var reset_material: ShaderMaterial = rig_moray_mesh.material as ShaderMaterial
 			if reset_material != null:
 				reset_material.set_shader_parameter("wave_phase", 0.0)
+		if rig_ray_mesh != null:
+			var ray_reset_material: ShaderMaterial = rig_ray_mesh.material as ShaderMaterial
+			if ray_reset_material != null:
+				ray_reset_material.set_shader_parameter("flap_phase", 0.0)
+				ray_reset_material.set_shader_parameter("glide_lift", 0.0)
 		_update_rig_direction()
