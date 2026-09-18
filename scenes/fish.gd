@@ -688,7 +688,7 @@ func _setup_articulated_rig() -> void:
 	elif fish_type == "Kalamar":
 		# Kalamarın ana itişi kuyruk sallamak değil, mantoyu kasıp suyu jet olarak atmaktır.
 		# Mesh manto kasılmasını, yüzgeç dalgasını ve gecikmeli tentakül akışını ayrı ayrı işler.
-		rig_squid_mesh = _create_squid_jet_mesh()
+		rig_squid_mesh = _create_squid_independent_limbs_mesh()
 
 	fish_sprite.visible = false
 	_update_rig_direction()
@@ -964,15 +964,15 @@ void fragment() {
 	return mesh_instance
 
 
-func _create_squid_jet_mesh() -> MeshInstance2D:
+func _create_squid_independent_limbs_mesh() -> MeshInstance2D:
 	var mesh_instance := MeshInstance2D.new()
-	mesh_instance.name = "SquidJetBodyMesh"
+	mesh_instance.name = "SquidIndependentLimbsMesh"
 	mesh_instance.z_index = 4
 	articulated_rig.add_child(mesh_instance)
 
-	# İnce grid; manto sıkışması ve tentakül dalgası keskin kırılmadan akar.
-	var columns: int = 56
-	var rows: int = 16
+	# Çok sık grid: her kol/tentakülün kendi dalgası komşu kola daha az taşsın.
+	var columns: int = 72
+	var rows: int = 28
 	var vertices := PackedVector2Array()
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
@@ -1017,51 +1017,112 @@ render_mode unshaded;
 
 uniform sampler2D fish_texture : source_color, filter_linear;
 uniform float motion_phase = 0.0;
-uniform float mantle_breath = 0.0;
+uniform float swim_strength = 1.0;
 uniform float jet_power = 0.0;
-uniform float tentacle_amplitude = 5.0;
-uniform float fin_amplitude = 2.4;
+uniform float mantle_breath = 0.0;
+uniform float fin_strength = 1.0;
+
+float band_mask(float y, float center, float width) {
+	return 1.0 - smoothstep(width * 0.42, width, abs(y - center));
+}
 
 void vertex() {
-	// Kalamar yatay çizimde gövde/manto merkez-sol bölgede,
-	// baş ve kollar ön tarafta kabul edilir. Maskeler yumuşak tutulduğu için
-	// görselin kendi konturu korunur ve transparan alanlar etkilenmez.
+	// Kaynak çizimde kafa yaklaşık UV.x 0.50 civarında, kollar sola uzanıyor.
+	// Kollar için hareket kafa dibinde sıfıra yaklaşır, uçlara doğru büyür.
+	float arm_zone = (1.0 - smoothstep(0.46, 0.535, UV.x)) * smoothstep(0.08, 0.15, UV.x);
+	float tip_gain = pow(clamp((0.535 - UV.x) / 0.44, 0.0, 1.0), 0.72);
+	float base_gain = arm_zone * (0.28 + 0.72 * tip_gain);
 
-	// Manto: normalde yavaş solunumla genişleyip daralır.
-	// Jet anında dikey olarak sıkışırken uzun eksende çok hafif uzar.
-	float mantle_x = smoothstep(0.12, 0.25, UV.x) * (1.0 - smoothstep(0.53, 0.68, UV.x));
-	float center_dist = UV.y - 0.50;
-	float mantle_center = 1.0 - smoothstep(0.18, 0.47, abs(center_dist));
-	float mantle_mask = mantle_x * mantle_center;
-	float radial_dir = sign(center_dist);
-	float breath_amount = sin(motion_phase * 0.72) * 1.15 + mantle_breath * 1.35;
-	VERTEX.y += radial_dir * breath_amount * mantle_mask;
-	VERTEX.y -= radial_dir * jet_power * 5.2 * mantle_mask;
-	VERTEX.x += jet_power * 2.4 * mantle_mask;
+	// Her kol için çizimdeki doğal eğriyi yaklaşık takip eden ayrı merkez hattı.
+	// 8 kısa kol + 2 uzun av tentakülü = 10 bağımsız hareket.
+	float c1 = 0.205 + UV.x * 0.59;
+	float c2 = 0.330 + UV.x * 0.34;
+	float c3 = 0.455 + UV.x * 0.15;
+	float c4 = 0.515 + UV.x * 0.09;
+	float c5 = 0.565 + UV.x * 0.05;
+	float c6 = 0.620 - UV.x * 0.02;
+	float c7 = 0.705 - UV.x * 0.20;
+	float c8 = 0.825 - UV.x * 0.43;
+	float c9 = 0.760 - UV.x * 0.31;
+	float c10 = 0.650 - UV.x * 0.13;
 
-	// Manto yan yüzgeçleri ana itiş kaynağı değil; sakin yüzüşte küçük dalgalar üretir.
-	float fin_y = smoothstep(0.18, 0.38, abs(center_dist));
-	float fin_x = smoothstep(0.12, 0.24, UV.x) * (1.0 - smoothstep(0.48, 0.62, UV.x));
-	float fin_mask = fin_y * fin_x;
-	float fin_wave = sin(motion_phase * 1.12 + UV.x * 8.4 + UV.y * 4.0);
-	VERTEX.y += radial_dir * fin_wave * fin_amplitude * fin_mask;
+	float m1 = band_mask(UV.y, c1, 0.050) * base_gain;
+	float m2 = band_mask(UV.y, c2, 0.047) * base_gain;
+	float m3 = band_mask(UV.y, c3, 0.042) * base_gain;
+	float m4 = band_mask(UV.y, c4, 0.040) * base_gain;
+	float m5 = band_mask(UV.y, c5, 0.039) * base_gain;
+	float m6 = band_mask(UV.y, c6, 0.041) * base_gain;
+	float m7 = band_mask(UV.y, c7, 0.046) * base_gain;
+	float m8 = band_mask(UV.y, c8, 0.052) * base_gain;
+	float m9 = band_mask(UV.y, c9, 0.046) * base_gain;
+	float m10 = band_mask(UV.y, c10, 0.040) * base_gain;
 
-	// Kollar / tentaküller: gövdeden sonra gecikmeli bir akış dalgası.
-	// Jet sırasında su direnciyle daha geriye toplanıp dalga genliği biraz azalır.
-	float arm_x = smoothstep(0.48, 0.66, UV.x);
-	float arm_edge = smoothstep(0.08, 0.31, abs(center_dist));
-	float arm_mask = arm_x * (0.48 + arm_edge * 0.52);
-	float arm_wave_a = sin(motion_phase * 1.28 + UV.x * 10.8 + UV.y * 5.2);
-	float arm_wave_b = sin(motion_phase * 0.91 + UV.x * 15.0 - UV.y * 6.4 + 1.15);
-	float jet_arm_damp = mix(1.0, 0.48, jet_power);
-	VERTEX.y += (arm_wave_a * 0.72 + arm_wave_b * 0.28) * tentacle_amplitude * arm_mask * jet_arm_damp;
+	// Yüzme yönüne göre bütün rig aynalandığı için bu dalgalar her iki yönde de
+	// kafa önde, kollar arkada akacak şekilde çalışır.
+	float travel = (0.535 - UV.x) * 13.0;
+	float jet_damp = mix(1.0, 0.56, jet_power);
 
-	// Jet anında kollar eksen boyunca biraz daha düzleşip geriye uzar.
-	VERTEX.x += jet_power * 4.6 * arm_mask;
+	float w1 = sin(motion_phase * 1.03 + travel * 0.92 + 0.10);
+	float w2 = sin(motion_phase * 1.11 + travel * 1.02 + 0.82);
+	float w3 = sin(motion_phase * 0.96 + travel * 1.10 + 1.47);
+	float w4 = sin(motion_phase * 1.16 + travel * 0.97 + 2.12);
+	float w5 = sin(motion_phase * 0.91 + travel * 1.15 + 2.76);
+	float w6 = sin(motion_phase * 1.08 + travel * 1.05 + 3.42);
+	float w7 = sin(motion_phase * 0.99 + travel * 0.88 + 4.03);
+	float w8 = sin(motion_phase * 1.13 + travel * 0.95 + 4.72);
+	float w9 = sin(motion_phase * 0.94 + travel * 1.08 + 5.34);
+	float w10 = sin(motion_phase * 1.06 + travel * 1.00 + 5.88);
 
-	// Baş merkezi fazla oynamasın; yalnızca çok küçük canlılık hareketi.
-	float head_mask = smoothstep(0.42, 0.56, UV.x) * (1.0 - smoothstep(0.72, 0.84, UV.x));
-	VERTEX.y += sin(motion_phase * 0.63 + 0.8) * 0.45 * head_mask;
+	float dy =
+		w1 * m1 * 5.8 +
+		w2 * m2 * 5.0 +
+		w3 * m3 * 4.5 +
+		w4 * m4 * 4.2 +
+		w5 * m5 * 4.0 +
+		w6 * m6 * 4.3 +
+		w7 * m7 * 5.1 +
+		w8 * m8 * 6.2 +
+		w9 * m9 * 5.5 +
+		w10 * m10 * 4.6;
+
+	// Her bacağın yatay esnemesi de farklı; böylece yalnız yukarı-aşağı titremez.
+	float dx =
+		cos(motion_phase * 0.91 + travel + 0.20) * m1 * 1.4 +
+		cos(motion_phase * 1.07 + travel + 1.00) * m2 * 1.1 +
+		cos(motion_phase * 0.89 + travel + 1.80) * m3 * 0.9 +
+		cos(motion_phase * 1.13 + travel + 2.50) * m4 * 0.8 +
+		cos(motion_phase * 0.95 + travel + 3.10) * m5 * 0.8 +
+		cos(motion_phase * 1.04 + travel + 3.80) * m6 * 0.9 +
+		cos(motion_phase * 0.92 + travel + 4.50) * m7 * 1.1 +
+		cos(motion_phase * 1.10 + travel + 5.20) * m8 * 1.5 +
+		cos(motion_phase * 0.97 + travel + 5.80) * m9 * 1.25 +
+		cos(motion_phase * 1.02 + travel + 6.30) * m10 * 1.0;
+
+	VERTEX.y += dy * swim_strength * jet_damp;
+	VERTEX.x += dx * swim_strength * jet_damp;
+
+	// Jet sırasında bütün kollar geriye doğru biraz daha düzleşir.
+	// Uçlarda etki büyük, kafa dibinde küçüktür.
+	VERTEX.x -= jet_power * tip_gain * arm_zone * 4.6;
+
+	// Manto artık ana animasyon değil; yalnızca hafif solunum yapıyor.
+	float mantle_x = smoothstep(0.50, 0.59, UV.x) * (1.0 - smoothstep(0.84, 0.90, UV.x));
+	float mantle_y = 1.0 - smoothstep(0.10, 0.31, abs(UV.y - 0.50));
+	float mantle_mask = mantle_x * mantle_y;
+	float radial = sign(UV.y - 0.50);
+	VERTEX.y += radial * sin(motion_phase * 0.46) * mantle_breath * 0.72 * mantle_mask;
+
+	// Sağdaki iki büyük yüzgeç birbirinden BAĞIMSIZ fazlarda açılıp kapanıyor.
+	float fin_x = smoothstep(0.69, 0.75, UV.x) * (1.0 - smoothstep(0.91, 0.96, UV.x));
+	float upper_fin = fin_x * (1.0 - smoothstep(0.47, 0.515, UV.y)) * smoothstep(0.24, 0.34, UV.y);
+	float lower_fin = fin_x * smoothstep(0.505, 0.56, UV.y) * (1.0 - smoothstep(0.74, 0.82, UV.y));
+
+	float upper_wave = sin(motion_phase * 0.78 + UV.x * 7.2 + 0.35);
+	float lower_wave = sin(motion_phase * 0.86 + UV.x * 6.6 + 2.05);
+	VERTEX.y -= upper_wave * 3.4 * upper_fin * fin_strength;
+	VERTEX.y += lower_wave * 3.7 * lower_fin * fin_strength;
+	VERTEX.x += cos(motion_phase * 0.71 + UV.x * 5.8) * 0.8 * upper_fin * fin_strength;
+	VERTEX.x += cos(motion_phase * 0.81 + UV.x * 6.1 + 1.4) * 0.9 * lower_fin * fin_strength;
 }
 
 void fragment() {
@@ -1074,10 +1135,10 @@ void fragment() {
 	material.shader = shader
 	material.set_shader_parameter("fish_texture", fish_sprite.texture)
 	material.set_shader_parameter("motion_phase", 0.0)
-	material.set_shader_parameter("mantle_breath", 0.0)
+	material.set_shader_parameter("swim_strength", 1.0)
 	material.set_shader_parameter("jet_power", 0.0)
-	material.set_shader_parameter("tentacle_amplitude", 5.0)
-	material.set_shader_parameter("fin_amplitude", 2.4)
+	material.set_shader_parameter("mantle_breath", 1.0)
+	material.set_shader_parameter("fin_strength", 1.0)
 	mesh_instance.material = material
 	return mesh_instance
 
@@ -1506,36 +1567,31 @@ func _update_squid_rig(delta: float, speed_ratio: float) -> void:
 	var speed_factor: float = clampf(speed_ratio, 0.30, 3.0)
 	rig_time += delta
 
-	# Normal yüzüşte yumuşak manto nefesi; jet anında kısa ve sert kasılma.
-	var base_rate: float = lerpf(1.15, 1.72, clampf(speed_factor / 2.4, 0.0, 1.0))
-	var phase: float = rig_time * base_rate * 2.05 + swim_phase
-	var breath: float = (sin(rig_time * 1.18 + swim_phase) + 1.0) * 0.5
+	# Kollar yüzüş hızlandıkça biraz hızlanır; birbirlerinin fazını asla paylaşmaz.
+	var motion_rate: float = lerpf(1.35, 2.25, clampf(speed_factor / 2.5, 0.0, 1.0))
+	var phase: float = rig_time * motion_rate + swim_phase
 
-	# Behavior sistemi jet darbelerinde was_dashing=true veriyor.
-	# Yumuşak easing için jet gücü sinüs darbesiyle şekillendirilir.
-	var jet_power: float = 0.0
-	if was_dashing:
-		jet_power = 0.78 + 0.22 * absf(sin(rig_time * 6.2 + swim_phase))
+	# Jet davranışı yalnızca kolları akış yönünde toplar.
+	# Eski sürümdeki abartılı manto kasılması tamamen kaldırıldı.
+	var jet_power: float = 1.0 if was_dashing else 0.0
 
 	var squid_material: ShaderMaterial = rig_squid_mesh.material as ShaderMaterial
 	if squid_material != null:
-		var tentacle_amount: float = lerpf(4.2, 6.4, clampf(speed_factor / 2.5, 0.0, 1.0))
-		var fin_amount: float = lerpf(1.8, 3.0, clampf(speed_factor / 2.2, 0.0, 1.0))
+		var limb_strength: float = lerpf(0.84, 1.22, clampf(speed_factor / 2.5, 0.0, 1.0))
+		var fin_strength: float = lerpf(0.82, 1.18, clampf(speed_factor / 2.2, 0.0, 1.0))
 		if was_dashing:
-			tentacle_amount *= 0.82
-			fin_amount *= 0.72
+			limb_strength *= 0.88
+			fin_strength *= 0.76
 
 		squid_material.set_shader_parameter("motion_phase", phase)
-		squid_material.set_shader_parameter("mantle_breath", breath)
+		squid_material.set_shader_parameter("swim_strength", limb_strength)
 		squid_material.set_shader_parameter("jet_power", jet_power)
-		squid_material.set_shader_parameter("tentacle_amplitude", tentacle_amount)
-		squid_material.set_shader_parameter("fin_amplitude", fin_amount)
+		squid_material.set_shader_parameter("mantle_breath", 1.0)
+		squid_material.set_shader_parameter("fin_strength", fin_strength)
 
-	# Jet vurunca balığın tamamı çok kısa öne eğilir; normalde neredeyse düz süzülür.
-	var jet_tilt: float = deg_to_rad(-1.6) * jet_power
-	var calm_tilt: float = sin(rig_time * 0.74 + swim_phase) * deg_to_rad(0.18)
-	articulated_rig.rotation += jet_tilt + calm_tilt
-	articulated_rig.position.y = sin(rig_time * 0.82 + swim_phase) * (0.45 if not was_dashing else 0.22)
+	# Gövde çok sakin; karakteri artık bacaklar ve iki bağımsız yüzgeç veriyor.
+	articulated_rig.position.y = sin(rig_time * 0.72 + swim_phase) * 0.32
+	articulated_rig.rotation += sin(rig_time * 0.58 + swim_phase + 0.45) * deg_to_rad(0.11)
 
 	_update_rig_direction()
 
@@ -1737,4 +1793,6 @@ func release_from_hook() -> void:
 			if squid_reset_material != null:
 				squid_reset_material.set_shader_parameter("motion_phase", 0.0)
 				squid_reset_material.set_shader_parameter("jet_power", 0.0)
+				squid_reset_material.set_shader_parameter("swim_strength", 1.0)
+				squid_reset_material.set_shader_parameter("fin_strength", 1.0)
 		_update_rig_direction()
