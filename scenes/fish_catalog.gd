@@ -216,7 +216,7 @@ const PROFILES: Dictionary = {
 		"value": 160,
 		"habitat": "Açık deniz / avcı",
 		"depth_label": "42–62 m",
-		"texture_path": "res://assets/fish/barakuda.webp",
+		"texture_path": "res://assets/fish/barakuda.png",
 		"behavior_id": "hunter",
 		"target_count": 2,
 		"spawn_x": [3900.0, 7600.0],
@@ -224,7 +224,7 @@ const PROFILES: Dictionary = {
 		"speed": [92.0, 118.0],
 		"distance": [420.0, 720.0],
 		"bob": [4.0, 7.0],
-		"visual_scale": 0.34,
+		"visual_scale": 0.50,
 		"swim_wave_speed": 3.9,
 		"swim_wave_angle": 2.1,
 		"acceleration": 460.0,
@@ -243,7 +243,7 @@ const PROFILES: Dictionary = {
 		"value": 115,
 		"habitat": "Kanyon duvarları / kaya oyukları",
 		"depth_label": "55–76 m",
-		"texture_path": "res://assets/fish/muren.webp",
+		"texture_path": "res://assets/fish/muren.png",
 		"behavior_id": "ambush",
 		"target_count": 2,
 		"spawn_x": [2600.0, 8200.0],
@@ -251,7 +251,7 @@ const PROFILES: Dictionary = {
 		"speed": [26.0, 38.0],
 		"distance": [130.0, 260.0],
 		"bob": [2.0, 4.5],
-		"visual_scale": 0.32,
+		"visual_scale": 0.46,
 		"swim_wave_speed": 2.6,
 		"swim_wave_angle": 5.0,
 		"acceleration": 520.0,
@@ -270,7 +270,7 @@ const PROFILES: Dictionary = {
 		"value": 140,
 		"habitat": "Kumluk dip / kanyon tabanı",
 		"depth_label": "35–58 m",
-		"texture_path": "res://assets/fish/vatoz.webp",
+		"texture_path": "res://assets/fish/vatoz.png",
 		"behavior_id": "glide",
 		"target_count": 2,
 		"spawn_x": [2200.0, 7200.0],
@@ -278,7 +278,7 @@ const PROFILES: Dictionary = {
 		"speed": [34.0, 48.0],
 		"distance": [360.0, 620.0],
 		"bob": [7.0, 12.0],
-		"visual_scale": 0.72,
+		"visual_scale": 0.46,
 		"swim_wave_speed": 1.45,
 		"swim_wave_angle": 1.2,
 		"acceleration": 95.0,
@@ -297,7 +297,7 @@ const PROFILES: Dictionary = {
 		"value": 360,
 		"habitat": "Karanlık kanyon / dip avcısı",
 		"depth_label": "82–98 m",
-		"texture_path": "res://assets/fish/deniz_seytani.webp",
+		"texture_path": "res://assets/fish/deniz_seytani.png",
 		"behavior_id": "lurker",
 		"target_count": 1,
 		"spawn_x": [5600.0, 9800.0],
@@ -305,7 +305,7 @@ const PROFILES: Dictionary = {
 		"speed": [24.0, 34.0],
 		"distance": [180.0, 340.0],
 		"bob": [8.0, 14.0],
-		"visual_scale": 0.78,
+		"visual_scale": 0.44,
 		"swim_wave_speed": 1.55,
 		"swim_wave_angle": 3.8,
 		"acceleration": 88.0,
@@ -324,7 +324,7 @@ const PROFILES: Dictionary = {
 		"value": 205,
 		"habitat": "Derin açık su / kanyon ağzı",
 		"depth_label": "64–90 m",
-		"texture_path": "res://assets/fish/kalamar.webp",
+		"texture_path": "res://assets/fish/kalamar.png",
 		"behavior_id": "jet",
 		"target_count": 2,
 		"spawn_x": [4300.0, 9200.0],
@@ -332,7 +332,7 @@ const PROFILES: Dictionary = {
 		"speed": [42.0, 58.0],
 		"distance": [280.0, 520.0],
 		"bob": [10.0, 17.0],
-		"visual_scale": 0.72,
+		"visual_scale": 0.45,
 		"swim_wave_speed": 2.2,
 		"swim_wave_angle": 4.4,
 		"acceleration": 540.0,
@@ -356,9 +356,7 @@ static func is_wave_1_species(fish_type: String) -> bool:
 
 
 static func is_asset_ready(fish_type: String) -> bool:
-	var profile: Dictionary = get_profile(fish_type)
-	var texture_path: String = String(profile.get("texture_path", ""))
-	return not texture_path.is_empty() and ResourceLoader.exists(texture_path)
+	return get_texture(fish_type) != null
 
 
 static func get_profile(fish_type: String) -> Dictionary:

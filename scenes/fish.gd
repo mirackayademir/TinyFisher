@@ -557,22 +557,27 @@ func update_swim_animation(delta: float) -> void:
 func update_fish_visual() -> void:
 	last_visual_type = fish_type
 	var profile: Dictionary = FishCatalog.get_profile(fish_type)
+	var visual_profile: Dictionary = profile
 	var texture: Texture2D = FishCatalog.get_texture(fish_type)
+
 	if texture == null:
+		push_error("FISH VISUAL: texture could not be loaded for " + fish_type + "; using safe placeholder.")
+		visual_profile = FishCatalog.get_profile("Sardalya")
 		texture = FishCatalog.get_texture("Sardalya")
+
 	fish_sprite.texture = texture
 
-	var visual_scale: float = float(profile.get("visual_scale", 0.06))
+	var visual_scale: float = float(visual_profile.get("visual_scale", 0.06))
 	base_sprite_scale = Vector2.ONE * visual_scale
-	swim_wave_speed = float(profile.get("swim_wave_speed", 4.0))
-	swim_wave_angle = float(profile.get("swim_wave_angle", 2.5))
+	swim_wave_speed = float(visual_profile.get("swim_wave_speed", 4.0))
+	swim_wave_angle = float(visual_profile.get("swim_wave_angle", 2.5))
 	bob_height = float(profile.get("bob", [3.5, 3.5])[0])
 	swim_acceleration = float(profile.get("acceleration", 260.0))
 	vertical_response = float(profile.get("vertical_response", 42.0))
-	turn_roll_strength = float(profile.get("turn_roll", 5.0))
-	base_tail_strength = float(profile.get("tail_strength", 24.0))
-	base_tail_speed = float(profile.get("tail_speed", 6.0))
-	base_body_strength = float(profile.get("body_strength", 4.0))
+	turn_roll_strength = float(visual_profile.get("turn_roll", 5.0))
+	base_tail_strength = float(visual_profile.get("tail_strength", 24.0))
+	base_tail_speed = float(visual_profile.get("tail_speed", 6.0))
+	base_body_strength = float(visual_profile.get("body_strength", 4.0))
 	_set_collision_size(FishCatalog.get_collision_size(fish_type))
 
 	fish_sprite.scale = base_sprite_scale
