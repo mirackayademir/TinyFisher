@@ -137,6 +137,16 @@ func update_species_behavior(delta: float) -> void:
 			_update_shark_behavior()
 		"hover":
 			_update_angler_behavior()
+		"hunter":
+			_update_barracuda_behavior()
+		"ambush":
+			_update_moray_behavior()
+		"glide":
+			_update_ray_behavior()
+		"lurker":
+			_update_sea_devil_behavior()
+		"jet":
+			_update_squid_behavior()
 		_:
 			behavior_speed_multiplier = 1.0
 
@@ -330,6 +340,141 @@ func _update_angler_behavior() -> void:
 		behavior_range_multiplier = 1.16
 		behavior_vertical_target = clampf(world_hook.global_position.y - start_y, -120.0, 120.0)
 		update_sprite_direction()
+
+
+func _update_barracuda_behavior() -> void:
+	# Uzun sakin devriye + yeme yaklasinca tek hamlede hizlanma.
+	var cruise_wave: float = sin(behavior_time * 0.92 + swim_phase)
+	behavior_speed_multiplier = 0.92 + absf(cruise_wave) * 0.22
+	behavior_range_multiplier = 1.55
+	behavior_vertical_target = sin(behavior_time * 0.72 + swim_phase) * 8.0
+
+	if decision_timer <= 0.0:
+		if randf() < 0.14:
+			direction *= -1.0
+			update_sprite_direction()
+			play_turn_animation()
+		decision_timer = randf_range(1.1, 2.1)
+
+	if not _hook_can_attract_fish():
+		_avoid_occupied_hook(260.0, 1.38)
+		return
+
+	var hook_distance: float = global_position.distance_to(world_hook.global_position)
+	if hook_distance < 520.0:
+		direction = 1.0 if world_hook.global_position.x > global_position.x else -1.0
+		behavior_vertical_target = clampf(world_hook.global_position.y - start_y, -120.0, 120.0)
+		behavior_speed_multiplier = 1.28
+		update_sprite_direction()
+		if hook_distance < 180.0:
+			behavior_speed_multiplier = 2.55
+			behavior_range_multiplier = 2.05
+			was_dashing = true
+
+
+func _update_moray_behavior() -> void:
+	# Kaya kovugunda pusuda bekler; yem yakinlasinca kisa ama cok sert bir atak yapar.
+	behavior_speed_multiplier = 0.26 + absf(sin(behavior_time * 0.54 + swim_phase)) * 0.16
+	behavior_range_multiplier = 0.62
+	behavior_vertical_target = sin(behavior_time * 1.1 + swim_phase) * 5.0
+
+	if not _hook_can_attract_fish():
+		_avoid_occupied_hook(155.0, 0.82)
+		return
+
+	var hook_distance: float = global_position.distance_to(world_hook.global_position)
+	if hook_distance < 245.0:
+		direction = 1.0 if world_hook.global_position.x > global_position.x else -1.0
+		behavior_vertical_target = clampf(world_hook.global_position.y - start_y, -75.0, 75.0)
+		update_sprite_direction()
+
+		if hook_distance < 115.0:
+			behavior_speed_multiplier = 3.0
+			behavior_range_multiplier = 1.35
+			was_dashing = true
+		else:
+			behavior_speed_multiplier = 0.55
+
+
+func _update_ray_behavior() -> void:
+	# Vatoz zemine paralel, genis ve sakin bir hat izler; dikey hareketi kanat cirpmasi gibi yumusaktir.
+	var glide_wave: float = sin(behavior_time * 0.44 + swim_phase)
+	behavior_speed_multiplier = 0.72 + absf(glide_wave) * 0.16
+	behavior_range_multiplier = 1.75
+	behavior_vertical_target = sin(behavior_time * 0.58 + swim_phase) * 22.0
+
+	if decision_timer <= 0.0:
+		if randf() < 0.10:
+			direction *= -1.0
+			update_sprite_direction()
+			play_turn_animation()
+		decision_timer = randf_range(2.0, 3.8)
+
+	if _hook_can_attract_fish():
+		var hook_distance: float = global_position.distance_to(world_hook.global_position)
+		if hook_distance < 280.0:
+			direction = 1.0 if world_hook.global_position.x > global_position.x else -1.0
+			behavior_speed_multiplier = 0.94
+			behavior_vertical_target = clampf(world_hook.global_position.y - start_y, -80.0, 80.0)
+			update_sprite_direction()
+
+
+func _update_sea_devil_behavior() -> void:
+	# Derinde neredeyse sabit asili kalir; yem yakindaysa yavasca sokulup son anda hamle yapar.
+	var drift: float = sin(behavior_time * 0.38 + swim_phase)
+	behavior_speed_multiplier = 0.22 + absf(drift) * 0.18
+	behavior_range_multiplier = 0.70
+	behavior_vertical_target = sin(behavior_time * 0.74 + swim_phase) * 27.0
+
+	if decision_timer <= 0.0:
+		if randf() < 0.20:
+			direction *= -1.0
+			update_sprite_direction()
+		decision_timer = randf_range(1.8, 3.1)
+
+	if not _hook_can_attract_fish():
+		_avoid_occupied_hook(190.0, 0.72)
+		return
+
+	var hook_distance: float = global_position.distance_to(world_hook.global_position)
+	if hook_distance < 360.0:
+		direction = 1.0 if world_hook.global_position.x > global_position.x else -1.0
+		behavior_vertical_target = clampf(world_hook.global_position.y - start_y, -110.0, 110.0)
+		behavior_speed_multiplier = 0.58
+		update_sprite_direction()
+		if hook_distance < 105.0:
+			behavior_speed_multiplier = 1.95
+			was_dashing = true
+
+
+func _update_squid_behavior() -> void:
+	# Kalamar duz yuzmek yerine jet darbeleriyle ileri atilir ve hafif dikey zikzak yapar.
+	var jet_wave: float = sin(behavior_time * 2.15 + swim_phase)
+	var jet_active: bool = jet_wave > 0.64
+	behavior_speed_multiplier = 2.35 if jet_active else 0.46
+	behavior_range_multiplier = 1.32
+	behavior_vertical_target = sin(behavior_time * 1.52 + swim_phase) * 30.0
+	was_dashing = jet_active
+
+	if decision_timer <= 0.0:
+		if randf() < 0.31:
+			direction *= -1.0
+			update_sprite_direction()
+			play_turn_animation()
+		decision_timer = randf_range(0.8, 1.55)
+
+	if not _hook_can_attract_fish():
+		_avoid_occupied_hook(210.0, 1.32)
+		return
+
+	var hook_distance: float = global_position.distance_to(world_hook.global_position)
+	if hook_distance < 350.0:
+		direction = 1.0 if world_hook.global_position.x > global_position.x else -1.0
+		behavior_vertical_target = clampf(world_hook.global_position.y - start_y, -135.0, 135.0)
+		update_sprite_direction()
+		if hook_distance < 150.0:
+			behavior_speed_multiplier = 2.8
+			was_dashing = true
 
 
 func _avoid_occupied_hook(radius: float, speed_multiplier: float) -> void:

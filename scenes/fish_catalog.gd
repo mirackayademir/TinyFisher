@@ -15,6 +15,14 @@ const FISH_ORDER: Array[String] = [
 	"Fener Balığı"
 ]
 
+const EXPANSION_WAVE_1: Array[String] = [
+	"Barakuda",
+	"Müren",
+	"Vatoz",
+	"Deniz Şeytanı",
+	"Kalamar"
+]
+
 const PROFILES: Dictionary = {
 	"Sardalya": {
 		"value": 10,
@@ -198,7 +206,154 @@ const PROFILES: Dictionary = {
 		"fight": [180.0, 0.50, 18.0, 31.0, 56.0],
 		"tension": [31.0, 22.0, 11.0]
 	}
+	,
+	"Barakuda": {
+		"value": 160,
+		"habitat": "Açık deniz / avcı",
+		"depth_label": "42–62 m",
+		"texture_path": "",
+		"behavior_id": "hunter",
+		"target_count": 0,
+		"spawn_x": [3900.0, 7600.0],
+		"spawn_y": [1700.0, 2320.0],
+		"speed": [92.0, 118.0],
+		"distance": [420.0, 720.0],
+		"bob": [4.0, 7.0],
+		"visual_scale": 0.34,
+		"swim_wave_speed": 3.9,
+		"swim_wave_angle": 2.1,
+		"acceleration": 460.0,
+		"vertical_response": 62.0,
+		"turn_roll": 7.0,
+		"tail_strength": 20.0,
+		"tail_speed": 7.2,
+		"body_strength": 3.0,
+		"collision": [145.0, 42.0],
+		"hook_struggle_angle": 23.0,
+		"fight": [295.0, 0.30, 20.0, 31.0, 60.0],
+		"tension": [28.0, 24.0, 9.5],
+		"asset_status": "pending"
+	},
+	"Müren": {
+		"value": 115,
+		"habitat": "Kanyon duvarları / kaya oyukları",
+		"depth_label": "55–76 m",
+		"texture_path": "",
+		"behavior_id": "ambush",
+		"target_count": 0,
+		"spawn_x": [2600.0, 8200.0],
+		"spawn_y": [2140.0, 2860.0],
+		"speed": [26.0, 38.0],
+		"distance": [130.0, 260.0],
+		"bob": [2.0, 4.5],
+		"visual_scale": 0.32,
+		"swim_wave_speed": 2.6,
+		"swim_wave_angle": 5.0,
+		"acceleration": 520.0,
+		"vertical_response": 34.0,
+		"turn_roll": 11.0,
+		"tail_strength": 34.0,
+		"tail_speed": 5.4,
+		"body_strength": 7.0,
+		"collision": [155.0, 38.0],
+		"hook_struggle_angle": 27.0,
+		"fight": [235.0, 0.38, 21.0, 29.0, 62.0],
+		"tension": [27.0, 23.0, 10.0],
+		"asset_status": "pending"
+	},
+	"Vatoz": {
+		"value": 140,
+		"habitat": "Kumluk dip / kanyon tabanı",
+		"depth_label": "35–58 m",
+		"texture_path": "",
+		"behavior_id": "glide",
+		"target_count": 0,
+		"spawn_x": [2200.0, 7200.0],
+		"spawn_y": [1550.0, 2200.0],
+		"speed": [34.0, 48.0],
+		"distance": [360.0, 620.0],
+		"bob": [7.0, 12.0],
+		"visual_scale": 0.36,
+		"swim_wave_speed": 1.45,
+		"swim_wave_angle": 1.2,
+		"acceleration": 95.0,
+		"vertical_response": 22.0,
+		"turn_roll": 4.0,
+		"tail_strength": 8.0,
+		"tail_speed": 2.3,
+		"body_strength": 6.5,
+		"collision": [150.0, 78.0],
+		"hook_struggle_angle": 10.0,
+		"fight": [185.0, 0.52, 20.0, 27.0, 70.0],
+		"tension": [24.0, 27.0, 8.0],
+		"asset_status": "pending"
+	},
+	"Deniz Şeytanı": {
+		"value": 360,
+		"habitat": "Karanlık kanyon / dip avcısı",
+		"depth_label": "82–98 m",
+		"texture_path": "",
+		"behavior_id": "lurker",
+		"target_count": 0,
+		"spawn_x": [5600.0, 9800.0],
+		"spawn_y": [3120.0, 3650.0],
+		"speed": [24.0, 34.0],
+		"distance": [180.0, 340.0],
+		"bob": [8.0, 14.0],
+		"visual_scale": 0.44,
+		"swim_wave_speed": 1.55,
+		"swim_wave_angle": 3.8,
+		"acceleration": 88.0,
+		"vertical_response": 24.0,
+		"turn_roll": 8.0,
+		"tail_strength": 13.0,
+		"tail_speed": 3.0,
+		"body_strength": 3.4,
+		"collision": [135.0, 92.0],
+		"hook_struggle_angle": 17.0,
+		"fight": [205.0, 0.44, 16.0, 36.0, 52.0],
+		"tension": [34.0, 20.0, 13.5],
+		"asset_status": "pending"
+	},
+	"Kalamar": {
+		"value": 205,
+		"habitat": "Derin açık su / kanyon ağzı",
+		"depth_label": "64–90 m",
+		"texture_path": "",
+		"behavior_id": "jet",
+		"target_count": 0,
+		"spawn_x": [4300.0, 9200.0],
+		"spawn_y": [2450.0, 3340.0],
+		"speed": [42.0, 58.0],
+		"distance": [280.0, 520.0],
+		"bob": [10.0, 17.0],
+		"visual_scale": 0.38,
+		"swim_wave_speed": 2.2,
+		"swim_wave_angle": 4.4,
+		"acceleration": 540.0,
+		"vertical_response": 72.0,
+		"turn_roll": 12.0,
+		"tail_strength": 15.0,
+		"tail_speed": 4.6,
+		"body_strength": 6.0,
+		"collision": [118.0, 86.0],
+		"hook_struggle_angle": 25.0,
+		"fight": [255.0, 0.34, 18.0, 33.0, 58.0],
+		"tension": [31.0, 22.0, 11.5],
+		"asset_status": "pending"
+	}
+
 }
+
+
+static func is_wave_1_species(fish_type: String) -> bool:
+	return fish_type in EXPANSION_WAVE_1
+
+
+static func is_asset_ready(fish_type: String) -> bool:
+	var profile: Dictionary = get_profile(fish_type)
+	var texture_path: String = String(profile.get("texture_path", ""))
+	return not texture_path.is_empty() and ResourceLoader.exists(texture_path)
 
 
 static func get_profile(fish_type: String) -> Dictionary:
