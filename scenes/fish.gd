@@ -59,6 +59,7 @@ var rig_head: Node2D
 var rig_moray_tail_tip: Node2D
 var rig_moray_mid_tail: Node2D
 var rig_moray_front_body: Node2D
+var rig_moray_mesh: MeshInstance2D
 var rig_gill: Line2D
 var rig_jaw: Line2D
 var rig_texture_size: Vector2 = Vector2.ZERO
@@ -632,6 +633,7 @@ func _setup_articulated_rig() -> void:
 	rig_moray_tail_tip = null
 	rig_moray_mid_tail = null
 	rig_moray_front_body = null
+	rig_moray_mesh = null
 	rig_gill = null
 	rig_jaw = null
 	rig_time = 0.0
@@ -657,15 +659,9 @@ func _setup_articulated_rig() -> void:
 		rig_head = _create_rig_region("Head", 0.68, 1.00, 0.70, 4)
 		_setup_barracuda_face_details()
 	elif fish_type == "Müren":
-		# Müren: 6 eklemli uzun gövde.
-		# Faz farkları bütün silüette kuyruktan başa akan belirgin S eğrisi üretir.
-		rig_moray_tail_tip = _create_rig_region("MorayTailTip", 0.00, 0.20, 0.18, 1)
-		rig_tail = _create_rig_region("MorayTail", 0.10, 0.34, 0.31, 2)
-		rig_moray_mid_tail = _create_rig_region("MorayMidTail", 0.23, 0.49, 0.46, 3)
-		rig_rear_body = _create_rig_region("MorayRear", 0.38, 0.64, 0.61, 4)
-		rig_core_body = _create_rig_region("MorayCore", 0.53, 0.79, 0.76, 5)
-		rig_moray_front_body = _create_rig_region("MorayFront", 0.67, 0.90, 0.86, 6)
-		rig_head = _create_rig_region("MorayHead", 0.78, 1.00, 0.81, 7)
+		# Müren artık parçalı sprite kullanmıyor.
+		# 48 kolonlu deformasyon mesh'i gövde + kuyruğu tek parça S şeklinde kıvırır.
+		rig_moray_mesh = _create_moray_wave_mesh()
 		_setup_moray_face_details()
 
 	fish_sprite.visible = false
@@ -731,6 +727,98 @@ func _setup_barracuda_face_details() -> void:
 	])
 	rig_jaw.z_index = 8
 	articulated_rig.add_child(rig_jaw)
+
+
+func _create_moray_wave_mesh() -> MeshInstance2D:
+	var mesh_instance := MeshInstance2D.new()
+	mesh_instance.name = "MorayContinuousWaveMesh"
+	mesh_instance.z_index = 4
+	articulated_rig.add_child(mesh_instance)
+
+	var columns: int = 48
+	var rows: int = 4
+	var vertices := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+
+	for y_index: int in range(rows + 1):
+		var v: float = float(y_index) / float(rows)
+		var local_y: float = (v - 0.5) * rig_texture_size.y
+		for x_index: int in range(columns + 1):
+			var u: float = float(x_index) / float(columns)
+			var local_x: float = (u - 0.5) * rig_texture_size.x
+			vertices.append(Vector2(local_x, local_y))
+			uvs.append(Vector2(u, v))
+
+	for y_index: int in range(rows):
+		for x_index: int in range(columns):
+			var row_width: int = columns + 1
+			var a: int = y_index * row_width + x_index
+			var b: int = a + 1
+			var c_index: int = a + row_width
+			var d: int = c_index + 1
+			indices.append(a)
+			indices.append(c_index)
+			indices.append(b)
+			indices.append(b)
+			indices.append(c_index)
+			indices.append(d)
+
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh_instance.mesh = mesh
+
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform sampler2D fish_texture : source_color, filter_linear;
+uniform float wave_phase = 0.0;
+uniform float wave_amplitude = 11.0;
+uniform float wave_frequency = 8.6;
+uniform float secondary_amount = 1.0;
+
+void vertex() {
+	// Kaynak görselde baş sağ tarafta.
+	// 0.72'den sonra deformasyon hızla söner; baş neredeyse tamamen sabit kalır.
+	float head_lock = 1.0 - smoothstep(0.67, 0.87, UV.x);
+
+	// Kuyrukta en yüksek, gövdenin ortasında orta kuvvette dalga.
+	float tail_gain = pow(clamp(1.0 - UV.x, 0.0, 1.0), 0.58);
+	float body_gain = mix(0.42, 1.0, tail_gain);
+	float mask = head_lock * body_gain;
+
+	// Yaklaşık 1.35 dalga: ekranda net bir S silüeti oluşturur.
+	float main_wave = sin(wave_phase + UV.x * wave_frequency);
+	float secondary_wave = sin(wave_phase * 0.54 + UV.x * 4.35 + 1.15);
+
+	VERTEX.y += main_wave * wave_amplitude * mask;
+	// Çok küçük yatay sıkışma/genişleme kıvrımı daha organik gösterir.
+	VERTEX.x += secondary_wave * wave_amplitude * 0.10 * mask * secondary_amount;
+}
+
+void fragment() {
+	vec4 tex = texture(fish_texture, UV);
+	COLOR = tex * COLOR;
+}
+"""
+
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("fish_texture", fish_sprite.texture)
+	material.set_shader_parameter("wave_phase", 0.0)
+	material.set_shader_parameter("wave_amplitude", 11.0)
+	material.set_shader_parameter("wave_frequency", 8.6)
+	material.set_shader_parameter("secondary_amount", 1.0)
+	mesh_instance.material = material
+	return mesh_instance
 
 
 func _setup_moray_face_details() -> void:
@@ -819,64 +907,36 @@ func _update_barracuda_rig(delta: float, speed_ratio: float) -> void:
 
 
 func _update_moray_rig(delta: float, speed_ratio: float) -> void:
+	if rig_moray_mesh == null:
+		return
+
 	var speed_factor: float = clampf(speed_ratio, 0.35, 3.0)
-	var motion_rate: float = lerpf(0.72, 1.82, (speed_factor - 0.35) / 2.65)
+	var motion_rate: float = lerpf(0.72, 1.90, (speed_factor - 0.35) / 2.65)
 	if was_dashing:
-		motion_rate *= 1.34
+		motion_rate *= 1.36
 	rig_time += delta * motion_rate
 
-	# Tam yılanvari S hareketi:
-	# aynı dalganın farklı fazları 6 gövde eklemine sırayla uygulanır.
-	# Kuyrukta açı büyük, başa yaklaştıkça azalır.
-	var wave_speed: float = 3.05
-	var p0: float = rig_time * wave_speed + swim_phase
-	var wave_head: float = sin(p0 - 0.28)
-	var wave_front: float = sin(p0 + 0.18)
-	var wave_core: float = sin(p0 + 0.72)
-	var wave_rear: float = sin(p0 + 1.28)
-	var wave_mid_tail: float = sin(p0 + 1.86)
-	var wave_tail: float = sin(p0 + 2.42)
-	var wave_tip: float = sin(p0 + 2.98)
+	# Videodaki mantık: baş sabit, gövde ve kuyruk tek parça dansöz gibi S çizer.
+	var moray_material: ShaderMaterial = rig_moray_mesh.material as ShaderMaterial
+	if moray_material != null:
+		var amplitude: float = lerpf(10.5, 15.5, clampf(speed_factor / 2.5, 0.0, 1.0))
+		if was_dashing:
+			amplitude *= 1.24
+		moray_material.set_shader_parameter("wave_phase", rig_time * 3.20 + swim_phase)
+		moray_material.set_shader_parameter("wave_amplitude", amplitude)
+		moray_material.set_shader_parameter("wave_frequency", 8.6)
+		moray_material.set_shader_parameter("secondary_amount", 1.0)
+
 	var breath: float = (sin(rig_time * 1.22 + swim_phase) + 1.0) * 0.5
 
-	var body_amp: float = deg_to_rad(8.5 + minf(speed_factor, 2.5) * 3.5)
-	if was_dashing:
-		body_amp *= 1.42
+	# Başın kendisi kıvrılmaz; yalnızca tüm balığın doğal yüzüş pitch'i uygulanır.
+	articulated_rig.position.y = sin(rig_time * 1.05 + swim_phase) * 0.35
 
-	# Rotasyon + küçük dikey eklem kaymaları birlikte tam S silüeti üretir.
-	if rig_moray_tail_tip != null:
-		rig_moray_tail_tip.rotation = wave_tip * body_amp * 1.22
-		rig_moray_tail_tip.position.y = wave_tip * 3.8
-	if rig_tail != null:
-		rig_tail.rotation = wave_tail * body_amp * 1.02
-		rig_tail.position.y = wave_tail * 3.1
-	if rig_moray_mid_tail != null:
-		rig_moray_mid_tail.rotation = wave_mid_tail * body_amp * 0.82
-		rig_moray_mid_tail.position.y = wave_mid_tail * 2.5
-	if rig_rear_body != null:
-		rig_rear_body.rotation = wave_rear * body_amp * 0.62
-		rig_rear_body.position.y = wave_rear * 1.9
-	if rig_core_body != null:
-		rig_core_body.rotation = wave_core * body_amp * 0.42
-		rig_core_body.position.y = wave_core * 1.35
-	if rig_moray_front_body != null:
-		rig_moray_front_body.rotation = wave_front * body_amp * 0.24
-		rig_moray_front_body.position.y = wave_front * 0.8
-	if rig_head != null:
-		# Baş hedefe bakarken vücudu takip eder; hareket var ama en az burada.
-		rig_head.rotation = wave_head * body_amp * 0.10
-		rig_head.position.y = wave_head * 0.35
-
-	# Tüm balıkta çok hafif yükselip alçalma; S kıvrımının üstüne binmez.
-	articulated_rig.position.y = sin(rig_time * 1.15 + swim_phase) * 0.55
-
-	# Müren nefes alırken solungaç yarığı belirgin şekilde çalışır.
 	if rig_gill != null:
 		rig_gill.scale.x = lerpf(0.86, 1.20, breath)
 		rig_gill.scale.y = lerpf(0.92, 1.12, breath)
 		rig_gill.default_color.a = lerpf(0.34, 0.82, breath)
 
-	# Çene normalde hafif açık; saldırıda ekstra açılır.
 	if rig_jaw != null:
 		var jaw_points: PackedVector2Array = rig_jaw.points
 		if jaw_points.size() == 3:
@@ -1071,4 +1131,8 @@ func release_from_hook() -> void:
 			if rig_node != null:
 				rig_node.rotation = 0.0
 				rig_node.position.y = 0.0
+		if rig_moray_mesh != null:
+			var reset_material: ShaderMaterial = rig_moray_mesh.material as ShaderMaterial
+			if reset_material != null:
+				reset_material.set_shader_parameter("wave_phase", 0.0)
 		_update_rig_direction()
