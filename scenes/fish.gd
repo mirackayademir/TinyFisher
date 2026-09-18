@@ -61,6 +61,10 @@ var rig_moray_mid_tail: Node2D
 var rig_moray_front_body: Node2D
 var rig_moray_mesh: MeshInstance2D
 var rig_ray_mesh: MeshInstance2D
+var rig_sea_devil_mesh: MeshInstance2D
+var rig_sea_glow_1: Polygon2D
+var rig_sea_glow_2: Polygon2D
+var rig_sea_glow_3: Polygon2D
 var rig_gill: Line2D
 var rig_jaw: Line2D
 var rig_texture_size: Vector2 = Vector2.ZERO
@@ -636,12 +640,16 @@ func _setup_articulated_rig() -> void:
 	rig_moray_front_body = null
 	rig_moray_mesh = null
 	rig_ray_mesh = null
+	rig_sea_devil_mesh = null
+	rig_sea_glow_1 = null
+	rig_sea_glow_2 = null
+	rig_sea_glow_3 = null
 	rig_gill = null
 	rig_jaw = null
 	rig_time = 0.0
 
 	# Wave-1 animasyonlarını tek tek ekliyoruz.
-	if fish_type not in ["Barakuda", "Müren", "Vatoz"] or fish_sprite.texture == null:
+	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı"] or fish_sprite.texture == null:
 		return
 
 	rig_texture_size = fish_sprite.texture.get_size()
@@ -669,6 +677,12 @@ func _setup_articulated_rig() -> void:
 		# Vatozda itişi kuyruk değil geniş pektoral yüzgeçler üretir.
 		# İnce mesh, kanat kenarlarına doğru büyüyen ilerleyen dalga ile süzülme hissi verir.
 		rig_ray_mesh = _create_ray_fin_mesh()
+	elif fish_type == "Deniz Şeytanı":
+		# Deniz Şeytanı ağır gövdeli dip avcısıdır:
+		# kuyruk itişi belirgin, gövde ağır, küçük yüzgeçler titreşimli ve fenerler bağımsızdır.
+		rig_sea_devil_mesh = _create_sea_devil_mesh()
+		_setup_sea_devil_face_details()
+		_setup_sea_devil_glows()
 
 	fish_sprite.visible = false
 	_update_rig_direction()
@@ -944,6 +958,204 @@ void fragment() {
 	return mesh_instance
 
 
+func _create_sea_devil_mesh() -> MeshInstance2D:
+	var mesh_instance := MeshInstance2D.new()
+	mesh_instance.name = "SeaDevilHeavyBodyMesh"
+	mesh_instance.z_index = 4
+	articulated_rig.add_child(mesh_instance)
+
+	var columns: int = 52
+	var rows: int = 14
+	var vertices := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+
+	for y_index in range(rows + 1):
+		var v: float = float(y_index) / float(rows)
+		var local_y: float = (v - 0.5) * rig_texture_size.y
+		for x_index in range(columns + 1):
+			var u: float = float(x_index) / float(columns)
+			var local_x: float = (u - 0.5) * rig_texture_size.x
+			vertices.append(Vector2(local_x, local_y))
+			uvs.append(Vector2(u, v))
+
+	for y_index in range(rows):
+		for x_index in range(columns):
+			var row_width: int = columns + 1
+			var a: int = y_index * row_width + x_index
+			var b: int = a + 1
+			var c_index: int = a + row_width
+			var d: int = c_index + 1
+			indices.append(a)
+			indices.append(c_index)
+			indices.append(b)
+			indices.append(b)
+			indices.append(c_index)
+			indices.append(d)
+
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh_instance.mesh = mesh
+
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform sampler2D fish_texture : source_color, filter_linear;
+uniform float swim_phase = 0.0;
+uniform float tail_amplitude = 8.0;
+uniform float fin_amplitude = 2.8;
+uniform float jaw_amplitude = 1.4;
+uniform float lure_amplitude = 4.0;
+
+void vertex() {
+	// Görselde baş sağ tarafta. Deniz Şeytanı gövdesi ağır ve rijittir.
+	// Kuyruğa gidildikçe hareket katlanarak büyür, baş neredeyse kilitlidir.
+	float tail_gain = 1.0 - smoothstep(0.18, 0.58, UV.x);
+	float rear_body = (1.0 - smoothstep(0.36, 0.68, UV.x)) * smoothstep(0.10, 0.32, UV.x);
+	float head_lock = 1.0 - smoothstep(0.64, 0.82, UV.x);
+
+	float tail_wave = sin(swim_phase + UV.x * 5.9);
+	float body_wave = sin(swim_phase * 0.72 + UV.x * 3.8 + 0.65);
+
+	VERTEX.y += tail_wave * tail_amplitude * tail_gain;
+	VERTEX.y += body_wave * tail_amplitude * 0.19 * rear_body * head_lock;
+
+	// Pektoral / alt yüzgeçler küçük ve hızlı mikro-vuruşlar yapar.
+	float lower_fin_y = smoothstep(0.58, 0.78, UV.y) * (1.0 - smoothstep(0.88, 0.98, UV.y));
+	float fin_x = smoothstep(0.34, 0.48, UV.x) * (1.0 - smoothstep(0.68, 0.78, UV.x));
+	float fin_mask = lower_fin_y * fin_x;
+	float fin_wave = sin(swim_phase * 1.72 + UV.x * 10.0 + UV.y * 5.0);
+	VERTEX.y += fin_wave * fin_amplitude * fin_mask;
+
+	// Sırt yüzgeçleri de gövdeden bağımsız çok küçük titreşir.
+	float dorsal_y = 1.0 - smoothstep(0.26, 0.43, UV.y);
+	float dorsal_x = smoothstep(0.28, 0.42, UV.x) * (1.0 - smoothstep(0.72, 0.82, UV.x));
+	VERTEX.x += sin(swim_phase * 1.28 + UV.x * 8.0) * fin_amplitude * 0.32 * dorsal_y * dorsal_x;
+
+	// Alt çene nefesle açılır; kafa bütünü sallanmaz.
+	float jaw_x = smoothstep(0.72, 0.84, UV.x);
+	float jaw_y = smoothstep(0.57, 0.67, UV.y);
+	float jaw_mask = jaw_x * jaw_y;
+	VERTEX.y += (0.5 + 0.5 * sin(swim_phase * 0.58 + 0.9)) * jaw_amplitude * jaw_mask;
+
+	// Fener saplarının bulunduğu üst-sağ bölge gövdeden bağımsız yumuşak salınır.
+	// Transparan alanlar etkilenmediği için hareket esas olarak sap ve ışık uçlarında görünür.
+	float lure_x = smoothstep(0.62, 0.74, UV.x);
+	float lure_y = 1.0 - smoothstep(0.18, 0.43, UV.y);
+	float lure_mask = lure_x * lure_y;
+	float lure_wave = sin(swim_phase * 0.48 + UV.x * 7.5 + UV.y * 3.0);
+	VERTEX.x += lure_wave * lure_amplitude * 0.55 * lure_mask;
+	VERTEX.y += cos(swim_phase * 0.44 + UV.x * 6.0) * lure_amplitude * lure_mask;
+}
+
+void fragment() {
+	vec4 tex = texture(fish_texture, UV);
+	COLOR = tex * COLOR;
+}
+"""
+
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("fish_texture", fish_sprite.texture)
+	material.set_shader_parameter("swim_phase", 0.0)
+	material.set_shader_parameter("tail_amplitude", 8.0)
+	material.set_shader_parameter("fin_amplitude", 2.8)
+	material.set_shader_parameter("jaw_amplitude", 1.4)
+	material.set_shader_parameter("lure_amplitude", 4.0)
+	mesh_instance.material = material
+	return mesh_instance
+
+
+func _setup_sea_devil_face_details() -> void:
+	# Solungaç kapağı: ağır ve yavaş nefes.
+	rig_gill = Line2D.new()
+	rig_gill.name = "SeaDevilGillPulse"
+	rig_gill.width = 1.55
+	rig_gill.default_color = Color(0.13, 0.14, 0.11, 0.54)
+	rig_gill.antialiased = true
+	var gx: float = rig_texture_size.x * 0.705 - rig_texture_size.x * 0.5
+	var gy: float = -rig_texture_size.y * 0.5
+	rig_gill.points = PackedVector2Array([
+		Vector2(gx, gy + rig_texture_size.y * 0.43),
+		Vector2(gx - 3.0, gy + rig_texture_size.y * 0.54),
+		Vector2(gx + 1.0, gy + rig_texture_size.y * 0.64)
+	])
+	rig_gill.z_index = 7
+	articulated_rig.add_child(rig_gill)
+
+	# Ağız çizgisi, normal nefeste küçük; saldırıda belirgin.
+	rig_jaw = Line2D.new()
+	rig_jaw.name = "SeaDevilJaw"
+	rig_jaw.width = 1.35
+	rig_jaw.default_color = Color(0.05, 0.055, 0.045, 0.46)
+	rig_jaw.antialiased = true
+	var y0: float = -rig_texture_size.y * 0.5 + rig_texture_size.y * 0.61
+	rig_jaw.points = PackedVector2Array([
+		Vector2(rig_texture_size.x * 0.77 - rig_texture_size.x * 0.5, y0),
+		Vector2(rig_texture_size.x * 0.88 - rig_texture_size.x * 0.5, y0 + 2.0),
+		Vector2(rig_texture_size.x * 0.985 - rig_texture_size.x * 0.5, y0 + 0.5)
+	])
+	rig_jaw.z_index = 8
+	articulated_rig.add_child(rig_jaw)
+
+
+func _create_soft_glow(glow_name: String, radius: float, glow_color: Color) -> Polygon2D:
+	var glow := Polygon2D.new()
+	glow.name = glow_name
+	var points := PackedVector2Array()
+	var sides: int = 16
+	for i in range(sides):
+		var angle: float = TAU * float(i) / float(sides)
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+	glow.polygon = points
+	glow.color = glow_color
+	glow.z_index = 9
+	articulated_rig.add_child(glow)
+	return glow
+
+
+func _setup_sea_devil_glows() -> void:
+	# Orijinal PNG 620x349 oranında; pozisyonlar oranla hesaplandığı için çözünürlükten bağımsızdır.
+	rig_sea_glow_1 = _create_soft_glow("SeaDevilGlowTop", 10.0, Color(0.68, 1.0, 0.76, 0.22))
+	rig_sea_glow_2 = _create_soft_glow("SeaDevilGlowMid", 8.5, Color(0.68, 1.0, 0.76, 0.20))
+	rig_sea_glow_3 = _create_soft_glow("SeaDevilGlowFront", 11.5, Color(0.70, 1.0, 0.78, 0.26))
+	_update_sea_devil_glows(0.0)
+
+
+func _update_sea_devil_glows(phase: float) -> void:
+	if rig_sea_glow_1 == null or rig_sea_glow_2 == null or rig_sea_glow_3 == null:
+		return
+
+	var w: float = rig_texture_size.x
+	var h: float = rig_texture_size.y
+	var base_1 := Vector2(w * (0.694 - 0.5), h * (0.183 - 0.5))
+	var base_2 := Vector2(w * (0.718 - 0.5), h * (0.270 - 0.5))
+	var base_3 := Vector2(w * (0.887 - 0.5), h * (0.410 - 0.5))
+
+	# Üç ışık aynı anda mekanik sallanmasın; her biri ayrı fazda gecikmeli hareket eder.
+	rig_sea_glow_1.position = base_1 + Vector2(sin(phase * 0.46) * 2.7, cos(phase * 0.41) * 3.8)
+	rig_sea_glow_2.position = base_2 + Vector2(sin(phase * 0.51 + 0.8) * 2.3, cos(phase * 0.44 + 0.6) * 3.0)
+	rig_sea_glow_3.position = base_3 + Vector2(sin(phase * 0.43 + 1.6) * 3.2, cos(phase * 0.39 + 1.2) * 4.4)
+
+	var p1: float = 0.78 + 0.22 * sin(phase * 1.15)
+	var p2: float = 0.78 + 0.22 * sin(phase * 1.07 + 1.7)
+	var p3: float = 0.82 + 0.18 * sin(phase * 1.22 + 0.9)
+	rig_sea_glow_1.scale = Vector2.ONE * p1
+	rig_sea_glow_2.scale = Vector2.ONE * p2
+	rig_sea_glow_3.scale = Vector2.ONE * p3
+	rig_sea_glow_1.color.a = 0.16 + p1 * 0.11
+	rig_sea_glow_2.color.a = 0.14 + p2 * 0.10
+	rig_sea_glow_3.color.a = 0.18 + p3 * 0.12
+
+
 func _setup_moray_face_details() -> void:
 	# Mürenin solungaç deliği küçük ama ritmik görünür.
 	rig_gill = Line2D.new()
@@ -989,6 +1201,8 @@ func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
 			_update_moray_rig(delta, speed_ratio)
 		"Vatoz":
 			_update_ray_rig(delta, speed_ratio)
+		"Deniz Şeytanı":
+			_update_sea_devil_rig(delta, speed_ratio)
 
 
 func _update_barracuda_rig(delta: float, speed_ratio: float) -> void:
@@ -1102,6 +1316,60 @@ func _update_ray_rig(delta: float, speed_ratio: float) -> void:
 	articulated_rig.rotation += sin(rig_time * flap_rate + swim_phase + 1.1) * deg_to_rad(0.16)
 	articulated_rig.position.y = sin(rig_time * 0.72 + swim_phase) * 0.55
 
+	_update_rig_direction()
+
+
+func _update_sea_devil_rig(delta: float, speed_ratio: float) -> void:
+	if rig_sea_devil_mesh == null:
+		return
+
+	var speed_factor: float = clampf(speed_ratio, 0.25, 2.5)
+	# Ağır avcı: yavaş temel ritim, saldırıda bir anda kuvvetli kuyruk.
+	var motion_rate: float = lerpf(0.72, 1.42, clampf((speed_factor - 0.25) / 2.25, 0.0, 1.0))
+	if was_dashing:
+		motion_rate *= 1.48
+	rig_time += delta
+
+	var phase: float = rig_time * motion_rate * 2.15 + swim_phase
+	var sea_material: ShaderMaterial = rig_sea_devil_mesh.material as ShaderMaterial
+	if sea_material != null:
+		var tail_amount: float = lerpf(5.5, 9.5, clampf(speed_factor / 2.2, 0.0, 1.0))
+		var fin_amount: float = lerpf(2.0, 3.4, clampf(speed_factor / 2.0, 0.0, 1.0))
+		var jaw_amount: float = 1.55
+		var lure_amount: float = 4.0
+		if was_dashing:
+			tail_amount *= 1.55
+			fin_amount *= 1.28
+			jaw_amount = 4.2
+			lure_amount = 5.6
+
+		sea_material.set_shader_parameter("swim_phase", phase)
+		sea_material.set_shader_parameter("tail_amplitude", tail_amount)
+		sea_material.set_shader_parameter("fin_amplitude", fin_amount)
+		sea_material.set_shader_parameter("jaw_amplitude", jaw_amount)
+		sea_material.set_shader_parameter("lure_amplitude", lure_amount)
+
+	# Gövde ağır olduğu için tüm balıkta çok küçük ataletsel salınım.
+	articulated_rig.position.y = sin(rig_time * 0.58 + swim_phase) * 0.70
+	articulated_rig.rotation += sin(rig_time * 0.66 + swim_phase + 0.4) * deg_to_rad(0.13)
+
+	var breath: float = (sin(rig_time * 0.82 + swim_phase) + 1.0) * 0.5
+	if rig_gill != null:
+		rig_gill.scale.x = lerpf(0.91, 1.11, breath)
+		rig_gill.scale.y = lerpf(0.95, 1.08, breath)
+		rig_gill.default_color.a = lerpf(0.34, 0.66, breath)
+
+	if rig_jaw != null:
+		var jaw_points: PackedVector2Array = rig_jaw.points
+		if jaw_points.size() == 3:
+			var jaw_y: float = -rig_texture_size.y * 0.5 + rig_texture_size.y * 0.61
+			var jaw_open: float = lerpf(0.6, 2.0, breath) + (4.8 if was_dashing else 0.0)
+			jaw_points[1].y = jaw_y + 2.0 + jaw_open
+			jaw_points[2].y = jaw_y + 0.5 + jaw_open * 0.58
+			rig_jaw.points = jaw_points
+		rig_jaw.default_color.a = 0.68 if was_dashing else lerpf(0.38, 0.54, breath)
+
+	_update_sea_devil_glows(phase)
 	_update_rig_direction()
 
 
@@ -1293,4 +1561,8 @@ func release_from_hook() -> void:
 			if ray_reset_material != null:
 				ray_reset_material.set_shader_parameter("flap_phase", 0.0)
 				ray_reset_material.set_shader_parameter("glide_lift", 0.0)
+		if rig_sea_devil_mesh != null:
+			var sea_reset_material: ShaderMaterial = rig_sea_devil_mesh.material as ShaderMaterial
+			if sea_reset_material != null:
+				sea_reset_material.set_shader_parameter("swim_phase", 0.0)
 		_update_rig_direction()
