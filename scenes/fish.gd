@@ -1057,49 +1057,58 @@ void vertex() {
 	float m9 = band_mask(UV.y, c9, 0.046) * base_gain;
 	float m10 = band_mask(UV.y, c10, 0.040) * base_gain;
 
-	// Yüzme yönüne göre bütün rig aynalandığı için bu dalgalar her iki yönde de
-	// kafa önde, kollar arkada akacak şekilde çalışır.
-	float travel = (0.535 - UV.x) * 13.0;
-	float jet_damp = mix(1.0, 0.56, jet_power);
+	// Müren kuyruğundaki mantık: dalga kolun KÖKÜNDEN UCUNA doğru akar.
+	// Kök sabit kalır, orta kısım kıvrılır, uçta S hareketi en geniş haline gelir.
+	float arm_t = clamp((0.535 - UV.x) / 0.455, 0.0, 1.0);
+	float root_lock = smoothstep(0.06, 0.30, arm_t);
+	float s_gain = pow(arm_t, 0.78) * root_lock;
+	float jet_damp = mix(1.0, 0.62, jet_power);
 
-	float w1 = sin(motion_phase * 1.03 + travel * 0.92 + 0.10);
-	float w2 = sin(motion_phase * 1.11 + travel * 1.02 + 0.82);
-	float w3 = sin(motion_phase * 0.96 + travel * 1.10 + 1.47);
-	float w4 = sin(motion_phase * 1.16 + travel * 0.97 + 2.12);
-	float w5 = sin(motion_phase * 0.91 + travel * 1.15 + 2.76);
-	float w6 = sin(motion_phase * 1.08 + travel * 1.05 + 3.42);
-	float w7 = sin(motion_phase * 0.99 + travel * 0.88 + 4.03);
-	float w8 = sin(motion_phase * 1.13 + travel * 0.95 + 4.72);
-	float w9 = sin(motion_phase * 0.94 + travel * 1.08 + 5.34);
-	float w10 = sin(motion_phase * 1.06 + travel * 1.00 + 5.88);
+	// Her bacak kendi içinde yaklaşık 1.2–1.5 S dalgası taşır.
+	// Faz ve frekanslar birbirinden farklıdır; hiçbir bacak diğerini kopyalamaz.
+	float w1 = sin(motion_phase * 1.02 + arm_t * 8.55 + 0.10) + sin(motion_phase * 0.57 + arm_t * 16.2 + 1.10) * 0.20;
+	float w2 = sin(motion_phase * 1.09 + arm_t * 8.95 + 0.74) + sin(motion_phase * 0.61 + arm_t * 16.9 + 1.85) * 0.18;
+	float w3 = sin(motion_phase * 0.97 + arm_t * 9.30 + 1.42) + sin(motion_phase * 0.55 + arm_t * 17.4 + 2.55) * 0.17;
+	float w4 = sin(motion_phase * 1.13 + arm_t * 8.70 + 2.08) + sin(motion_phase * 0.63 + arm_t * 16.5 + 3.20) * 0.16;
+	float w5 = sin(motion_phase * 0.93 + arm_t * 9.55 + 2.72) + sin(motion_phase * 0.53 + arm_t * 17.8 + 3.84) * 0.16;
+	float w6 = sin(motion_phase * 1.07 + arm_t * 9.10 + 3.38) + sin(motion_phase * 0.59 + arm_t * 16.8 + 4.42) * 0.17;
+	float w7 = sin(motion_phase * 1.00 + arm_t * 8.45 + 4.00) + sin(motion_phase * 0.56 + arm_t * 16.0 + 5.10) * 0.18;
+	float w8 = sin(motion_phase * 1.11 + arm_t * 8.80 + 4.66) + sin(motion_phase * 0.62 + arm_t * 16.6 + 5.82) * 0.21;
+	float w9 = sin(motion_phase * 0.95 + arm_t * 9.20 + 5.30) + sin(motion_phase * 0.54 + arm_t * 17.2 + 0.32) * 0.20;
+	float w10 = sin(motion_phase * 1.05 + arm_t * 8.65 + 5.88) + sin(motion_phase * 0.58 + arm_t * 16.4 + 0.96) * 0.18;
 
+	// Uzun dış tentaküller biraz daha geniş, iç kollar biraz daha kontrollü.
 	float dy =
-		w1 * m1 * 5.8 +
-		w2 * m2 * 5.0 +
-		w3 * m3 * 4.5 +
-		w4 * m4 * 4.2 +
-		w5 * m5 * 4.0 +
-		w6 * m6 * 4.3 +
-		w7 * m7 * 5.1 +
-		w8 * m8 * 6.2 +
-		w9 * m9 * 5.5 +
-		w10 * m10 * 4.6;
+		w1 * m1 * 10.2 +
+		w2 * m2 * 8.6 +
+		w3 * m3 * 7.4 +
+		w4 * m4 * 6.8 +
+		w5 * m5 * 6.5 +
+		w6 * m6 * 6.9 +
+		w7 * m7 * 8.1 +
+		w8 * m8 * 11.0 +
+		w9 * m9 * 9.6 +
+		w10 * m10 * 7.7;
 
-	// Her bacağın yatay esnemesi de farklı; böylece yalnız yukarı-aşağı titremez.
+	// S eğrisi sadece dikey sallanma olmasın diye her bacakta gecikmeli yatay kıvrım da var.
 	float dx =
-		cos(motion_phase * 0.91 + travel + 0.20) * m1 * 1.4 +
-		cos(motion_phase * 1.07 + travel + 1.00) * m2 * 1.1 +
-		cos(motion_phase * 0.89 + travel + 1.80) * m3 * 0.9 +
-		cos(motion_phase * 1.13 + travel + 2.50) * m4 * 0.8 +
-		cos(motion_phase * 0.95 + travel + 3.10) * m5 * 0.8 +
-		cos(motion_phase * 1.04 + travel + 3.80) * m6 * 0.9 +
-		cos(motion_phase * 0.92 + travel + 4.50) * m7 * 1.1 +
-		cos(motion_phase * 1.10 + travel + 5.20) * m8 * 1.5 +
-		cos(motion_phase * 0.97 + travel + 5.80) * m9 * 1.25 +
-		cos(motion_phase * 1.02 + travel + 6.30) * m10 * 1.0;
+		cos(motion_phase * 0.91 + arm_t * 8.55 + 0.55) * m1 * 2.25 +
+		cos(motion_phase * 1.03 + arm_t * 8.95 + 1.24) * m2 * 1.90 +
+		cos(motion_phase * 0.88 + arm_t * 9.30 + 1.92) * m3 * 1.60 +
+		cos(motion_phase * 1.08 + arm_t * 8.70 + 2.58) * m4 * 1.45 +
+		cos(motion_phase * 0.90 + arm_t * 9.55 + 3.22) * m5 * 1.40 +
+		cos(motion_phase * 1.00 + arm_t * 9.10 + 3.88) * m6 * 1.50 +
+		cos(motion_phase * 0.93 + arm_t * 8.45 + 4.50) * m7 * 1.80 +
+		cos(motion_phase * 1.06 + arm_t * 8.80 + 5.16) * m8 * 2.45 +
+		cos(motion_phase * 0.89 + arm_t * 9.20 + 5.80) * m9 * 2.10 +
+		cos(motion_phase * 0.98 + arm_t * 8.65 + 0.30) * m10 * 1.70;
 
-	VERTEX.y += dy * swim_strength * jet_damp;
-	VERTEX.x += dx * swim_strength * jet_damp;
+	// Birden fazla maskenin kökte üst üste bindiği yerde hareket patlamasın.
+	float mask_sum = m1+m2+m3+m4+m5+m6+m7+m8+m9+m10;
+	float overlap_guard = max(1.0, mask_sum * 0.72);
+
+	VERTEX.y += (dy / overlap_guard) * s_gain * swim_strength * jet_damp;
+	VERTEX.x += (dx / overlap_guard) * s_gain * swim_strength * jet_damp;
 
 	// Jet sırasında bütün kollar geriye doğru biraz daha düzleşir.
 	// Uçlarda etki büyük, kafa dibinde küçüktür.
@@ -1568,7 +1577,7 @@ func _update_squid_rig(delta: float, speed_ratio: float) -> void:
 	rig_time += delta
 
 	# Kollar yüzüş hızlandıkça biraz hızlanır; birbirlerinin fazını asla paylaşmaz.
-	var motion_rate: float = lerpf(1.35, 2.25, clampf(speed_factor / 2.5, 0.0, 1.0))
+	var motion_rate: float = lerpf(1.18, 1.95, clampf(speed_factor / 2.5, 0.0, 1.0))
 	var phase: float = rig_time * motion_rate + swim_phase
 
 	# Jet davranışı yalnızca kolları akış yönünde toplar.
@@ -1577,7 +1586,7 @@ func _update_squid_rig(delta: float, speed_ratio: float) -> void:
 
 	var squid_material: ShaderMaterial = rig_squid_mesh.material as ShaderMaterial
 	if squid_material != null:
-		var limb_strength: float = lerpf(0.84, 1.22, clampf(speed_factor / 2.5, 0.0, 1.0))
+		var limb_strength: float = lerpf(0.98, 1.34, clampf(speed_factor / 2.5, 0.0, 1.0))
 		var fin_strength: float = lerpf(0.82, 1.18, clampf(speed_factor / 2.2, 0.0, 1.0))
 		if was_dashing:
 			limb_strength *= 0.88
