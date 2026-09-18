@@ -741,17 +741,17 @@ func _create_moray_wave_mesh() -> MeshInstance2D:
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 
-	for y_index: int in range(rows + 1):
+	for y_index in range(rows + 1):
 		var v: float = float(y_index) / float(rows)
 		var local_y: float = (v - 0.5) * rig_texture_size.y
-		for x_index: int in range(columns + 1):
+		for x_index in range(columns + 1):
 			var u: float = float(x_index) / float(columns)
 			var local_x: float = (u - 0.5) * rig_texture_size.x
 			vertices.append(Vector2(local_x, local_y))
 			uvs.append(Vector2(u, v))
 
-	for y_index: int in range(rows):
-		for x_index: int in range(columns):
+	for y_index in range(rows):
+		for x_index in range(columns):
 			var row_width: int = columns + 1
 			var a: int = y_index * row_width + x_index
 			var b: int = a + 1
