@@ -1,5 +1,7 @@
 extends RefCounted
 
+const FishExactArt = preload("res://scenes/fish_exact_art.gd")
+
 # TinyFisher — Fish Catalog V1
 # Baliklarin statik verileri icin tek kaynak.
 # Yeni bir tur eklerken once buraya profil eklenir; spawn, HUD, balik defteri,
@@ -215,137 +217,137 @@ const PROFILES: Dictionary = {
 	"Barakuda": {
 		"value": 160,
 		"habitat": "Açık deniz / avcı",
-		"depth_label": "42–62 m",
+		"depth_label": "10–15 m (TEST)"
 		"texture_path": "res://assets/fish/barakuda.svg",
 		"behavior_id": "hunter",
-		"target_count": 2,
-		"spawn_x": [3900.0, 7600.0],
-		"spawn_y": [1700.0, 2320.0],
-		"speed": [92.0, 118.0],
-		"distance": [420.0, 720.0],
+		"target_count": 1
+		"spawn_x": [600.0, 650.0]
+		"spawn_y": [720.0, 750.0]
+		"speed": [22.0, 28.0]
+		"distance": [40.0, 65.0]
 		"bob": [4.0, 7.0],
-		"visual_scale": 0.50,
+		"visual_scale": 1.18
 		"swim_wave_speed": 3.9,
-		"swim_wave_angle": 2.1,
+		"swim_wave_angle": 0.8
 		"acceleration": 460.0,
 		"vertical_response": 62.0,
 		"turn_roll": 7.0,
-		"tail_strength": 20.0,
+		"tail_strength": 0.0
 		"tail_speed": 7.2,
-		"body_strength": 3.0,
+		"body_strength": 0.0
 		"collision": [145.0, 42.0],
 		"hook_struggle_angle": 23.0,
 		"fight": [295.0, 0.30, 20.0, 31.0, 60.0],
 		"tension": [28.0, 24.0, 9.5],
-		"asset_status": "live"
+		"asset_status": "exact_embedded_test"
 	},
 	"Müren": {
 		"value": 115,
 		"habitat": "Kanyon duvarları / kaya oyukları",
-		"depth_label": "55–76 m",
+		"depth_label": "10–15 m (TEST)"
 		"texture_path": "res://assets/fish/muren.svg",
 		"behavior_id": "ambush",
-		"target_count": 2,
-		"spawn_x": [2600.0, 8200.0],
-		"spawn_y": [2140.0, 2860.0],
-		"speed": [26.0, 38.0],
-		"distance": [130.0, 260.0],
+		"target_count": 1
+		"spawn_x": [900.0, 950.0]
+		"spawn_y": [810.0, 840.0]
+		"speed": [16.0, 22.0]
+		"distance": [35.0, 55.0]
 		"bob": [2.0, 4.5],
-		"visual_scale": 0.46,
+		"visual_scale": 1.18
 		"swim_wave_speed": 2.6,
-		"swim_wave_angle": 5.0,
+		"swim_wave_angle": 0.8
 		"acceleration": 520.0,
 		"vertical_response": 34.0,
 		"turn_roll": 11.0,
-		"tail_strength": 34.0,
+		"tail_strength": 0.0
 		"tail_speed": 5.4,
-		"body_strength": 7.0,
+		"body_strength": 0.0
 		"collision": [155.0, 38.0],
 		"hook_struggle_angle": 27.0,
 		"fight": [235.0, 0.38, 21.0, 29.0, 62.0],
 		"tension": [27.0, 23.0, 10.0],
-		"asset_status": "live"
+		"asset_status": "exact_embedded_test"
 	},
 	"Vatoz": {
 		"value": 140,
 		"habitat": "Kumluk dip / kanyon tabanı",
-		"depth_label": "35–58 m",
+		"depth_label": "10–15 m (TEST)"
 		"texture_path": "res://assets/fish/vatoz.svg",
 		"behavior_id": "glide",
-		"target_count": 2,
-		"spawn_x": [2200.0, 7200.0],
-		"spawn_y": [1550.0, 2200.0],
-		"speed": [34.0, 48.0],
-		"distance": [360.0, 620.0],
+		"target_count": 1
+		"spawn_x": [800.0, 850.0]
+		"spawn_y": [780.0, 810.0]
+		"speed": [16.0, 22.0]
+		"distance": [35.0, 60.0]
 		"bob": [7.0, 12.0],
-		"visual_scale": 0.46,
+		"visual_scale": 1.18
 		"swim_wave_speed": 1.45,
-		"swim_wave_angle": 1.2,
+		"swim_wave_angle": 0.6
 		"acceleration": 95.0,
 		"vertical_response": 22.0,
 		"turn_roll": 4.0,
-		"tail_strength": 8.0,
+		"tail_strength": 0.0
 		"tail_speed": 2.3,
-		"body_strength": 6.5,
+		"body_strength": 0.0
 		"collision": [150.0, 78.0],
 		"hook_struggle_angle": 10.0,
 		"fight": [185.0, 0.52, 20.0, 27.0, 70.0],
 		"tension": [24.0, 27.0, 8.0],
-		"asset_status": "live"
+		"asset_status": "exact_embedded_test"
 	},
 	"Deniz Şeytanı": {
 		"value": 360,
 		"habitat": "Karanlık kanyon / dip avcısı",
-		"depth_label": "82–98 m",
+		"depth_label": "10–15 m (TEST)"
 		"texture_path": "res://assets/fish/deniz_seytani.svg",
 		"behavior_id": "lurker",
-		"target_count": 1,
-		"spawn_x": [5600.0, 9800.0],
-		"spawn_y": [3120.0, 3650.0],
-		"speed": [24.0, 34.0],
-		"distance": [180.0, 340.0],
+		"target_count": 1
+		"spawn_x": [1000.0, 1050.0]
+		"spawn_y": [840.0, 870.0]
+		"speed": [12.0, 18.0]
+		"distance": [30.0, 50.0]
 		"bob": [8.0, 14.0],
-		"visual_scale": 0.44,
+		"visual_scale": 1.22
 		"swim_wave_speed": 1.55,
-		"swim_wave_angle": 3.8,
+		"swim_wave_angle": 0.6
 		"acceleration": 88.0,
 		"vertical_response": 24.0,
 		"turn_roll": 8.0,
-		"tail_strength": 13.0,
+		"tail_strength": 0.0
 		"tail_speed": 3.0,
-		"body_strength": 3.4,
+		"body_strength": 0.0
 		"collision": [135.0, 92.0],
 		"hook_struggle_angle": 17.0,
 		"fight": [205.0, 0.44, 16.0, 36.0, 52.0],
 		"tension": [34.0, 20.0, 13.5],
-		"asset_status": "live"
+		"asset_status": "exact_embedded_test"
 	},
 	"Kalamar": {
 		"value": 205,
 		"habitat": "Derin açık su / kanyon ağzı",
-		"depth_label": "64–90 m",
+		"depth_label": "10–15 m (TEST)"
 		"texture_path": "res://assets/fish/kalamar.svg",
 		"behavior_id": "jet",
-		"target_count": 2,
-		"spawn_x": [4300.0, 9200.0],
-		"spawn_y": [2450.0, 3340.0],
-		"speed": [42.0, 58.0],
-		"distance": [280.0, 520.0],
+		"target_count": 1
+		"spawn_x": [700.0, 750.0]
+		"spawn_y": [750.0, 780.0]
+		"speed": [18.0, 24.0]
+		"distance": [35.0, 60.0]
 		"bob": [10.0, 17.0],
-		"visual_scale": 0.45,
+		"visual_scale": 1.18
 		"swim_wave_speed": 2.2,
-		"swim_wave_angle": 4.4,
+		"swim_wave_angle": 0.8
 		"acceleration": 540.0,
 		"vertical_response": 72.0,
 		"turn_roll": 12.0,
-		"tail_strength": 15.0,
+		"tail_strength": 0.0
 		"tail_speed": 4.6,
-		"body_strength": 6.0,
+		"body_strength": 0.0
 		"collision": [118.0, 86.0],
 		"hook_struggle_angle": 25.0,
 		"fight": [255.0, 0.34, 18.0, 33.0, 58.0],
 		"tension": [31.0, 22.0, 11.5],
-		"asset_status": "live"
+		"asset_status": "exact_embedded_test"
 	}
 
 }
@@ -387,6 +389,13 @@ static func get_target_count(fish_type: String) -> int:
 
 
 static func get_texture(fish_type: String) -> Texture2D:
+	# Yeni 5 tur icin kullanicinin onayladigi birebir raster sanatini,
+	# Godot importer'a bagimli olmadan base64 parcalarindan kur.
+	if FishExactArt.has_fish(fish_type):
+		var exact_texture: Texture2D = FishExactArt.get_texture(fish_type)
+		if exact_texture != null:
+			return exact_texture
+
 	var texture_path: String = String(get_profile(fish_type).get("texture_path", ""))
 	if texture_path.is_empty():
 		push_error("FISH TEXTURE: empty texture path for " + fish_type)

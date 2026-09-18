@@ -522,15 +522,25 @@ func update_swim_animation(delta: float) -> void:
 	var vertical_error: float = behavior_vertical_target - behavior_vertical_offset
 	var motion_pitch: float = deg_to_rad(clampf(vertical_error * 0.045, -4.5, 4.5))
 	var wave_rotation: float = deg_to_rad(wave * swim_wave_angle * 0.34)
-	fish_sprite.rotation = wave_rotation + motion_pitch + turn_roll
-	fish_sprite.skew = wave * 0.024
+	var exact_art: bool = FishCatalog.is_wave_1_species(fish_type)
+
+	# Onayli 5 raster balikta resmi bukup karartma: kaynak goruntu birebir kalsin.
+	if exact_art:
+		fish_sprite.rotation = motion_pitch * 0.25 + turn_roll * 0.25
+		fish_sprite.skew = 0.0
+	else:
+		fish_sprite.rotation = wave_rotation + motion_pitch + turn_roll
+		fish_sprite.skew = wave * 0.024
 
 	var speed_ratio: float = clampf(absf(current_swim_velocity_x) / maxf(swim_speed, 1.0), 0.25, 2.6)
-	var stretch_x: float = 1.0 + minf(speed_ratio - 1.0, 1.0) * 0.025
-	var squash_y: float = 1.0 - absf(wave) * 0.018
-	if was_dashing:
-		stretch_x += 0.035
-		squash_y -= 0.025
+	var stretch_x: float = 1.0
+	var squash_y: float = 1.0
+	if not exact_art:
+		stretch_x = 1.0 + minf(speed_ratio - 1.0, 1.0) * 0.025
+		squash_y = 1.0 - absf(wave) * 0.018
+		if was_dashing:
+			stretch_x += 0.035
+			squash_y -= 0.025
 
 	fish_sprite.scale = Vector2(base_sprite_scale.x * stretch_x, base_sprite_scale.y * squash_y)
 	global_position.y = start_y + behavior_vertical_offset + slow_wave * bob_height
@@ -542,6 +552,9 @@ func update_swim_animation(delta: float) -> void:
 		lerpf(1.0, 0.94, depth_ratio),
 		1.0
 	)
+
+	if exact_art:
+		base_modulate = Color.WHITE
 
 	if fish_type == "Fener Balığı":
 		var lure_pulse: float = 0.78 + absf(sin(behavior_time * 2.35)) * 0.34
@@ -674,6 +687,8 @@ func update_sprite_direction() -> void:
 
 func play_turn_animation() -> void:
 	turn_roll = -direction * deg_to_rad(turn_roll_strength)
+	if FishCatalog.is_wave_1_species(fish_type):
+		return
 	var tween: Tween = create_tween()
 	tween.set_trans(Tween.TRANS_SINE)
 	tween.set_ease(Tween.EASE_OUT)
