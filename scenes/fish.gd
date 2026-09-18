@@ -880,8 +880,8 @@ render_mode unshaded;
 
 uniform sampler2D fish_texture : source_color, filter_linear;
 uniform float flap_phase = 0.0;
-uniform float flap_amplitude = 9.0;
-uniform float tail_amplitude = 3.0;
+uniform float flap_amplitude = 13.5;
+uniform float tail_amplitude = 3.4;
 uniform float glide_lift = 0.0;
 
 void vertex() {
@@ -890,34 +890,40 @@ void vertex() {
 	float y_delta = UV.y - center_y;
 	float edge_distance = abs(y_delta);
 
-	// Gövde merkezi sabit kalsın, dış kanat kenarlarına gidildikçe hareket büyüsün.
-	float edge_mask = smoothstep(0.075, 0.34, edge_distance);
+	// Gövde merkezi sabit kalsın; kanat ucuna yaklaştıkça kıvrım katlanarak büyüsün.
+	float edge_mask = smoothstep(0.065, 0.33, edge_distance);
+	float tip_mask = pow(edge_mask, 1.55);
 	float body_core = 1.0 - smoothstep(0.03, 0.115, edge_distance);
 
 	// Pektoral yüzgeç bölgesi: kuyruğu ve baş ucunu mümkün olduğunca dışarıda bırak.
-	float rear_fade = smoothstep(0.18, 0.34, UV.x);
-	float head_fade = 1.0 - smoothstep(0.76, 0.96, UV.x);
+	float rear_fade = smoothstep(0.17, 0.33, UV.x);
+	float head_fade = 1.0 - smoothstep(0.77, 0.96, UV.x);
 	float wing_mask = edge_mask * rear_fade * head_fade;
 
-	// Gerçek vatozda dalga ön kenardan arka kenara doğru ilerler.
-	// Üst ve alt kanatlar zıt yönde bükülerek disk silüetini açıp kapatır.
-	float travel = (1.0 - UV.x) * 6.15;
+	// Ana kanat dalgası önden arkaya akar.
+	float travel = (1.0 - UV.x) * 5.65;
 	float wing_wave = sin(flap_phase + travel);
+
+	// Kanat uçlarında ikinci, gecikmeli bir esneme vardır.
+	// Bu küçük ikinci dalga videodaki daha canlı "çırpma" hissini verir.
+	float tip_wave = sin(flap_phase * 0.86 + travel * 1.18 + 0.72);
+
 	float side = y_delta >= 0.0 ? 1.0 : -1.0;
 	VERTEX.y += side * wing_wave * flap_amplitude * wing_mask;
+	VERTEX.y += side * tip_wave * flap_amplitude * 0.34 * tip_mask * rear_fade * head_fade;
 
-	// Kanat aşağı-yukarı hareket ederken yatayda çok hafif esneme:
-	// 2D resimde hacim hissi verir, fakat merkez gövdeyi bozmaz.
-	VERTEX.x += cos(flap_phase + travel + 0.85) * flap_amplitude * 0.075 * wing_mask;
+	// Kanat vuruşunda kenarlar hafif ileri-geri esner.
+	VERTEX.x += cos(flap_phase + travel + 0.85) * flap_amplitude * 0.095 * wing_mask;
+	VERTEX.x += cos(flap_phase * 0.82 + travel * 1.12) * flap_amplitude * 0.035 * tip_mask;
 
-	// Uzun kuyruk itiş üretmiyor; kanat dalgasını gecikmeli ve çok küçük takip ediyor.
+	// Uzun kuyruk itiş üretmiyor; kanat hareketini gecikmeli takip ediyor.
 	float tail_x = 1.0 - smoothstep(0.16, 0.52, UV.x);
 	float tail_y = 1.0 - smoothstep(0.055, 0.18, abs(UV.y - 0.43));
 	float tail_mask = tail_x * tail_y;
-	float tail_wave = sin(flap_phase * 0.72 + UV.x * 8.8 + 1.35);
+	float tail_wave = sin(flap_phase * 0.68 + UV.x * 8.2 + 1.55);
 	VERTEX.y += tail_wave * tail_amplitude * tail_mask;
 
-	// Merkez disk solunum/yüzdürme için yalnızca çok küçük yukarı-aşağı hareket eder.
+	// Merkez disk çok az yükselip alçalır; asıl hareket kanatlarda kalır.
 	VERTEX.y += glide_lift * body_core * head_fade;
 }
 
@@ -931,8 +937,8 @@ void fragment() {
 	material.shader = shader
 	material.set_shader_parameter("fish_texture", fish_sprite.texture)
 	material.set_shader_parameter("flap_phase", 0.0)
-	material.set_shader_parameter("flap_amplitude", 9.0)
-	material.set_shader_parameter("tail_amplitude", 3.0)
+	material.set_shader_parameter("flap_amplitude", 13.5)
+	material.set_shader_parameter("tail_amplitude", 3.4)
 	material.set_shader_parameter("glide_lift", 0.0)
 	mesh_instance.material = material
 	return mesh_instance
@@ -1076,16 +1082,16 @@ func _update_ray_rig(delta: float, speed_ratio: float) -> void:
 		return
 
 	var speed_factor: float = clampf(speed_ratio, 0.35, 2.2)
-	# Vatoz hızlandıkça kanatlarını biraz daha sık vurur; normalde ağır ve sakin süzülür.
-	var flap_rate: float = lerpf(1.55, 2.65, clampf((speed_factor - 0.35) / 1.85, 0.0, 1.0))
+	# Kanat vuruşu biraz daha geniş; hızlanınca frekans artar ama telaşlı görünmez.
+	var flap_rate: float = lerpf(1.42, 2.45, clampf((speed_factor - 0.35) / 1.85, 0.0, 1.0))
 	rig_time += delta
 
 	var ray_material: ShaderMaterial = rig_ray_mesh.material as ShaderMaterial
 	if ray_material != null:
 		var phase: float = rig_time * flap_rate + swim_phase
-		var amplitude: float = lerpf(7.5, 11.5, clampf(speed_factor / 2.0, 0.0, 1.0))
-		var tail_amount: float = lerpf(2.0, 3.8, clampf(speed_factor / 2.0, 0.0, 1.0))
-		var lift: float = sin(phase * 0.52 + 0.6) * 0.75
+		var amplitude: float = lerpf(11.5, 16.8, clampf(speed_factor / 2.0, 0.0, 1.0))
+		var tail_amount: float = lerpf(2.6, 4.4, clampf(speed_factor / 2.0, 0.0, 1.0))
+		var lift: float = sin(phase * 0.50 + 0.6) * 0.90
 
 		ray_material.set_shader_parameter("flap_phase", phase)
 		ray_material.set_shader_parameter("flap_amplitude", amplitude)
