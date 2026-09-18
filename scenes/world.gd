@@ -1,5 +1,7 @@
 extends Node2D
 
+const FishCatalog = preload("res://scenes/fish_catalog.gd")
+
 const MAX_UPGRADE_LEVEL: int = 5
 const UPGRADE_COSTS: Array[int] = [50, 100, 175, 275, 400]
 const WATER_SURFACE_Y: float = 360.0
@@ -8,23 +10,8 @@ const CAMERA_HARBOR_X: float = -160.0
 const BASE_DEPTH_METERS: int = 50
 const DEPTH_METERS_PER_LEVEL: int = 10
 
-const FISH_ORDER: Array[String] = [
-	"Sardalya",
-	"Levrek",
-	"Uskumru",
-	"Ton Balığı",
-	"Kılıç Balığı",
-	"Köpekbalığı",
-	"Fener Balığı"
-]
+const FISH_ORDER: Array[String] = FishCatalog.FISH_ORDER
 
-const SARDALYA_TEXTURE: Texture2D = preload("res://assets/sardalya.png")
-const LEVREK_TEXTURE: Texture2D = preload("res://assets/levrek2.png")
-const USKUMRU_TEXTURE: Texture2D = preload("res://assets/uskumru.png")
-const TON_BALIGI_TEXTURE: Texture2D = preload("res://assets/tonbaligi.png")
-const KILIC_BALIGI_TEXTURE: Texture2D = preload("res://assets/kilic_baligi.svg")
-const KOPEKBALIGI_TEXTURE: Texture2D = preload("res://assets/kopekbaligi.svg")
-const FENER_BALIGI_TEXTURE: Texture2D = preload("res://assets/fener_baligi.svg")
 
 @onready var dock_prompt: Label = $DockPrompt
 @onready var dock_menu: Panel = $DockMenu
@@ -76,18 +63,12 @@ var _surface_shadow: Line2D
 var _surface_foam: Line2D
 var _camera_tween: Tween
 
-var discovered_fish: Dictionary = {
-	"Sardalya": false,
-	"Levrek": false,
-	"Uskumru": false,
-	"Ton Balığı": false,
-	"Kılıç Balığı": false,
-	"Köpekbalığı": false,
-	"Fener Balığı": false
-}
+var discovered_fish: Dictionary = {}
+
 
 
 func _ready() -> void:
+	discovered_fish = FishCatalog.create_discovery_state()
 	dock_prompt.visible = false
 	dock_menu.visible = false
 	upgrade_menu.visible = false
@@ -349,81 +330,19 @@ func _refresh_fish_book() -> void:
 
 
 func _get_fish_texture(fish_type: String) -> Texture2D:
-	match fish_type:
-		"Levrek":
-			return LEVREK_TEXTURE
-		"Uskumru":
-			return USKUMRU_TEXTURE
-		"Ton Balığı":
-			return TON_BALIGI_TEXTURE
-		"Kılıç Balığı":
-			return KILIC_BALIGI_TEXTURE
-		"Köpekbalığı":
-			return KOPEKBALIGI_TEXTURE
-		"Fener Balığı":
-			return FENER_BALIGI_TEXTURE
-		_:
-			return SARDALYA_TEXTURE
+	return FishCatalog.get_texture(fish_type)
 
 
 func _fish_value(fish_type: String) -> int:
-	match fish_type:
-		"Sardalya":
-			return 10
-		"Levrek":
-			return 25
-		"Uskumru":
-			return 40
-		"Ton Balığı":
-			return 75
-		"Kılıç Balığı":
-			return 130
-		"Köpekbalığı":
-			return 220
-		"Fener Balığı":
-			return 300
-		_:
-			return 0
+	return FishCatalog.get_value(fish_type)
 
 
 func _fish_habitat(fish_type: String) -> String:
-	match fish_type:
-		"Sardalya":
-			return "Sığ su / sürüler"
-		"Levrek":
-			return "Orta sular"
-		"Uskumru":
-			return "Açık deniz"
-		"Ton Balığı":
-			return "Derin açık deniz"
-		"Kılıç Balığı":
-			return "Uzak açık deniz"
-		"Köpekbalığı":
-			return "Derin av bölgesi"
-		"Fener Balığı":
-			return "Karanlık derinlik"
-		_:
-			return "Bilinmiyor"
+	return FishCatalog.get_habitat(fish_type)
 
 
 func _fish_depth(fish_type: String) -> String:
-	match fish_type:
-		"Sardalya":
-			return "8–12 m"
-		"Levrek":
-			return "15–25 m"
-		"Uskumru":
-			return "25–38 m"
-		"Ton Balığı":
-			return "38–50 m"
-		"Kılıç Balığı":
-			return "52–62 m"
-		"Köpekbalığı":
-			return "68–82 m"
-		"Fener Balığı":
-			return "88–100 m"
-		_:
-			return "???"
+	return FishCatalog.get_depth_label(fish_type)
 
 
 func _set_harbor_camera(active: bool) -> void:

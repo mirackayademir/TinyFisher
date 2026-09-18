@@ -1,5 +1,7 @@
 extends Area2D
 
+const FishCatalog = preload("res://scenes/fish_catalog.gd")
+
 @export var fish_type: String = "Sardalya"
 @export var fish_value: int = 10
 
@@ -46,14 +48,6 @@ var was_dashing: bool = false
 var angler_glow_outer: Polygon2D
 var angler_glow_inner: Polygon2D
 var sword_speed_trail: Line2D
-
-const SARDALYA_TEXTURE: Texture2D = preload("res://assets/sardalya.png")
-const LEVREK_TEXTURE: Texture2D = preload("res://assets/levrek2.png")
-const USKUMRU_TEXTURE: Texture2D = preload("res://assets/uskumru.png")
-const TON_BALIGI_TEXTURE: Texture2D = preload("res://assets/tonbaligi.png")
-const KILIC_BALIGI_TEXTURE: Texture2D = preload("res://assets/kilic_baligi.svg")
-const KOPEKBALIGI_TEXTURE: Texture2D = preload("res://assets/kopekbaligi.svg")
-const FENER_BALIGI_TEXTURE: Texture2D = preload("res://assets/fener_baligi.svg")
 
 @onready var fish_sprite: Sprite2D = $FishSprite
 @onready var fish_collision: CollisionShape2D = $CollisionShape2D
@@ -128,20 +122,20 @@ func update_species_behavior(delta: float) -> void:
 	behavior_vertical_target = 0.0
 	was_dashing = false
 
-	match fish_type:
-		"Sardalya":
+	match FishCatalog.get_behavior_id(fish_type):
+		"school":
 			_update_sardine_behavior()
-		"Levrek":
+		"curious":
 			_update_levrek_behavior()
-		"Uskumru":
+		"burst":
 			_update_uskumru_behavior()
-		"Ton Balığı":
+		"surge":
 			_update_tuna_behavior()
-		"Kılıç Balığı":
+		"dash":
 			_update_swordfish_behavior()
-		"Köpekbalığı":
+		"predator":
 			_update_shark_behavior()
-		"Fener Balığı":
+		"hover":
 			_update_angler_behavior()
 		_:
 			behavior_speed_multiplier = 1.0
@@ -417,112 +411,24 @@ func update_swim_animation(delta: float) -> void:
 
 func update_fish_visual() -> void:
 	last_visual_type = fish_type
+	var profile: Dictionary = FishCatalog.get_profile(fish_type)
+	var texture: Texture2D = FishCatalog.get_texture(fish_type)
+	if texture == null:
+		texture = FishCatalog.get_texture("Sardalya")
+	fish_sprite.texture = texture
 
-	match fish_type:
-		"Sardalya":
-			fish_sprite.texture = SARDALYA_TEXTURE
-			base_sprite_scale = Vector2(0.06, 0.06)
-			swim_wave_speed = 4.0
-			swim_wave_angle = 2.5
-			bob_height = 3.5
-			swim_acceleration = 320.0
-			vertical_response = 52.0
-			turn_roll_strength = 5.0
-			base_tail_strength = 26.0
-			base_tail_speed = 7.0
-			base_body_strength = 4.0
-			_set_collision_size(Vector2(55.0, 24.0))
-		"Levrek":
-			fish_sprite.texture = LEVREK_TEXTURE
-			base_sprite_scale = Vector2(0.08, 0.08)
-			swim_wave_speed = 3.3
-			swim_wave_angle = 3.0
-			bob_height = 4.5
-			swim_acceleration = 235.0
-			vertical_response = 46.0
-			turn_roll_strength = 6.0
-			base_tail_strength = 24.0
-			base_tail_speed = 5.8
-			base_body_strength = 4.0
-			_set_collision_size(Vector2(68.0, 30.0))
-		"Uskumru":
-			fish_sprite.texture = USKUMRU_TEXTURE
-			base_sprite_scale = Vector2(0.09, 0.09)
-			swim_wave_speed = 4.8
-			swim_wave_angle = 4.0
-			bob_height = 5.0
-			swim_acceleration = 390.0
-			vertical_response = 68.0
-			turn_roll_strength = 8.0
-			base_tail_strength = 30.0
-			base_tail_speed = 8.2
-			base_body_strength = 4.5
-			_set_collision_size(Vector2(76.0, 30.0))
-		"Ton Balığı":
-			fish_sprite.texture = TON_BALIGI_TEXTURE
-			base_sprite_scale = Vector2(0.12, 0.12)
-			swim_wave_speed = 2.4
-			swim_wave_angle = 2.0
-			bob_height = 6.0
-			swim_acceleration = 170.0
-			vertical_response = 38.0
-			turn_roll_strength = 5.0
-			base_tail_strength = 24.0
-			base_tail_speed = 4.8
-			base_body_strength = 3.8
-			_set_collision_size(Vector2(95.0, 38.0))
-		"Kılıç Balığı":
-			fish_sprite.texture = KILIC_BALIGI_TEXTURE
-			base_sprite_scale = Vector2(0.40, 0.40)
-			swim_wave_speed = 3.1
-			swim_wave_angle = 2.2
-			bob_height = 6.0
-			swim_acceleration = 430.0
-			vertical_response = 58.0
-			turn_roll_strength = 7.5
-			base_tail_strength = 18.0
-			base_tail_speed = 6.4
-			base_body_strength = 2.6
-			_set_collision_size(Vector2(165.0, 50.0))
-		"Köpekbalığı":
-			fish_sprite.texture = KOPEKBALIGI_TEXTURE
-			base_sprite_scale = Vector2(0.43, 0.43)
-			swim_wave_speed = 1.65
-			swim_wave_angle = 1.35
-			bob_height = 7.0
-			swim_acceleration = 92.0
-			vertical_response = 26.0
-			turn_roll_strength = 10.0
-			base_tail_strength = 15.0
-			base_tail_speed = 3.6
-			base_body_strength = 2.2
-			_set_collision_size(Vector2(185.0, 72.0))
-		"Fener Balığı":
-			fish_sprite.texture = FENER_BALIGI_TEXTURE
-			base_sprite_scale = Vector2(0.43, 0.43)
-			swim_wave_speed = 1.75
-			swim_wave_angle = 3.0
-			bob_height = 10.0
-			swim_acceleration = 70.0
-			vertical_response = 20.0
-			turn_roll_strength = 7.0
-			base_tail_strength = 10.0
-			base_tail_speed = 3.2
-			base_body_strength = 2.8
-			_set_collision_size(Vector2(120.0, 84.0))
-		_:
-			fish_sprite.texture = SARDALYA_TEXTURE
-			base_sprite_scale = Vector2(0.06, 0.06)
-			swim_wave_speed = 4.0
-			swim_wave_angle = 2.5
-			bob_height = 3.5
-			swim_acceleration = 260.0
-			vertical_response = 42.0
-			turn_roll_strength = 5.0
-			base_tail_strength = 24.0
-			base_tail_speed = 6.0
-			base_body_strength = 4.0
-			_set_collision_size(Vector2(55.0, 24.0))
+	var visual_scale: float = float(profile.get("visual_scale", 0.06))
+	base_sprite_scale = Vector2.ONE * visual_scale
+	swim_wave_speed = float(profile.get("swim_wave_speed", 4.0))
+	swim_wave_angle = float(profile.get("swim_wave_angle", 2.5))
+	bob_height = float(profile.get("bob", [3.5, 3.5])[0])
+	swim_acceleration = float(profile.get("acceleration", 260.0))
+	vertical_response = float(profile.get("vertical_response", 42.0))
+	turn_roll_strength = float(profile.get("turn_roll", 5.0))
+	base_tail_strength = float(profile.get("tail_strength", 24.0))
+	base_tail_speed = float(profile.get("tail_speed", 6.0))
+	base_body_strength = float(profile.get("body_strength", 4.0))
+	_set_collision_size(FishCatalog.get_collision_size(fish_type))
 
 	fish_sprite.scale = base_sprite_scale
 	_apply_base_shader_params()
@@ -629,13 +535,8 @@ func play_hooked_animation() -> void:
 	var tween: Tween = create_tween()
 	tween.set_trans(Tween.TRANS_SINE)
 	tween.set_ease(Tween.EASE_IN_OUT)
-	var struggle_angle: float = 18.0
-	if fish_type == "Köpekbalığı":
-		struggle_angle = 11.0
-	elif fish_type == "Fener Balığı":
-		struggle_angle = 15.0
-	elif fish_type == "Kılıç Balığı":
-		struggle_angle = 22.0
+	var profile: Dictionary = FishCatalog.get_profile(fish_type)
+	var struggle_angle: float = float(profile.get("hook_struggle_angle", 18.0))
 
 	tween.tween_property(fish_sprite, "rotation", deg_to_rad(struggle_angle), 0.07)
 	tween.tween_property(fish_sprite, "rotation", deg_to_rad(-struggle_angle), 0.07)

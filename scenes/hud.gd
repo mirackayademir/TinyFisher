@@ -1,24 +1,11 @@
 extends CanvasLayer
 
+const FishCatalog = preload("res://scenes/fish_catalog.gd")
+
 @export var max_fish_capacity: int = 8
 
-const FISH_ORDER: Array[String] = [
-	"Sardalya",
-	"Levrek",
-	"Uskumru",
-	"Ton Balığı",
-	"Kılıç Balığı",
-	"Köpekbalığı",
-	"Fener Balığı"
-]
+const FISH_ORDER: Array[String] = FishCatalog.FISH_ORDER
 
-const SARDALYA_TEXTURE: Texture2D = preload("res://assets/sardalya.png")
-const LEVREK_TEXTURE: Texture2D = preload("res://assets/levrek2.png")
-const USKUMRU_TEXTURE: Texture2D = preload("res://assets/uskumru.png")
-const TON_BALIGI_TEXTURE: Texture2D = preload("res://assets/tonbaligi.png")
-const KILIC_BALIGI_TEXTURE: Texture2D = preload("res://assets/kilic_baligi.svg")
-const KOPEKBALIGI_TEXTURE: Texture2D = preload("res://assets/kopekbaligi.svg")
-const FENER_BALIGI_TEXTURE: Texture2D = preload("res://assets/fener_baligi.svg")
 
 @onready var inventory_panel: Panel = $InventoryPanel
 @onready var inventory_slots: HBoxContainer = $InventoryPanel/InventorySlots
@@ -70,18 +57,13 @@ var inventory_icons_by_type: Dictionary = {}
 var inventory_labels_by_type: Dictionary = {}
 var discovery_state: Dictionary = {}
 
-var inventory: Dictionary = {
-	"Sardalya": 0,
-	"Levrek": 0,
-	"Uskumru": 0,
-	"Ton Balığı": 0,
-	"Kılıç Balığı": 0,
-	"Köpekbalığı": 0,
-	"Fener Balığı": 0
-}
+var inventory: Dictionary = {}
+
 
 
 func _ready() -> void:
+	inventory = FishCatalog.create_inventory_state()
+	discovery_state = FishCatalog.create_discovery_state()
 	_setup_inventory_visuals()
 	update_inventory()
 
@@ -120,12 +102,15 @@ func _setup_inventory_visuals() -> void:
 	inventory_slots.size = Vector2(518.0, 64.0)
 	inventory_slots.add_theme_constant_override("separation", 6)
 
-	_register_inventory_slot("Sardalya", slot_1, fish_icon_1, count_label_1)
-	_register_inventory_slot("Levrek", slot_2, fish_icon_2, count_label_2)
-	_register_inventory_slot("Uskumru", slot_3, fish_icon_3, count_label_3)
-	_register_inventory_slot("Ton Balığı", slot_4, fish_icon_4, count_label_4)
+	var base_slots: Array[Panel] = [slot_1, slot_2, slot_3, slot_4]
+	var base_icons: Array[TextureRect] = [fish_icon_1, fish_icon_2, fish_icon_3, fish_icon_4]
+	var base_labels: Array[Label] = [count_label_1, count_label_2, count_label_3, count_label_4]
 
-	for fish_type: String in ["Kılıç Balığı", "Köpekbalığı", "Fener Balığı"]:
+	for i: int in range(mini(4, FISH_ORDER.size())):
+		_register_inventory_slot(FISH_ORDER[i], base_slots[i], base_icons[i], base_labels[i])
+
+	for i: int in range(4, FISH_ORDER.size()):
+		var fish_type: String = FISH_ORDER[i]
 		var runtime_slot: Panel = _create_runtime_inventory_slot(fish_type)
 		var runtime_icon: TextureRect = runtime_slot.get_node("FishIcon") as TextureRect
 		var runtime_label: Label = runtime_slot.get_node("CountLabel") as Label
@@ -417,57 +402,12 @@ func show_fight_bar(fish_type: String) -> void:
 	fish_change_timer = 0.0
 	_fight_title.text = fish_type.to_upper() + "  •  MÜCADELE"
 
-	var zone_width: float = 88.0
-
-	match fish_type:
-		"Sardalya":
-			fish_move_speed = 95.0
-			fish_change_interval = 1.0
-			fight_gain_speed = 36.0
-			fight_loss_speed = 11.0
-			zone_width = 112.0
-		"Levrek":
-			fish_move_speed = 145.0
-			fish_change_interval = 0.70
-			fight_gain_speed = 31.0
-			fight_loss_speed = 17.0
-			zone_width = 92.0
-		"Uskumru":
-			fish_move_speed = 205.0
-			fish_change_interval = 0.46
-			fight_gain_speed = 26.0
-			fight_loss_speed = 23.0
-			zone_width = 76.0
-		"Ton Balığı":
-			fish_move_speed = 265.0
-			fish_change_interval = 0.32
-			fight_gain_speed = 22.0
-			fight_loss_speed = 29.0
-			zone_width = 64.0
-		"Kılıç Balığı":
-			fish_move_speed = 315.0
-			fish_change_interval = 0.27
-			fight_gain_speed = 19.0
-			fight_loss_speed = 32.0
-			zone_width = 58.0
-		"Köpekbalığı":
-			fish_move_speed = 225.0
-			fish_change_interval = 0.42
-			fight_gain_speed = 17.5
-			fight_loss_speed = 35.0
-			zone_width = 60.0
-		"Fener Balığı":
-			fish_move_speed = 180.0
-			fish_change_interval = 0.50
-			fight_gain_speed = 18.0
-			fight_loss_speed = 31.0
-			zone_width = 56.0
-		_:
-			fish_move_speed = 125.0
-			fish_change_interval = 0.8
-			fight_gain_speed = 30.0
-			fight_loss_speed = 18.0
-			zone_width = 88.0
+	var fight_profile: Array = FishCatalog.get_fight_profile(fish_type)
+	fish_move_speed = float(fight_profile[0])
+	fish_change_interval = float(fight_profile[1])
+	fight_gain_speed = float(fight_profile[2])
+	fight_loss_speed = float(fight_profile[3])
+	var zone_width: float = float(fight_profile[4])
 
 	var ease_multiplier: float = maxf(0.58, 1.0 - float(fight_ease_level) * 0.08)
 	fish_move_speed *= ease_multiplier
@@ -579,21 +519,7 @@ func _hide_catch_popup() -> void:
 
 
 func _get_fish_texture(fish_type: String) -> Texture2D:
-	match fish_type:
-		"Levrek":
-			return LEVREK_TEXTURE
-		"Uskumru":
-			return USKUMRU_TEXTURE
-		"Ton Balığı":
-			return TON_BALIGI_TEXTURE
-		"Kılıç Balığı":
-			return KILIC_BALIGI_TEXTURE
-		"Köpekbalığı":
-			return KOPEKBALIGI_TEXTURE
-		"Fener Balığı":
-			return FENER_BALIGI_TEXTURE
-		_:
-			return SARDALYA_TEXTURE
+	return FishCatalog.get_texture(fish_type)
 
 
 func update_inventory() -> void:

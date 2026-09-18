@@ -1,5 +1,7 @@
 extends Area2D
 
+const FishCatalog = preload("res://scenes/fish_catalog.gd")
+
 const BASE_DEPTH_PIXELS: float = 1700.0
 const DEPTH_PER_LEVEL: float = 350.0
 const BASE_DEPTH_METERS: int = 50
@@ -270,39 +272,10 @@ func _update_line_tension(delta: float) -> void:
 
 
 func _configure_tension_for_fish(fish_type: String) -> void:
-	match fish_type:
-		"Sardalya":
-			tension_gain_rate = 8.0
-			tension_recovery_rate = 34.0
-			tension_fish_pull = 2.0
-		"Levrek":
-			tension_gain_rate = 14.0
-			tension_recovery_rate = 30.0
-			tension_fish_pull = 4.0
-		"Uskumru":
-			tension_gain_rate = 20.0
-			tension_recovery_rate = 27.0
-			tension_fish_pull = 6.0
-		"Ton Balığı":
-			tension_gain_rate = 25.0
-			tension_recovery_rate = 25.0
-			tension_fish_pull = 8.0
-		"Kılıç Balığı":
-			tension_gain_rate = 29.0
-			tension_recovery_rate = 24.0
-			tension_fish_pull = 10.0
-		"Köpekbalığı":
-			tension_gain_rate = 35.0
-			tension_recovery_rate = 21.0
-			tension_fish_pull = 13.0
-		"Fener Balığı":
-			tension_gain_rate = 31.0
-			tension_recovery_rate = 22.0
-			tension_fish_pull = 11.0
-		_:
-			tension_gain_rate = 14.0
-			tension_recovery_rate = 30.0
-			tension_fish_pull = 4.0
+	var tension_profile: Array = FishCatalog.get_tension_profile(fish_type)
+	tension_gain_rate = float(tension_profile[0])
+	tension_recovery_rate = float(tension_profile[1])
+	tension_fish_pull = float(tension_profile[2])
 
 	var ease_level: int = int(hud.fight_ease_level)
 	tension_gain_rate = maxf(5.0, tension_gain_rate - float(ease_level) * 1.2)
