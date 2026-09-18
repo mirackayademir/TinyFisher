@@ -217,137 +217,137 @@ const PROFILES: Dictionary = {
 	"Barakuda": {
 		"value": 160,
 		"habitat": "Açık deniz / avcı",
-		"depth_label": "10–15 m (TEST)"
-		"texture_path": "res://assets/fish/barakuda.svg",
+		"depth_label": "10–15 m (TEST)",
+		"texture_path": "res://assets/fish/barakuda.png",
 		"behavior_id": "hunter",
-		"target_count": 1
-		"spawn_x": [600.0, 650.0]
-		"spawn_y": [720.0, 750.0]
-		"speed": [22.0, 28.0]
-		"distance": [40.0, 65.0]
+		"target_count": 1,
+		"spawn_x": [600.0, 650.0],
+		"spawn_y": [720.0, 750.0],
+		"speed": [22.0, 28.0],
+		"distance": [40.0, 65.0],
 		"bob": [4.0, 7.0],
-		"visual_scale": 1.18
-		"swim_wave_speed": 3.9,
-		"swim_wave_angle": 0.8
-		"acceleration": 460.0,
-		"vertical_response": 62.0,
-		"turn_roll": 7.0,
-		"tail_strength": 0.0
-		"tail_speed": 7.2,
-		"body_strength": 0.0
-		"collision": [145.0, 42.0],
-		"hook_struggle_angle": 23.0,
+		"visual_scale": 0.82,
+		"swim_wave_speed": 2.2,
+		"swim_wave_angle": 0.35,
+		"acceleration": 220.0,
+		"vertical_response": 38.0,
+		"turn_roll": 2.0,
+		"tail_strength": 0.0,
+		"tail_speed": 4.0,
+		"body_strength": 0.0,
+		"collision": [125.0, 36.0],
+		"hook_struggle_angle": 12.0,
 		"fight": [295.0, 0.30, 20.0, 31.0, 60.0],
 		"tension": [28.0, 24.0, 9.5],
-		"asset_status": "exact_embedded_test"
+		"asset_status": "exact_user_art_test"
 	},
 	"Müren": {
 		"value": 115,
 		"habitat": "Kanyon duvarları / kaya oyukları",
-		"depth_label": "10–15 m (TEST)"
-		"texture_path": "res://assets/fish/muren.svg",
+		"depth_label": "10–15 m (TEST)",
+		"texture_path": "res://assets/fish/muren.png",
 		"behavior_id": "ambush",
-		"target_count": 1
-		"spawn_x": [900.0, 950.0]
-		"spawn_y": [810.0, 840.0]
-		"speed": [16.0, 22.0]
-		"distance": [35.0, 55.0]
-		"bob": [2.0, 4.5],
-		"visual_scale": 1.18
-		"swim_wave_speed": 2.6,
-		"swim_wave_angle": 0.8
-		"acceleration": 520.0,
-		"vertical_response": 34.0,
-		"turn_roll": 11.0,
-		"tail_strength": 0.0
-		"tail_speed": 5.4,
-		"body_strength": 0.0
-		"collision": [155.0, 38.0],
-		"hook_struggle_angle": 27.0,
+		"target_count": 1,
+		"spawn_x": [900.0, 950.0],
+		"spawn_y": [810.0, 840.0],
+		"speed": [14.0, 20.0],
+		"distance": [30.0, 50.0],
+		"bob": [2.0, 4.0],
+		"visual_scale": 0.86,
+		"swim_wave_speed": 1.8,
+		"swim_wave_angle": 0.30,
+		"acceleration": 180.0,
+		"vertical_response": 28.0,
+		"turn_roll": 2.0,
+		"tail_strength": 0.0,
+		"tail_speed": 3.0,
+		"body_strength": 0.0,
+		"collision": [130.0, 34.0],
+		"hook_struggle_angle": 12.0,
 		"fight": [235.0, 0.38, 21.0, 29.0, 62.0],
 		"tension": [27.0, 23.0, 10.0],
-		"asset_status": "exact_embedded_test"
+		"asset_status": "exact_user_art_test"
 	},
 	"Vatoz": {
 		"value": 140,
 		"habitat": "Kumluk dip / kanyon tabanı",
-		"depth_label": "10–15 m (TEST)"
-		"texture_path": "res://assets/fish/vatoz.svg",
+		"depth_label": "10–15 m (TEST)",
+		"texture_path": "res://assets/fish/vatoz.png",
 		"behavior_id": "glide",
-		"target_count": 1
-		"spawn_x": [800.0, 850.0]
-		"spawn_y": [780.0, 810.0]
-		"speed": [16.0, 22.0]
-		"distance": [35.0, 60.0]
-		"bob": [7.0, 12.0],
-		"visual_scale": 1.18
-		"swim_wave_speed": 1.45,
-		"swim_wave_angle": 0.6
-		"acceleration": 95.0,
-		"vertical_response": 22.0,
-		"turn_roll": 4.0,
-		"tail_strength": 0.0
-		"tail_speed": 2.3,
-		"body_strength": 0.0
-		"collision": [150.0, 78.0],
-		"hook_struggle_angle": 10.0,
+		"target_count": 1,
+		"spawn_x": [800.0, 850.0],
+		"spawn_y": [780.0, 810.0],
+		"speed": [14.0, 20.0],
+		"distance": [30.0, 50.0],
+		"bob": [5.0, 8.0],
+		"visual_scale": 0.88,
+		"swim_wave_speed": 1.2,
+		"swim_wave_angle": 0.20,
+		"acceleration": 90.0,
+		"vertical_response": 20.0,
+		"turn_roll": 1.5,
+		"tail_strength": 0.0,
+		"tail_speed": 2.0,
+		"body_strength": 0.0,
+		"collision": [130.0, 68.0],
+		"hook_struggle_angle": 8.0,
 		"fight": [185.0, 0.52, 20.0, 27.0, 70.0],
 		"tension": [24.0, 27.0, 8.0],
-		"asset_status": "exact_embedded_test"
+		"asset_status": "exact_user_art_test"
 	},
 	"Deniz Şeytanı": {
 		"value": 360,
 		"habitat": "Karanlık kanyon / dip avcısı",
-		"depth_label": "10–15 m (TEST)"
-		"texture_path": "res://assets/fish/deniz_seytani.svg",
+		"depth_label": "10–15 m (TEST)",
+		"texture_path": "res://assets/fish/deniz_seytani.png",
 		"behavior_id": "lurker",
-		"target_count": 1
-		"spawn_x": [1000.0, 1050.0]
-		"spawn_y": [840.0, 870.0]
-		"speed": [12.0, 18.0]
-		"distance": [30.0, 50.0]
-		"bob": [8.0, 14.0],
-		"visual_scale": 1.22
-		"swim_wave_speed": 1.55,
-		"swim_wave_angle": 0.6
-		"acceleration": 88.0,
-		"vertical_response": 24.0,
-		"turn_roll": 8.0,
-		"tail_strength": 0.0
-		"tail_speed": 3.0,
-		"body_strength": 0.0
-		"collision": [135.0, 92.0],
-		"hook_struggle_angle": 17.0,
+		"target_count": 1,
+		"spawn_x": [1000.0, 1050.0],
+		"spawn_y": [840.0, 870.0],
+		"speed": [10.0, 16.0],
+		"distance": [25.0, 45.0],
+		"bob": [5.0, 9.0],
+		"visual_scale": 0.80,
+		"swim_wave_speed": 1.1,
+		"swim_wave_angle": 0.20,
+		"acceleration": 75.0,
+		"vertical_response": 18.0,
+		"turn_roll": 1.5,
+		"tail_strength": 0.0,
+		"tail_speed": 2.0,
+		"body_strength": 0.0,
+		"collision": [120.0, 72.0],
+		"hook_struggle_angle": 10.0,
 		"fight": [205.0, 0.44, 16.0, 36.0, 52.0],
 		"tension": [34.0, 20.0, 13.5],
-		"asset_status": "exact_embedded_test"
+		"asset_status": "exact_user_art_test"
 	},
 	"Kalamar": {
 		"value": 205,
 		"habitat": "Derin açık su / kanyon ağzı",
-		"depth_label": "10–15 m (TEST)"
-		"texture_path": "res://assets/fish/kalamar.svg",
+		"depth_label": "10–15 m (TEST)",
+		"texture_path": "res://assets/fish/kalamar.png",
 		"behavior_id": "jet",
-		"target_count": 1
-		"spawn_x": [700.0, 750.0]
-		"spawn_y": [750.0, 780.0]
-		"speed": [18.0, 24.0]
-		"distance": [35.0, 60.0]
-		"bob": [10.0, 17.0],
-		"visual_scale": 1.18
-		"swim_wave_speed": 2.2,
-		"swim_wave_angle": 0.8
-		"acceleration": 540.0,
-		"vertical_response": 72.0,
-		"turn_roll": 12.0,
-		"tail_strength": 0.0
-		"tail_speed": 4.6,
-		"body_strength": 0.0
-		"collision": [118.0, 86.0],
-		"hook_struggle_angle": 25.0,
+		"target_count": 1,
+		"spawn_x": [700.0, 750.0],
+		"spawn_y": [750.0, 780.0],
+		"speed": [16.0, 22.0],
+		"distance": [30.0, 50.0],
+		"bob": [6.0, 10.0],
+		"visual_scale": 0.84,
+		"swim_wave_speed": 1.5,
+		"swim_wave_angle": 0.25,
+		"acceleration": 180.0,
+		"vertical_response": 30.0,
+		"turn_roll": 2.0,
+		"tail_strength": 0.0,
+		"tail_speed": 3.0,
+		"body_strength": 0.0,
+		"collision": [120.0, 66.0],
+		"hook_struggle_angle": 10.0,
 		"fight": [255.0, 0.34, 18.0, 33.0, 58.0],
 		"tension": [31.0, 22.0, 11.5],
-		"asset_status": "exact_embedded_test"
+		"asset_status": "exact_user_art_test"
 	}
 
 }
