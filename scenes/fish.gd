@@ -630,8 +630,8 @@ func _setup_articulated_rig() -> void:
 	rig_jaw = null
 	rig_time = 0.0
 
-	# İlk tek-tek çalışma: yalnızca Barakuda.
-	if fish_type != "Barakuda" or fish_sprite.texture == null:
+	# Wave-1 animasyonlarını tek tek ekliyoruz.
+	if fish_type not in ["Barakuda", "Müren"] or fish_sprite.texture == null:
 		return
 
 	rig_texture_size = fish_sprite.texture.get_size()
@@ -639,18 +639,26 @@ func _setup_articulated_rig() -> void:
 		return
 
 	articulated_rig = Node2D.new()
-	articulated_rig.name = "BarakudaArticulatedRig"
+	articulated_rig.name = fish_type + "ArticulatedRig"
 	articulated_rig.z_index = fish_sprite.z_index
 	add_child(articulated_rig)
 
-	# Dört örtüşen parça: kuyruk -> arka gövde -> ana gövde -> kafa.
-	# Örtüşme dikişlerin görünmesini engeller; her parça kendi ekleminden döner.
-	rig_tail = _create_rig_region("TailFin", 0.00, 0.28, 0.25, 1)
-	rig_rear_body = _create_rig_region("RearBody", 0.20, 0.53, 0.49, 2)
-	rig_core_body = _create_rig_region("CoreBody", 0.45, 0.79, 0.72, 3)
-	rig_head = _create_rig_region("Head", 0.68, 1.00, 0.70, 4)
+	if fish_type == "Barakuda":
+		# Barakuda: baş stabil, kuyrukta güçlü itiş.
+		rig_tail = _create_rig_region("TailFin", 0.00, 0.28, 0.25, 1)
+		rig_rear_body = _create_rig_region("RearBody", 0.20, 0.53, 0.49, 2)
+		rig_core_body = _create_rig_region("CoreBody", 0.45, 0.79, 0.72, 3)
+		rig_head = _create_rig_region("Head", 0.68, 1.00, 0.70, 4)
+		_setup_barracuda_face_details()
+	elif fish_type == "Müren":
+		# Müren: uzun gövde boyunca daha geniş örtüşme.
+		# Böylece dönüşler kesik değil, baştan kuyruğa akan S kıvrımı gibi görünür.
+		rig_tail = _create_rig_region("MorayTail", 0.00, 0.30, 0.27, 1)
+		rig_rear_body = _create_rig_region("MorayRear", 0.18, 0.50, 0.46, 2)
+		rig_core_body = _create_rig_region("MorayCore", 0.38, 0.72, 0.68, 3)
+		rig_head = _create_rig_region("MorayHead", 0.60, 1.00, 0.64, 4)
+		_setup_moray_face_details()
 
-	_setup_barracuda_face_details()
 	fish_sprite.visible = false
 	_update_rig_direction()
 
@@ -716,10 +724,52 @@ func _setup_barracuda_face_details() -> void:
 	articulated_rig.add_child(rig_jaw)
 
 
+func _setup_moray_face_details() -> void:
+	# Mürenin solungaç deliği küçük ama ritmik görünür.
+	rig_gill = Line2D.new()
+	rig_gill.name = "MorayGillPulse"
+	rig_gill.width = 1.55
+	rig_gill.default_color = Color(0.10, 0.12, 0.08, 0.62)
+	rig_gill.antialiased = true
+	var gx: float = rig_texture_size.x * 0.785 - rig_texture_size.x * 0.5
+	var gy: float = -rig_texture_size.y * 0.5
+	rig_gill.points = PackedVector2Array([
+		Vector2(gx, gy + rig_texture_size.y * 0.44),
+		Vector2(gx - 2.0, gy + rig_texture_size.y * 0.52),
+		Vector2(gx + 1.0, gy + rig_texture_size.y * 0.59)
+	])
+	rig_gill.z_index = 7
+	articulated_rig.add_child(rig_gill)
+
+	# Müren ağzı doğal olarak sürekli hafif açıktır.
+	# Pusuda yavaş nefesle, saldırıda daha belirgin açılır.
+	rig_jaw = Line2D.new()
+	rig_jaw.name = "MorayJawBreath"
+	rig_jaw.width = 1.25
+	rig_jaw.default_color = Color(0.055, 0.065, 0.045, 0.48)
+	rig_jaw.antialiased = true
+	var y0: float = -rig_texture_size.y * 0.5 + rig_texture_size.y * 0.56
+	rig_jaw.points = PackedVector2Array([
+		Vector2(rig_texture_size.x * 0.80 - rig_texture_size.x * 0.5, y0),
+		Vector2(rig_texture_size.x * 0.90 - rig_texture_size.x * 0.5, y0 + 2.0),
+		Vector2(rig_texture_size.x * 0.985 - rig_texture_size.x * 0.5, y0 + 0.8)
+	])
+	rig_jaw.z_index = 8
+	articulated_rig.add_child(rig_jaw)
+
+
 func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
-	if fish_type != "Barakuda" or articulated_rig == null:
+	if articulated_rig == null:
 		return
 
+	match fish_type:
+		"Barakuda":
+			_update_barracuda_rig(delta, speed_ratio)
+		"Müren":
+			_update_moray_rig(delta, speed_ratio)
+
+
+func _update_barracuda_rig(delta: float, speed_ratio: float) -> void:
 	var speed_factor: float = clampf(speed_ratio, 0.55, 2.6)
 	var cruise_factor: float = lerpf(0.82, 1.72, (speed_factor - 0.55) / 2.05)
 	rig_time += delta * cruise_factor
@@ -741,33 +791,72 @@ func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
 	if rig_core_body != null:
 		rig_core_body.rotation = main_wave * tail_amp * 0.13
 	if rig_head != null:
-		# Baş neredeyse sabit; sadece gerçek balıktaki mikro dengeleme hareketi.
 		rig_head.rotation = -main_wave * deg_to_rad(0.65) + sin(rig_time * 0.92) * deg_to_rad(0.20)
 
-	# Solungaç nefesi.
 	if rig_gill != null:
 		rig_gill.scale.x = lerpf(0.92, 1.10, breath)
 		rig_gill.scale.y = lerpf(0.96, 1.06, breath)
 		rig_gill.default_color.a = lerpf(0.28, 0.62, breath)
 
-	# Çene hareketi: 1–2 piksel; abartısız.
 	if rig_jaw != null:
 		var jaw_points: PackedVector2Array = rig_jaw.points
 		if jaw_points.size() == 3:
 			var jaw_open: float = lerpf(0.0, 1.65, breath)
-			jaw_points[1].y = (
-				-rig_texture_size.y * 0.5
-				+ rig_texture_size.y * 0.59
-				+ 1.5
-				+ jaw_open
-			)
-			jaw_points[2].y = (
-				-rig_texture_size.y * 0.5
-				+ rig_texture_size.y * 0.59
-				+ 0.5
-				+ jaw_open * 0.55
-			)
+			jaw_points[1].y = -rig_texture_size.y * 0.5 + rig_texture_size.y * 0.59 + 1.5 + jaw_open
+			jaw_points[2].y = -rig_texture_size.y * 0.5 + rig_texture_size.y * 0.59 + 0.5 + jaw_open * 0.55
 			rig_jaw.points = jaw_points
+
+	_update_rig_direction()
+
+
+func _update_moray_rig(delta: float, speed_ratio: float) -> void:
+	var speed_factor: float = clampf(speed_ratio, 0.40, 2.9)
+	var motion_rate: float = lerpf(0.68, 1.65, (speed_factor - 0.40) / 2.50)
+	if was_dashing:
+		motion_rate *= 1.28
+	rig_time += delta * motion_rate
+
+	# Müren yılan gibi bütün gövdeyi kullanır.
+	# Faz farkları S kıvrımını kuyruktan başa doğru taşır.
+	var core_wave: float = sin(rig_time * 3.35 + swim_phase)
+	var rear_wave: float = sin(rig_time * 3.35 + swim_phase + 0.92)
+	var tail_wave: float = sin(rig_time * 3.35 + swim_phase + 1.82)
+	var head_wave: float = sin(rig_time * 3.35 + swim_phase - 0.38)
+	var breath: float = (sin(rig_time * 1.28 + swim_phase) + 1.0) * 0.5
+
+	var body_amp: float = deg_to_rad(7.0 + minf(speed_factor, 2.4) * 3.1)
+	if was_dashing:
+		body_amp *= 1.35
+
+	if rig_tail != null:
+		rig_tail.rotation = tail_wave * body_amp * 1.00
+	if rig_rear_body != null:
+		rig_rear_body.rotation = rear_wave * body_amp * 0.72
+	if rig_core_body != null:
+		rig_core_body.rotation = core_wave * body_amp * 0.42
+	if rig_head != null:
+		# Baş gövdeyi takip eder ama avı görebilmek için daha stabil kalır.
+		rig_head.rotation = head_wave * body_amp * 0.13
+
+	# Yılanvari hareket sırasında tüm silüet çok hafif yukarı-aşağı nefes alır.
+	articulated_rig.position.y = sin(rig_time * 1.62 + swim_phase) * 0.85
+
+	if rig_gill != null:
+		rig_gill.scale.x = lerpf(0.88, 1.16, breath)
+		rig_gill.scale.y = lerpf(0.94, 1.10, breath)
+		rig_gill.default_color.a = lerpf(0.36, 0.78, breath)
+
+	if rig_jaw != null:
+		var jaw_points: PackedVector2Array = rig_jaw.points
+		if jaw_points.size() == 3:
+			var base_open: float = lerpf(1.0, 2.8, breath)
+			var attack_open: float = 3.8 if was_dashing else 0.0
+			var jaw_open: float = base_open + attack_open
+			var jaw_y: float = -rig_texture_size.y * 0.5 + rig_texture_size.y * 0.56
+			jaw_points[1].y = jaw_y + 2.0 + jaw_open
+			jaw_points[2].y = jaw_y + 0.8 + jaw_open * 0.62
+			rig_jaw.points = jaw_points
+		rig_jaw.default_color.a = 0.62 if was_dashing else lerpf(0.36, 0.55, breath)
 
 	_update_rig_direction()
 
@@ -937,5 +1026,6 @@ func release_from_hook() -> void:
 	fish_sprite.scale = base_sprite_scale
 	if articulated_rig != null:
 		articulated_rig.rotation = 0.0
+		articulated_rig.position = Vector2.ZERO
 		articulated_rig.modulate = Color.WHITE
 		_update_rig_direction()
