@@ -61,6 +61,7 @@ var rig_moray_mid_tail: Node2D
 var rig_moray_front_body: Node2D
 var rig_moray_mesh: MeshInstance2D
 var rig_ray_mesh: MeshInstance2D
+var rig_squid_mesh: MeshInstance2D
 var rig_sea_devil_mesh: MeshInstance2D
 var rig_sea_glow_1: Polygon2D
 var rig_sea_glow_2: Polygon2D
@@ -640,6 +641,7 @@ func _setup_articulated_rig() -> void:
 	rig_moray_front_body = null
 	rig_moray_mesh = null
 	rig_ray_mesh = null
+	rig_squid_mesh = null
 	rig_sea_devil_mesh = null
 	rig_sea_glow_1 = null
 	rig_sea_glow_2 = null
@@ -649,7 +651,7 @@ func _setup_articulated_rig() -> void:
 	rig_time = 0.0
 
 	# Wave-1 animasyonlarını tek tek ekliyoruz.
-	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı"] or fish_sprite.texture == null:
+	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı", "Kalamar"] or fish_sprite.texture == null:
 		return
 
 	rig_texture_size = fish_sprite.texture.get_size()
@@ -683,6 +685,10 @@ func _setup_articulated_rig() -> void:
 		rig_sea_devil_mesh = _create_sea_devil_mesh()
 		_setup_sea_devil_face_details()
 		_setup_sea_devil_glows()
+	elif fish_type == "Kalamar":
+		# Kalamarın ana itişi kuyruk sallamak değil, mantoyu kasıp suyu jet olarak atmaktır.
+		# Mesh manto kasılmasını, yüzgeç dalgasını ve gecikmeli tentakül akışını ayrı ayrı işler.
+		rig_squid_mesh = _create_squid_jet_mesh()
 
 	fish_sprite.visible = false
 	_update_rig_direction()
@@ -958,6 +964,124 @@ void fragment() {
 	return mesh_instance
 
 
+func _create_squid_jet_mesh() -> MeshInstance2D:
+	var mesh_instance := MeshInstance2D.new()
+	mesh_instance.name = "SquidJetBodyMesh"
+	mesh_instance.z_index = 4
+	articulated_rig.add_child(mesh_instance)
+
+	# İnce grid; manto sıkışması ve tentakül dalgası keskin kırılmadan akar.
+	var columns: int = 56
+	var rows: int = 16
+	var vertices := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+
+	for y_index in range(rows + 1):
+		var v: float = float(y_index) / float(rows)
+		var local_y: float = (v - 0.5) * rig_texture_size.y
+		for x_index in range(columns + 1):
+			var u: float = float(x_index) / float(columns)
+			var local_x: float = (u - 0.5) * rig_texture_size.x
+			vertices.append(Vector2(local_x, local_y))
+			uvs.append(Vector2(u, v))
+
+	for y_index in range(rows):
+		for x_index in range(columns):
+			var row_width: int = columns + 1
+			var a: int = y_index * row_width + x_index
+			var b: int = a + 1
+			var c_index: int = a + row_width
+			var d: int = c_index + 1
+			indices.append(a)
+			indices.append(c_index)
+			indices.append(b)
+			indices.append(b)
+			indices.append(c_index)
+			indices.append(d)
+
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh_instance.mesh = mesh
+
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform sampler2D fish_texture : source_color, filter_linear;
+uniform float motion_phase = 0.0;
+uniform float mantle_breath = 0.0;
+uniform float jet_power = 0.0;
+uniform float tentacle_amplitude = 5.0;
+uniform float fin_amplitude = 2.4;
+
+void vertex() {
+	// Kalamar yatay çizimde gövde/manto merkez-sol bölgede,
+	// baş ve kollar ön tarafta kabul edilir. Maskeler yumuşak tutulduğu için
+	// görselin kendi konturu korunur ve transparan alanlar etkilenmez.
+
+	// Manto: normalde yavaş solunumla genişleyip daralır.
+	// Jet anında dikey olarak sıkışırken uzun eksende çok hafif uzar.
+	float mantle_x = smoothstep(0.12, 0.25, UV.x) * (1.0 - smoothstep(0.53, 0.68, UV.x));
+	float center_dist = UV.y - 0.50;
+	float mantle_center = 1.0 - smoothstep(0.18, 0.47, abs(center_dist));
+	float mantle_mask = mantle_x * mantle_center;
+	float radial_dir = sign(center_dist);
+	float breath_amount = sin(motion_phase * 0.72) * 1.15 + mantle_breath * 1.35;
+	VERTEX.y += radial_dir * breath_amount * mantle_mask;
+	VERTEX.y -= radial_dir * jet_power * 5.2 * mantle_mask;
+	VERTEX.x += jet_power * 2.4 * mantle_mask;
+
+	// Manto yan yüzgeçleri ana itiş kaynağı değil; sakin yüzüşte küçük dalgalar üretir.
+	float fin_y = smoothstep(0.18, 0.38, abs(center_dist));
+	float fin_x = smoothstep(0.12, 0.24, UV.x) * (1.0 - smoothstep(0.48, 0.62, UV.x));
+	float fin_mask = fin_y * fin_x;
+	float fin_wave = sin(motion_phase * 1.12 + UV.x * 8.4 + UV.y * 4.0);
+	VERTEX.y += radial_dir * fin_wave * fin_amplitude * fin_mask;
+
+	// Kollar / tentaküller: gövdeden sonra gecikmeli bir akış dalgası.
+	// Jet sırasında su direnciyle daha geriye toplanıp dalga genliği biraz azalır.
+	float arm_x = smoothstep(0.48, 0.66, UV.x);
+	float arm_edge = smoothstep(0.08, 0.31, abs(center_dist));
+	float arm_mask = arm_x * (0.48 + arm_edge * 0.52);
+	float arm_wave_a = sin(motion_phase * 1.28 + UV.x * 10.8 + UV.y * 5.2);
+	float arm_wave_b = sin(motion_phase * 0.91 + UV.x * 15.0 - UV.y * 6.4 + 1.15);
+	float jet_arm_damp = mix(1.0, 0.48, jet_power);
+	VERTEX.y += (arm_wave_a * 0.72 + arm_wave_b * 0.28) * tentacle_amplitude * arm_mask * jet_arm_damp;
+
+	// Jet anında kollar eksen boyunca biraz daha düzleşip geriye uzar.
+	VERTEX.x += jet_power * 4.6 * arm_mask;
+
+	// Baş merkezi fazla oynamasın; yalnızca çok küçük canlılık hareketi.
+	float head_mask = smoothstep(0.42, 0.56, UV.x) * (1.0 - smoothstep(0.72, 0.84, UV.x));
+	VERTEX.y += sin(motion_phase * 0.63 + 0.8) * 0.45 * head_mask;
+}
+
+void fragment() {
+	vec4 tex = texture(fish_texture, UV);
+	COLOR = tex * COLOR;
+}
+"""
+
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("fish_texture", fish_sprite.texture)
+	material.set_shader_parameter("motion_phase", 0.0)
+	material.set_shader_parameter("mantle_breath", 0.0)
+	material.set_shader_parameter("jet_power", 0.0)
+	material.set_shader_parameter("tentacle_amplitude", 5.0)
+	material.set_shader_parameter("fin_amplitude", 2.4)
+	mesh_instance.material = material
+	return mesh_instance
+
+
 func _create_sea_devil_mesh() -> MeshInstance2D:
 	var mesh_instance := MeshInstance2D.new()
 	mesh_instance.name = "SeaDevilHeavyBodyMesh"
@@ -1203,6 +1327,8 @@ func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
 			_update_ray_rig(delta, speed_ratio)
 		"Deniz Şeytanı":
 			_update_sea_devil_rig(delta, speed_ratio)
+		"Kalamar":
+			_update_squid_rig(delta, speed_ratio)
 
 
 func _update_barracuda_rig(delta: float, speed_ratio: float) -> void:
@@ -1370,6 +1496,47 @@ func _update_sea_devil_rig(delta: float, speed_ratio: float) -> void:
 		rig_jaw.default_color.a = 0.68 if was_dashing else lerpf(0.38, 0.54, breath)
 
 	_update_sea_devil_glows(phase)
+	_update_rig_direction()
+
+
+func _update_squid_rig(delta: float, speed_ratio: float) -> void:
+	if rig_squid_mesh == null:
+		return
+
+	var speed_factor: float = clampf(speed_ratio, 0.30, 3.0)
+	rig_time += delta
+
+	# Normal yüzüşte yumuşak manto nefesi; jet anında kısa ve sert kasılma.
+	var base_rate: float = lerpf(1.15, 1.72, clampf(speed_factor / 2.4, 0.0, 1.0))
+	var phase: float = rig_time * base_rate * 2.05 + swim_phase
+	var breath: float = (sin(rig_time * 1.18 + swim_phase) + 1.0) * 0.5
+
+	# Behavior sistemi jet darbelerinde was_dashing=true veriyor.
+	# Yumuşak easing için jet gücü sinüs darbesiyle şekillendirilir.
+	var jet_power: float = 0.0
+	if was_dashing:
+		jet_power = 0.78 + 0.22 * absf(sin(rig_time * 6.2 + swim_phase))
+
+	var squid_material: ShaderMaterial = rig_squid_mesh.material as ShaderMaterial
+	if squid_material != null:
+		var tentacle_amount: float = lerpf(4.2, 6.4, clampf(speed_factor / 2.5, 0.0, 1.0))
+		var fin_amount: float = lerpf(1.8, 3.0, clampf(speed_factor / 2.2, 0.0, 1.0))
+		if was_dashing:
+			tentacle_amount *= 0.82
+			fin_amount *= 0.72
+
+		squid_material.set_shader_parameter("motion_phase", phase)
+		squid_material.set_shader_parameter("mantle_breath", breath)
+		squid_material.set_shader_parameter("jet_power", jet_power)
+		squid_material.set_shader_parameter("tentacle_amplitude", tentacle_amount)
+		squid_material.set_shader_parameter("fin_amplitude", fin_amount)
+
+	# Jet vurunca balığın tamamı çok kısa öne eğilir; normalde neredeyse düz süzülür.
+	var jet_tilt: float = deg_to_rad(-1.6) * jet_power
+	var calm_tilt: float = sin(rig_time * 0.74 + swim_phase) * deg_to_rad(0.18)
+	articulated_rig.rotation += jet_tilt + calm_tilt
+	articulated_rig.position.y = sin(rig_time * 0.82 + swim_phase) * (0.45 if not was_dashing else 0.22)
+
 	_update_rig_direction()
 
 
@@ -1565,4 +1732,9 @@ func release_from_hook() -> void:
 			var sea_reset_material: ShaderMaterial = rig_sea_devil_mesh.material as ShaderMaterial
 			if sea_reset_material != null:
 				sea_reset_material.set_shader_parameter("swim_phase", 0.0)
+		if rig_squid_mesh != null:
+			var squid_reset_material: ShaderMaterial = rig_squid_mesh.material as ShaderMaterial
+			if squid_reset_material != null:
+				squid_reset_material.set_shader_parameter("motion_phase", 0.0)
+				squid_reset_material.set_shader_parameter("jet_power", 0.0)
 		_update_rig_direction()
