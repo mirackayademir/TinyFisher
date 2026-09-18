@@ -49,6 +49,18 @@ var angler_glow_outer: Polygon2D
 var angler_glow_inner: Polygon2D
 var sword_speed_trail: Line2D
 
+# Wave-1 gerçek raster balıklar için eklemli görsel rig.
+# İlk profil: Barakuda. Diğer dört balık tek tek aynı sisteme eklenecek.
+var articulated_rig: Node2D
+var rig_tail: Node2D
+var rig_rear_body: Node2D
+var rig_core_body: Node2D
+var rig_head: Node2D
+var rig_gill: Line2D
+var rig_jaw: Line2D
+var rig_texture_size: Vector2 = Vector2.ZERO
+var rig_time: float = 0.0
+
 @onready var fish_sprite: Sprite2D = $FishSprite
 @onready var fish_collision: CollisionShape2D = $CollisionShape2D
 
@@ -533,6 +545,11 @@ func update_swim_animation(delta: float) -> void:
 		fish_sprite.skew = wave * 0.024
 
 	var speed_ratio: float = clampf(absf(current_swim_velocity_x) / maxf(swim_speed, 1.0), 0.25, 2.6)
+
+	if articulated_rig != null:
+		articulated_rig.rotation = motion_pitch * 0.18 + turn_roll * 0.18
+		_update_articulated_rig(delta, speed_ratio)
+
 	var stretch_x: float = 1.0
 	var squash_y: float = 1.0
 	if not exact_art:
@@ -564,6 +581,8 @@ func update_swim_animation(delta: float) -> void:
 		_update_sword_trail(was_dashing, speed_ratio)
 
 	fish_sprite.modulate = base_modulate
+	if articulated_rig != null:
+		articulated_rig.modulate = Color.WHITE
 	_update_shader_motion(speed_ratio)
 
 
@@ -595,6 +614,169 @@ func update_fish_visual() -> void:
 
 	fish_sprite.scale = base_sprite_scale
 	_apply_base_shader_params()
+	_setup_articulated_rig()
+
+
+func _setup_articulated_rig() -> void:
+	fish_sprite.visible = true
+	if is_instance_valid(articulated_rig):
+		articulated_rig.queue_free()
+	articulated_rig = null
+	rig_tail = null
+	rig_rear_body = null
+	rig_core_body = null
+	rig_head = null
+	rig_gill = null
+	rig_jaw = null
+	rig_time = 0.0
+
+	# İlk tek-tek çalışma: yalnızca Barakuda.
+	if fish_type != "Barakuda" or fish_sprite.texture == null:
+		return
+
+	rig_texture_size = fish_sprite.texture.get_size()
+	if rig_texture_size.x <= 1.0 or rig_texture_size.y <= 1.0:
+		return
+
+	articulated_rig = Node2D.new()
+	articulated_rig.name = "BarakudaArticulatedRig"
+	articulated_rig.z_index = fish_sprite.z_index
+	add_child(articulated_rig)
+
+	# Dört örtüşen parça: kuyruk -> arka gövde -> ana gövde -> kafa.
+	# Örtüşme dikişlerin görünmesini engeller; her parça kendi ekleminden döner.
+	rig_tail = _create_rig_region("TailFin", 0.00, 0.28, 0.25, 1)
+	rig_rear_body = _create_rig_region("RearBody", 0.20, 0.53, 0.49, 2)
+	rig_core_body = _create_rig_region("CoreBody", 0.45, 0.79, 0.72, 3)
+	rig_head = _create_rig_region("Head", 0.68, 1.00, 0.70, 4)
+
+	_setup_barracuda_face_details()
+	fish_sprite.visible = false
+	_update_rig_direction()
+
+
+func _create_rig_region(
+	segment_name: String,
+	x0_ratio: float,
+	x1_ratio: float,
+	pivot_ratio: float,
+	draw_order: int
+) -> Node2D:
+	var pivot := Node2D.new()
+	pivot.name = segment_name + "Pivot"
+	var pivot_x: float = rig_texture_size.x * pivot_ratio
+	pivot.position = Vector2(pivot_x - rig_texture_size.x * 0.5, 0.0)
+	pivot.z_index = draw_order
+	articulated_rig.add_child(pivot)
+
+	var part := Sprite2D.new()
+	part.name = segment_name
+	part.texture = fish_sprite.texture
+	part.centered = false
+	part.region_enabled = true
+	var x0: float = floor(rig_texture_size.x * x0_ratio)
+	var x1: float = ceil(rig_texture_size.x * x1_ratio)
+	part.region_rect = Rect2(x0, 0.0, maxf(1.0, x1 - x0), rig_texture_size.y)
+	part.position = Vector2(x0 - pivot_x, -rig_texture_size.y * 0.5)
+	part.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	pivot.add_child(part)
+	return pivot
+
+
+func _setup_barracuda_face_details() -> void:
+	# Solungaç: iki ince kavis. Nefes alırken aralık ve görünürlük hafifçe değişir.
+	rig_gill = Line2D.new()
+	rig_gill.name = "GillPulse"
+	rig_gill.width = 1.45
+	rig_gill.default_color = Color(0.12, 0.14, 0.15, 0.50)
+	rig_gill.antialiased = true
+	var gx: float = rig_texture_size.x * 0.735 - rig_texture_size.x * 0.5
+	var gy: float = -rig_texture_size.y * 0.5
+	rig_gill.points = PackedVector2Array([
+		Vector2(gx, gy + rig_texture_size.y * 0.40),
+		Vector2(gx - 1.5, gy + rig_texture_size.y * 0.51),
+		Vector2(gx + 0.5, gy + rig_texture_size.y * 0.62)
+	])
+	rig_gill.z_index = 7
+	articulated_rig.add_child(rig_gill)
+
+	# Çene çizgisi çok az açılıp kapanır; resmin kendi ağız hattını bastırmaz.
+	rig_jaw = Line2D.new()
+	rig_jaw.name = "JawBreath"
+	rig_jaw.width = 1.15
+	rig_jaw.default_color = Color(0.07, 0.08, 0.09, 0.36)
+	rig_jaw.antialiased = true
+	var y0: float = -rig_texture_size.y * 0.5 + rig_texture_size.y * 0.59
+	rig_jaw.points = PackedVector2Array([
+		Vector2(rig_texture_size.x * 0.80 - rig_texture_size.x * 0.5, y0),
+		Vector2(rig_texture_size.x * 0.91 - rig_texture_size.x * 0.5, y0 + 1.5),
+		Vector2(rig_texture_size.x * 0.975 - rig_texture_size.x * 0.5, y0 + 0.5)
+	])
+	rig_jaw.z_index = 8
+	articulated_rig.add_child(rig_jaw)
+
+
+func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
+	if fish_type != "Barakuda" or articulated_rig == null:
+		return
+
+	var speed_factor: float = clampf(speed_ratio, 0.55, 2.6)
+	var cruise_factor: float = lerpf(0.82, 1.72, (speed_factor - 0.55) / 2.05)
+	rig_time += delta * cruise_factor
+
+	# Barakuda karakteri: kafa stabil, gövdede küçük S dalgası, kuyrukta güçlü itiş.
+	var main_wave: float = sin(rig_time * 5.0 + swim_phase)
+	var rear_wave: float = sin(rig_time * 5.0 + swim_phase + 0.72)
+	var tail_wave: float = sin(rig_time * 5.0 + swim_phase + 1.28)
+	var breath: float = (sin(rig_time * 1.72 + swim_phase) + 1.0) * 0.5
+
+	var tail_amp: float = deg_to_rad(7.5 + minf(speed_factor, 2.2) * 4.2)
+	if was_dashing:
+		tail_amp *= 1.28
+
+	if rig_tail != null:
+		rig_tail.rotation = tail_wave * tail_amp
+	if rig_rear_body != null:
+		rig_rear_body.rotation = rear_wave * tail_amp * 0.40
+	if rig_core_body != null:
+		rig_core_body.rotation = main_wave * tail_amp * 0.13
+	if rig_head != null:
+		# Baş neredeyse sabit; sadece gerçek balıktaki mikro dengeleme hareketi.
+		rig_head.rotation = -main_wave * deg_to_rad(0.65) + sin(rig_time * 0.92) * deg_to_rad(0.20)
+
+	# Solungaç nefesi.
+	if rig_gill != null:
+		rig_gill.scale.x = lerpf(0.92, 1.10, breath)
+		rig_gill.scale.y = lerpf(0.96, 1.06, breath)
+		rig_gill.default_color.a = lerpf(0.28, 0.62, breath)
+
+	# Çene hareketi: 1–2 piksel; abartısız.
+	if rig_jaw != null:
+		var jaw_points: PackedVector2Array = rig_jaw.points
+		if jaw_points.size() == 3:
+			var jaw_open: float = lerpf(0.0, 1.65, breath)
+			jaw_points[1].y = (
+				-rig_texture_size.y * 0.5
+				+ rig_texture_size.y * 0.59
+				+ 1.5
+				+ jaw_open
+			)
+			jaw_points[2].y = (
+				-rig_texture_size.y * 0.5
+				+ rig_texture_size.y * 0.59
+				+ 0.5
+				+ jaw_open * 0.55
+			)
+			rig_jaw.points = jaw_points
+
+	_update_rig_direction()
+
+
+func _update_rig_direction() -> void:
+	if articulated_rig == null:
+		return
+	var x_scale: float = absf(base_sprite_scale.x)
+	articulated_rig.scale = Vector2(x_scale if direction > 0.0 else -x_scale, base_sprite_scale.y)
 
 
 func _setup_special_visuals() -> void:
@@ -679,6 +861,7 @@ func _set_collision_size(new_size: Vector2) -> void:
 
 func update_sprite_direction() -> void:
 	fish_sprite.flip_h = direction < 0.0
+	_update_rig_direction()
 	if fish_type == "Fener Balığı":
 		_update_angler_glow(1.0)
 	if fish_type == "Kılıç Balığı":
@@ -697,12 +880,26 @@ func play_turn_animation() -> void:
 
 
 func play_hooked_animation() -> void:
-	var tween: Tween = create_tween()
-	tween.set_trans(Tween.TRANS_SINE)
-	tween.set_ease(Tween.EASE_IN_OUT)
 	var profile: Dictionary = FishCatalog.get_profile(fish_type)
 	var struggle_angle: float = float(profile.get("hook_struggle_angle", 18.0))
 
+	if articulated_rig != null:
+		var rig_tween: Tween = create_tween()
+		rig_tween.set_trans(Tween.TRANS_SINE)
+		rig_tween.set_ease(Tween.EASE_IN_OUT)
+		rig_tween.tween_property(articulated_rig, "rotation", deg_to_rad(struggle_angle * 0.55), 0.07)
+		rig_tween.tween_property(articulated_rig, "rotation", deg_to_rad(-struggle_angle * 0.55), 0.07)
+		rig_tween.tween_property(articulated_rig, "rotation", deg_to_rad(struggle_angle * 0.35), 0.07)
+		rig_tween.tween_property(articulated_rig, "rotation", 0.0, 0.11)
+
+		var rig_flash: Tween = create_tween()
+		rig_flash.tween_property(articulated_rig, "modulate", Color(1.35, 1.35, 1.10, 1.0), 0.08)
+		rig_flash.tween_property(articulated_rig, "modulate", Color.WHITE, 0.18)
+		return
+
+	var tween: Tween = create_tween()
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.set_ease(Tween.EASE_IN_OUT)
 	tween.tween_property(fish_sprite, "rotation", deg_to_rad(struggle_angle), 0.07)
 	tween.tween_property(fish_sprite, "rotation", deg_to_rad(-struggle_angle), 0.07)
 	tween.tween_property(fish_sprite, "rotation", deg_to_rad(struggle_angle * 0.65), 0.07)
@@ -738,3 +935,7 @@ func release_from_hook() -> void:
 	fish_sprite.rotation = 0.0
 	fish_sprite.skew = 0.0
 	fish_sprite.scale = base_sprite_scale
+	if articulated_rig != null:
+		articulated_rig.rotation = 0.0
+		articulated_rig.modulate = Color.WHITE
+		_update_rig_direction()
