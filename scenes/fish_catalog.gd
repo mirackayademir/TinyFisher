@@ -12,7 +12,12 @@ const FISH_ORDER: Array[String] = [
 	"Ton Balığı",
 	"Kılıç Balığı",
 	"Köpekbalığı",
-	"Fener Balığı"
+	"Fener Balığı",
+	"Barakuda",
+	"Müren",
+	"Vatoz",
+	"Deniz Şeytanı",
+	"Kalamar"
 ]
 
 const EXPANSION_WAVE_1: Array[String] = [
@@ -211,9 +216,9 @@ const PROFILES: Dictionary = {
 		"value": 160,
 		"habitat": "Açık deniz / avcı",
 		"depth_label": "42–62 m",
-		"texture_path": "",
+		"texture_path": "res://assets/fish/barakuda.webp",
 		"behavior_id": "hunter",
-		"target_count": 0,
+		"target_count": 2,
 		"spawn_x": [3900.0, 7600.0],
 		"spawn_y": [1700.0, 2320.0],
 		"speed": [92.0, 118.0],
@@ -232,15 +237,15 @@ const PROFILES: Dictionary = {
 		"hook_struggle_angle": 23.0,
 		"fight": [295.0, 0.30, 20.0, 31.0, 60.0],
 		"tension": [28.0, 24.0, 9.5],
-		"asset_status": "pending"
+		"asset_status": "live"
 	},
 	"Müren": {
 		"value": 115,
 		"habitat": "Kanyon duvarları / kaya oyukları",
 		"depth_label": "55–76 m",
-		"texture_path": "",
+		"texture_path": "res://assets/fish/muren.webp",
 		"behavior_id": "ambush",
-		"target_count": 0,
+		"target_count": 2,
 		"spawn_x": [2600.0, 8200.0],
 		"spawn_y": [2140.0, 2860.0],
 		"speed": [26.0, 38.0],
@@ -259,21 +264,21 @@ const PROFILES: Dictionary = {
 		"hook_struggle_angle": 27.0,
 		"fight": [235.0, 0.38, 21.0, 29.0, 62.0],
 		"tension": [27.0, 23.0, 10.0],
-		"asset_status": "pending"
+		"asset_status": "live"
 	},
 	"Vatoz": {
 		"value": 140,
 		"habitat": "Kumluk dip / kanyon tabanı",
 		"depth_label": "35–58 m",
-		"texture_path": "",
+		"texture_path": "res://assets/fish/vatoz.webp",
 		"behavior_id": "glide",
-		"target_count": 0,
+		"target_count": 2,
 		"spawn_x": [2200.0, 7200.0],
 		"spawn_y": [1550.0, 2200.0],
 		"speed": [34.0, 48.0],
 		"distance": [360.0, 620.0],
 		"bob": [7.0, 12.0],
-		"visual_scale": 0.36,
+		"visual_scale": 0.72,
 		"swim_wave_speed": 1.45,
 		"swim_wave_angle": 1.2,
 		"acceleration": 95.0,
@@ -286,21 +291,21 @@ const PROFILES: Dictionary = {
 		"hook_struggle_angle": 10.0,
 		"fight": [185.0, 0.52, 20.0, 27.0, 70.0],
 		"tension": [24.0, 27.0, 8.0],
-		"asset_status": "pending"
+		"asset_status": "live"
 	},
 	"Deniz Şeytanı": {
 		"value": 360,
 		"habitat": "Karanlık kanyon / dip avcısı",
 		"depth_label": "82–98 m",
-		"texture_path": "",
+		"texture_path": "res://assets/fish/deniz_seytani.webp",
 		"behavior_id": "lurker",
-		"target_count": 0,
+		"target_count": 1,
 		"spawn_x": [5600.0, 9800.0],
 		"spawn_y": [3120.0, 3650.0],
 		"speed": [24.0, 34.0],
 		"distance": [180.0, 340.0],
 		"bob": [8.0, 14.0],
-		"visual_scale": 0.44,
+		"visual_scale": 0.78,
 		"swim_wave_speed": 1.55,
 		"swim_wave_angle": 3.8,
 		"acceleration": 88.0,
@@ -313,21 +318,21 @@ const PROFILES: Dictionary = {
 		"hook_struggle_angle": 17.0,
 		"fight": [205.0, 0.44, 16.0, 36.0, 52.0],
 		"tension": [34.0, 20.0, 13.5],
-		"asset_status": "pending"
+		"asset_status": "live"
 	},
 	"Kalamar": {
 		"value": 205,
 		"habitat": "Derin açık su / kanyon ağzı",
 		"depth_label": "64–90 m",
-		"texture_path": "",
+		"texture_path": "res://assets/fish/kalamar.webp",
 		"behavior_id": "jet",
-		"target_count": 0,
+		"target_count": 2,
 		"spawn_x": [4300.0, 9200.0],
 		"spawn_y": [2450.0, 3340.0],
 		"speed": [42.0, 58.0],
 		"distance": [280.0, 520.0],
 		"bob": [10.0, 17.0],
-		"visual_scale": 0.38,
+		"visual_scale": 0.72,
 		"swim_wave_speed": 2.2,
 		"swim_wave_angle": 4.4,
 		"acceleration": 540.0,
@@ -340,7 +345,7 @@ const PROFILES: Dictionary = {
 		"hook_struggle_angle": 25.0,
 		"fight": [255.0, 0.34, 18.0, 33.0, 58.0],
 		"tension": [31.0, 22.0, 11.5],
-		"asset_status": "pending"
+		"asset_status": "live"
 	}
 
 }
