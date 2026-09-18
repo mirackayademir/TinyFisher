@@ -216,7 +216,7 @@ const PROFILES: Dictionary = {
 		"value": 160,
 		"habitat": "Açık deniz / avcı",
 		"depth_label": "42–62 m",
-		"texture_path": "res://assets/fish/barakuda.png",
+		"texture_path": "res://assets/fish/barakuda.svg",
 		"behavior_id": "hunter",
 		"target_count": 2,
 		"spawn_x": [3900.0, 7600.0],
@@ -243,7 +243,7 @@ const PROFILES: Dictionary = {
 		"value": 115,
 		"habitat": "Kanyon duvarları / kaya oyukları",
 		"depth_label": "55–76 m",
-		"texture_path": "res://assets/fish/muren.png",
+		"texture_path": "res://assets/fish/muren.svg",
 		"behavior_id": "ambush",
 		"target_count": 2,
 		"spawn_x": [2600.0, 8200.0],
@@ -270,7 +270,7 @@ const PROFILES: Dictionary = {
 		"value": 140,
 		"habitat": "Kumluk dip / kanyon tabanı",
 		"depth_label": "35–58 m",
-		"texture_path": "res://assets/fish/vatoz.png",
+		"texture_path": "res://assets/fish/vatoz.svg",
 		"behavior_id": "glide",
 		"target_count": 2,
 		"spawn_x": [2200.0, 7200.0],
@@ -297,7 +297,7 @@ const PROFILES: Dictionary = {
 		"value": 360,
 		"habitat": "Karanlık kanyon / dip avcısı",
 		"depth_label": "82–98 m",
-		"texture_path": "res://assets/fish/deniz_seytani.png",
+		"texture_path": "res://assets/fish/deniz_seytani.svg",
 		"behavior_id": "lurker",
 		"target_count": 1,
 		"spawn_x": [5600.0, 9800.0],
@@ -324,7 +324,7 @@ const PROFILES: Dictionary = {
 		"value": 205,
 		"habitat": "Derin açık su / kanyon ağzı",
 		"depth_label": "64–90 m",
-		"texture_path": "res://assets/fish/kalamar.png",
+		"texture_path": "res://assets/fish/kalamar.svg",
 		"behavior_id": "jet",
 		"target_count": 2,
 		"spawn_x": [4300.0, 9200.0],
@@ -407,7 +407,18 @@ static func get_texture(fish_type: String) -> Texture2D:
 		return null
 
 	var image: Image = Image.new()
-	var load_error: Error = image.load(absolute_path)
+	var load_error: Error = OK
+
+	if texture_path.get_extension().to_lower() == "svg":
+		var svg_file: FileAccess = FileAccess.open(absolute_path, FileAccess.READ)
+		if svg_file == null:
+			push_error("FISH SVG OPEN FAILED: " + fish_type + " -> " + texture_path)
+			return null
+		var svg_source: String = svg_file.get_as_text()
+		load_error = image.load_svg_from_string(svg_source, 1.0)
+	else:
+		load_error = image.load(absolute_path)
+
 	if load_error != OK or image.is_empty():
 		push_error(
 			"FISH TEXTURE DECODE FAILED: %s -> %s (%s)" % [
