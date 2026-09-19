@@ -168,7 +168,7 @@ const PROFILES: Dictionary = {
 		"texture_path": "res://assets/kopekbaligi.png",
 		"behavior_id": "predator",
 		"target_count": 2,
-		"spawn_x": [5200.0, 9000.0],
+		"spawn_x": [620.0, 820.0],
 		"spawn_y": [820.0, 980.0],
 		"speed": [42.0, 55.0],
 		"distance": [560.0, 820.0],
