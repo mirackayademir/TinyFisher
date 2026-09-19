@@ -1014,14 +1014,14 @@ func _setup_shark_face_details() -> void:
 	# Ağız/çene sadece nefes ve hızlanma sırasında çok az oynar.
 	rig_jaw = Line2D.new()
 	rig_jaw.name = "SharkJawBreath"
-	rig_jaw.width = maxf(1.0, rig_texture_size.y * 0.009)
-	rig_jaw.default_color = Color(0.035, 0.055, 0.075, 0.52)
+	rig_jaw.width = maxf(1.0, rig_texture_size.y * 0.007)
+	rig_jaw.default_color = Color(0.035, 0.055, 0.075, 0.16)
 	rig_jaw.antialiased = false
-	var jaw_y: float = rig_texture_size.y * 0.635 - rig_texture_size.y * 0.5
+	var jaw_y: float = rig_texture_size.y * 0.646 - rig_texture_size.y * 0.5
 	rig_jaw.points = PackedVector2Array([
-		Vector2(rig_texture_size.x * 0.835 - rig_texture_size.x * 0.5, jaw_y),
-		Vector2(rig_texture_size.x * 0.905 - rig_texture_size.x * 0.5, jaw_y + 1.0),
-		Vector2(rig_texture_size.x * 0.975 - rig_texture_size.x * 0.5, jaw_y - 0.2)
+		Vector2(rig_texture_size.x * 0.842 - rig_texture_size.x * 0.5, jaw_y),
+		Vector2(rig_texture_size.x * 0.895 - rig_texture_size.x * 0.5, jaw_y + 0.55),
+		Vector2(rig_texture_size.x * 0.944 - rig_texture_size.x * 0.5, jaw_y + 0.05)
 	])
 	rig_jaw.z_index = 9
 	articulated_rig.add_child(rig_jaw)
@@ -1627,11 +1627,11 @@ func _update_shark_rig(delta: float, speed_ratio: float) -> void:
 			var breath: float = (sin(breath_phase + 0.42) + 1.0) * 0.5
 			var attack_open: float = 1.9 if was_dashing else 0.0
 			var jaw_open: float = lerpf(0.0, 0.85, breath) + attack_open
-			var jaw_y: float = rig_texture_size.y * 0.635 - rig_texture_size.y * 0.5
-			jaw_points[1].y = jaw_y + 1.0 + jaw_open
-			jaw_points[2].y = jaw_y - 0.2 + jaw_open * 0.48
+			var jaw_y: float = rig_texture_size.y * 0.646 - rig_texture_size.y * 0.5
+			jaw_points[1].y = jaw_y + 0.55 + jaw_open * 0.55
+			jaw_points[2].y = jaw_y + 0.05 + jaw_open * 0.22
 			rig_jaw.points = jaw_points
-		rig_jaw.default_color.a = 0.68 if was_dashing else 0.50
+		rig_jaw.default_color.a = 0.28 if was_dashing else 0.14
 
 	_update_rig_direction()
 
