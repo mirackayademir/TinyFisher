@@ -205,7 +205,7 @@ theme_override_colors/font_color = Color(0.90, 0.96, 1, 0.92)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
-text = "A/D: Tekne | Sağ tık / S: Oltayı bırak | Sol tuş basılı / W: Sar | E: Liman\nMücadele: Fareyle yeşil alanı balık işaretinde tut ve sar. Çubuk dolunca balığı yukarı çek.\nLimanda balık sat ve geliştirmeleri satın al."
+text = "A/D: Tekne | Sağ tık / S: Oltayı bırak | Sol tuş basılı / W: Sar | E: Liman\nMücadele: Balık ikonunu yeşil bölgede tut ve Sol tık / W ile sar. Yakalama %100 olunca balığı yukarı çek.\nLimanda balık sat ve geliştirmeleri satın al."
 
 [node name="InventoryPanel" type="Panel" parent="HUD" unique_id=1002202826]
 offset_right = 40.0
