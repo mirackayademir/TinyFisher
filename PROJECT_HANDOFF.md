@@ -22,6 +22,7 @@ When a new ChatGPT conversation starts for this project:
 6. Do not switch branches unless the user explicitly approves it. Continue on **`eski`**.
 7. After each completed task, give a short status report with commit SHA and what changed.
 8. **The user does not manually edit project code/repo files. ChatGPT performs all feasible implementation and repository changes directly.** The user's normal role is only `git pull`, Godot testing, and screenshots/feedback.
+   - Do not send implementation code snippets to the user for project changes unless the user explicitly asks for code. Apply the changes directly instead.
 9. Do not switch to Work mode automatically.
 10. **Editor Preview Rule:** every new visual/runtime object added to the project must also be visible in `scenes/world_editor_preview.tscn` in the same change/commit whenever technically possible. Static `world.tscn` nodes appear automatically; runtime-spawned systems must be mirrored by the editor preview script.
 
