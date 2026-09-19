@@ -161,41 +161,56 @@ func _hide_runtime_placeholder_fish() -> void:
 		placeholder.visible = false
 
 
+
 func _build_fish_preview() -> void:
 	if _preview_root == null:
 		return
 
+	# Balıklar runtime'da sabit node değildir; kolay görsel kontrol için
+	# editörde hepsini tek bir düzenli showroom bandında yan yana göster.
 	var fish_root: Node2D = Node2D.new()
 	fish_root.name = "FishCatalogPreview"
 	fish_root.z_as_relative = false
 	_preview_root.add_child(fish_root, false, Node.INTERNAL_MODE_BACK)
 
-	for fish_type: String in FishCatalog.FISH_ORDER:
+	var start_x: float = 520.0
+	var start_y: float = 610.0
+	var column_spacing: float = 360.0
+	var row_spacing: float = 230.0
+	var columns: int = 6
+
+	for index: int in range(FishCatalog.FISH_ORDER.size()):
+		var fish_type: String = FishCatalog.FISH_ORDER[index]
 		var profile: Dictionary = FishCatalog.get_profile(fish_type)
 		var texture: Texture2D = FishCatalog.get_texture(fish_type)
 		if texture == null:
 			push_warning("EDITOR FISH PREVIEW: texture missing for " + fish_type)
 			continue
 
-		var spawn_position: Vector2 = _profile_spawn_midpoint(profile)
+		var column: int = index % columns
+		var row: int = index / columns
+		var preview_position := Vector2(
+			start_x + float(column) * column_spacing,
+			start_y + float(row) * row_spacing
+		)
 		var visual_scale: float = float(profile.get("visual_scale", 0.06))
 
 		var sprite: Sprite2D = Sprite2D.new()
 		sprite.name = _safe_preview_node_name(fish_type) + "_Preview"
 		sprite.texture = texture
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		sprite.position = spawn_position
+		sprite.position = preview_position
 		sprite.scale = Vector2.ONE * visual_scale
 		sprite.z_as_relative = false
 		sprite.z_index = FISH_PREVIEW_Z
 		fish_root.add_child(sprite, false, Node.INTERNAL_MODE_BACK)
 
 		if show_fish_labels:
-			_build_fish_preview_label(fish_root, fish_type, spawn_position)
+			_build_fish_preview_label(fish_root, fish_type, preview_position)
 
 	fish_root.set_meta("preview_source", "FishCatalog.PROFILES")
+	fish_root.set_meta("preview_layout", "compact_showroom")
 	fish_root.set_meta("preview_count", FishCatalog.FISH_ORDER.size())
-
 
 func _profile_spawn_midpoint(profile: Dictionary) -> Vector2:
 	var spawn_x: Variant = profile.get("spawn_x", [800.0, 800.0])

@@ -165,7 +165,7 @@ const PROFILES: Dictionary = {
 		"value": 220,
 		"habitat": "Derin av bölgesi",
 		"depth_label": "2–5 m (TEST)",
-		"texture_path": "res://assets/kopekbaligi.png",
+		"texture_path": "res://assets/kopekbaligi_exact.webp",
 		"behavior_id": "predator",
 		"target_count": 2,
 		"spawn_x": [520.0, 680.0],
