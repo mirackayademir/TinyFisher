@@ -33,6 +33,8 @@ var _preview_root: Node2D = null
 var _terrain_texture: Texture2D = null
 var _source_region: Rect2 = Rect2()
 var _build_attempted: bool = false
+var _preview_time: float = 0.0
+var _shark_preview_sprite: Sprite2D = null
 
 
 func _ready() -> void:
@@ -45,9 +47,12 @@ func _ready() -> void:
 	call_deferred("_rebuild_preview")
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not Engine.is_editor_hint():
 		return
+
+	_preview_time += delta
+	_update_shark_editor_preview()
 
 	if not show_preview:
 		if is_instance_valid(_preview_root):
@@ -205,12 +210,50 @@ func _build_fish_preview() -> void:
 		sprite.z_index = FISH_PREVIEW_Z
 		fish_root.add_child(sprite, false, Node.INTERNAL_MODE_BACK)
 
+		if fish_type == "Köpekbalığı":
+			_setup_shark_editor_preview(sprite)
+			_shark_preview_sprite = sprite
+
 		if show_fish_labels:
 			_build_fish_preview_label(fish_root, fish_type, preview_position)
 
 	fish_root.set_meta("preview_source", "FishCatalog.PROFILES")
 	fish_root.set_meta("preview_layout", "compact_showroom")
 	fish_root.set_meta("preview_count", FishCatalog.FISH_ORDER.size())
+
+
+func _setup_shark_editor_preview(sprite: Sprite2D) -> void:
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+
+uniform float swim_phase = 0.0;
+uniform float tail_amplitude = 0.020;
+
+void vertex() {
+	float tail_gain = pow(clamp(1.0 - UV.x, 0.0, 1.0), 1.28);
+	float head_lock = 1.0 - smoothstep(0.70, 0.94, UV.x);
+	float mask = head_lock * mix(0.16, 1.0, tail_gain);
+	float wave = sin(swim_phase + UV.x * 5.45);
+	VERTEX.y += wave * 3.5 * mask;
+}
+"""
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("swim_phase", 0.0)
+	material.set_shader_parameter("tail_amplitude", 0.020)
+	sprite.material = material
+
+
+func _update_shark_editor_preview() -> void:
+	if not is_instance_valid(_shark_preview_sprite):
+		return
+	var material: ShaderMaterial = _shark_preview_sprite.material as ShaderMaterial
+	if material == null:
+		return
+	material.set_shader_parameter("swim_phase", _preview_time * 2.25)
+	_shark_preview_sprite.rotation = sin(_preview_time * 0.62) * deg_to_rad(0.10)
+
 
 func _profile_spawn_midpoint(profile: Dictionary) -> Vector2:
 	var spawn_x: Variant = profile.get("spawn_x", [800.0, 800.0])
@@ -257,6 +300,7 @@ func _safe_preview_node_name(value: String) -> String:
 
 
 func _clear_preview() -> void:
+	_shark_preview_sprite = null
 	if is_instance_valid(_preview_root):
 		remove_child(_preview_root)
 		_preview_root.free()
