@@ -25,6 +25,10 @@ const PARTS: Dictionary = {
 	"Kalamar": [
 		"res://assets/fish/runtime_data/kalamar_part00.txt",
 		"res://assets/fish/runtime_data/kalamar_part01.txt"
+	],
+	"Köpekbalığı": [
+		"res://assets/fish/runtime_data/kopekbaligi_part00.txt",
+		"res://assets/fish/runtime_data/kopekbaligi_part01.txt"
 	]
 }
 
@@ -33,7 +37,8 @@ const EXPECTED_SIZE: Dictionary = {
 	"Müren": Vector2i(110, 80),
 	"Vatoz": Vector2i(110, 82),
 	"Deniz Şeytanı": Vector2i(105, 78),
-	"Kalamar": Vector2i(110, 80)
+	"Kalamar": Vector2i(110, 80),
+	"Köpekbalığı": Vector2i(330, 110)
 }
 
 static var _cache: Dictionary = {}
