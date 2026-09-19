@@ -172,12 +172,56 @@ func update_species_behavior(delta: float) -> void:
 		_:
 			behavior_speed_multiplier = 1.0
 
+	# Bütün türler için ortak "yemi alma" katmanı.
+	# Türün kendi yüzüş karakterini korur, fakat aktif ve boş kanca yakındaysa
+	# balığın kancayı ıskalayıp sonsuza kadar etrafında dolaşmasını engeller.
+	_apply_hook_bite_assist()
+
 	behavior_vertical_offset = move_toward(
 		behavior_vertical_offset,
 		behavior_vertical_target,
 		vertical_response * delta
 	)
 	turn_roll = move_toward(turn_roll, 0.0, deg_to_rad(34.0) * delta)
+
+
+
+func _apply_hook_bite_assist() -> void:
+	if not _hook_can_attract_fish():
+		return
+
+	var hook_distance: float = global_position.distance_to(world_hook.global_position)
+	var collision_size: Vector2 = FishCatalog.get_collision_size(fish_type)
+	var fish_span: float = maxf(collision_size.x, collision_size.y)
+
+	# Büyük balıklar biraz daha uzaktan yemi fark eder; küçüklerde menzil daha dar kalır.
+	var attraction_radius: float = clampf(135.0 + fish_span * 0.55, 150.0, 290.0)
+	if hook_distance > attraction_radius:
+		return
+
+	var to_hook_x: float = world_hook.global_position.x - global_position.x
+	if absf(to_hook_x) > 2.0:
+		direction = 1.0 if to_hook_x > 0.0 else -1.0
+
+	var desired_vertical: float = world_hook.global_position.y - start_y
+	var vertical_limit: float = clampf(65.0 + fish_span * 0.48, 80.0, 180.0)
+	behavior_vertical_target = clampf(desired_vertical, -vertical_limit, vertical_limit)
+	behavior_range_multiplier = maxf(behavior_range_multiplier, 1.45)
+
+	# Kancaya yaklaştıkça yeme doğru kararlı bir son hamle yapar.
+	var proximity: float = 1.0 - clampf(hook_distance / attraction_radius, 0.0, 1.0)
+	var bite_speed: float = lerpf(1.05, 1.85, proximity)
+	behavior_speed_multiplier = maxf(behavior_speed_multiplier, bite_speed)
+
+	if hook_distance < 72.0:
+		behavior_speed_multiplier = maxf(behavior_speed_multiplier, 1.95)
+		behavior_vertical_target = clampf(
+			world_hook.global_position.y - start_y,
+			-vertical_limit,
+			vertical_limit
+		)
+
+	update_sprite_direction()
 
 
 func _update_sardine_behavior() -> void:
