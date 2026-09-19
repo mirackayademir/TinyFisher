@@ -42,6 +42,17 @@ var tension_fill_style: StyleBoxFlat
 var line_break_feedback_timer: float = 0.0
 var line_strength_level: int = 0
 
+# Fishing Fight V2: tek ana mücadele sistemi misina gerilimidir.
+# Balıklar periyodik olarak asılır; oyuncu sarma/bırakma ritmiyle gerilimi yönetir.
+var current_fish_type: String = ""
+var fish_surge_active: bool = false
+var fish_surge_timer: float = 0.0
+var fish_surge_cooldown: float = 0.0
+var fish_surge_duration: float = 0.55
+var fish_surge_strength: float = 10.0
+var fish_surge_min_interval: float = 2.2
+var fish_surge_max_interval: float = 4.2
+
 @onready var hook_line: Line2D = $"../HookLine"
 @onready var hud = $"../../HUD"
 @onready var camera: Camera2D = $"../Camera2D"
@@ -229,8 +240,16 @@ func _physics_process(delta: float) -> void:
 				_update_depth_hud()
 				return
 
-			if hud.is_fight_won() and is_reeling():
-				position.y -= reel_speed * delta
+			# Balık takılıyken sarma doğrudan balığı yukarı taşır.
+			# Gerilim yükseldikçe makara verimi düşer; bırakınca konum sabit kalır
+			# ve misina toparlanır. Böylece eski ayrı minigame yerine tek sistem çalışır.
+			if is_reeling():
+				var reel_efficiency: float = 1.0
+				if line_tension >= 82.0:
+					reel_efficiency = 0.55
+				elif line_tension >= 55.0:
+					reel_efficiency = 0.82
+				position.y -= reel_speed * reel_efficiency * delta
 		else:
 			position.y += (-reel_speed if is_reeling() else hook_speed) * delta
 
@@ -256,19 +275,43 @@ func _update_line_tension(delta: float) -> void:
 		return
 
 	tension_time += delta
+	_update_fish_surge(delta)
+
 	var pull_wave: float = 0.55 + absf(sin(tension_time * 3.1)) * 0.75
 	var reeling: bool = is_reeling()
+	var surge_pull: float = fish_surge_strength if fish_surge_active else 0.0
 
 	if reeling:
-		line_tension += (tension_gain_rate + tension_fish_pull * pull_wave) * delta
+		line_tension += (tension_gain_rate + tension_fish_pull * pull_wave + surge_pull) * delta
 	else:
-		line_tension -= tension_recovery_rate * delta
+		# Sarmayı bırakmak ana savunmadır. Balık asılırken toparlanma yavaşlar,
+		# fakat oyuncu yine de gerilimi düşürebilir.
+		var recovery: float = tension_recovery_rate
+		if fish_surge_active:
+			recovery *= 0.42
+			line_tension += fish_surge_strength * 0.12 * delta
+		line_tension -= recovery * delta
 
 	line_tension = clampf(line_tension, 0.0, 100.0)
 	_update_tension_hud()
 
 	if line_tension >= 100.0:
 		_break_line()
+
+
+func _update_fish_surge(delta: float) -> void:
+	if fish_surge_active:
+		fish_surge_timer -= delta
+		if fish_surge_timer <= 0.0:
+			fish_surge_active = false
+			fish_surge_timer = 0.0
+			fish_surge_cooldown = randf_range(fish_surge_min_interval, fish_surge_max_interval)
+		return
+
+	fish_surge_cooldown -= delta
+	if fish_surge_cooldown <= 0.0:
+		fish_surge_active = true
+		fish_surge_timer = fish_surge_duration
 
 
 func _configure_tension_for_fish(fish_type: String) -> void:
@@ -285,6 +328,17 @@ func _configure_tension_for_fish(fish_type: String) -> void:
 	tension_gain_rate *= strength_multiplier
 	tension_fish_pull *= strength_multiplier
 	tension_recovery_rate += float(line_strength_level) * 2.2
+
+	# Balığın temel çekiş gücünden saldırı/asılma karakteri türetilir.
+	# Küçük balıklar seyrek ve hafif, büyük/tehlikeli balıklar daha sık ve sert asılır.
+	var aggression: float = clampf((tension_fish_pull - 2.0) / 11.5, 0.0, 1.0)
+	fish_surge_min_interval = lerpf(3.8, 1.55, aggression)
+	fish_surge_max_interval = lerpf(5.2, 2.65, aggression)
+	fish_surge_duration = lerpf(0.32, 0.78, aggression)
+	fish_surge_strength = lerpf(4.0, 22.0, aggression) * strength_multiplier
+	fish_surge_active = false
+	fish_surge_timer = 0.0
+	fish_surge_cooldown = randf_range(fish_surge_min_interval, fish_surge_max_interval)
 
 	line_tension = 12.0
 	tension_time = 0.0
@@ -306,7 +360,8 @@ func _update_tension_hud() -> void:
 		return
 
 	tension_bar.value = line_tension
-	tension_label.text = "MİSİNA GERİLİMİ  %d%%" % int(round(line_tension))
+	var fish_prefix: String = (current_fish_type.to_upper() + "  •  ") if not current_fish_type.is_empty() else ""
+	tension_label.text = fish_prefix + "MİSİNA GERİLİMİ  %d%%" % int(round(line_tension))
 
 	if line_tension < 55.0:
 		tension_fill_style.bg_color = Color(0.20, 0.82, 0.50, 0.96)
@@ -320,6 +375,12 @@ func _update_tension_hud() -> void:
 		tension_fill_style.bg_color = Color(0.96, 0.22, 0.16, 1.0)
 		tension_label.add_theme_color_override("font_color", Color(1.0, 0.42, 0.34, 1.0))
 		tension_hint.text = "TEHLİKE — misina kopmak üzere!"
+
+	if fish_surge_active:
+		tension_hint.text = "BALIK ASILIYOR! Sarmayı bırak, gerilimin düşmesini bekle"
+		if line_tension < 82.0:
+			tension_fill_style.bg_color = Color(1.0, 0.48, 0.12, 0.98)
+			tension_label.add_theme_color_override("font_color", Color(1.0, 0.76, 0.38, 1.0))
 
 
 func _update_line_visual() -> void:
@@ -353,6 +414,10 @@ func _break_line() -> void:
 	position = start_position
 	hud.reset_fight()
 	boat.set_movement_enabled(not world.docked)
+	current_fish_type = ""
+	fish_surge_active = false
+	fish_surge_timer = 0.0
+	fish_surge_cooldown = 0.0
 
 	line_tension = 100.0
 	line_break_feedback_timer = 1.15
@@ -422,6 +487,10 @@ func land_catch() -> void:
 	position = start_position
 	hud.reset_fight()
 	boat.set_movement_enabled(not world.docked)
+	current_fish_type = ""
+	fish_surge_active = false
+	fish_surge_timer = 0.0
+	fish_surge_cooldown = 0.0
 	line_tension = 0.0
 	line_break_feedback_timer = 0.0
 	_update_depth_hud()
@@ -442,6 +511,7 @@ func _on_hook_area_entered(area: Area2D) -> void:
 		hooked_fish = area
 		area.hook_to(self)
 		var fish_type: String = String(area.get("fish_type"))
+		current_fish_type = fish_type
 		_configure_tension_for_fish(fish_type)
 		hud.show_fight_bar(fish_type)
 		_update_tension_hud()

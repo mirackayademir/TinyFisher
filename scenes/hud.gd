@@ -194,16 +194,8 @@ func _update_inventory_slot_visibility() -> void:
 
 func _process(delta: float) -> void:
 	_fight_time += delta
-
-	if not fight_active:
-		return
-
-	move_catch_zone()
-	move_fish_marker(delta)
-	update_fight_progress(delta)
-
-	fish_marker.modulate.a = 0.78 + sin(_fight_time * 8.0) * 0.18
-	catch_zone.modulate.a = 0.70 + sin(_fight_time * 5.0 + 0.8) * 0.14
+	# Fishing Fight V2'de eski fareyle alan takip minigame'i devre dışıdır.
+	# Mücadele hook.gd içindeki misina gerilimi + balık asılma sistemiyle yürür.
 
 
 func _setup_fight_visuals() -> void:
@@ -394,35 +386,13 @@ func update_fight_progress(delta: float) -> void:
 
 
 func show_fight_bar(fish_type: String) -> void:
-	layout_fight_bar()
-	fight_panel.visible = true
+	# API adı eski kodla uyum için korunuyor. Görsel eski minigame artık gösterilmez;
+	# fight_active, hook.gd'deki gerilim sistemi balık karaya çıkana/kopana kadar çalışsın diye açıktır.
 	fight_active = true
 	fight_won = false
-	fight_bar.value = 10.0
-	fish_change_timer = 0.0
+	fight_panel.visible = false
+	fight_bar.value = 0.0
 	_fight_title.text = fish_type.to_upper() + "  •  MÜCADELE"
-
-	var fight_profile: Array = FishCatalog.get_fight_profile(fish_type)
-	fish_move_speed = float(fight_profile[0])
-	fish_change_interval = float(fight_profile[1])
-	fight_gain_speed = float(fight_profile[2])
-	fight_loss_speed = float(fight_profile[3])
-	var zone_width: float = float(fight_profile[4])
-
-	var ease_multiplier: float = maxf(0.58, 1.0 - float(fight_ease_level) * 0.08)
-	fish_move_speed *= ease_multiplier
-	fight_gain_speed += float(fight_ease_level) * 2.0
-	fight_loss_speed = maxf(8.0, fight_loss_speed - float(fight_ease_level) * 2.0)
-	zone_width += float(fight_ease_level) * 10.0
-
-	fish_marker.size = Vector2(28.0, 32.0)
-	catch_zone.size = Vector2(zone_width, 32.0)
-	fish_marker.position.x = 20.0
-	catch_zone.position.x = clampf(
-		fight_bar.size.x * 0.5 - catch_zone.size.x * 0.5,
-		0.0,
-		maxf(fight_bar.size.x - catch_zone.size.x, 0.0)
-	)
 
 
 func set_capacity_level(level: int) -> void:
