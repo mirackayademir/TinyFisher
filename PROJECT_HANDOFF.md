@@ -3,7 +3,7 @@
 **Last updated:** 2026-09-19  
 **Active repo:** `mirackayademir/TinyFisher`  
 **Active branch:** `eski`  
-**Current branch head:** `bf9258f1fbd1ce21fa187f92fbd82196c4a1eab3`
+**Current branch head before this preview-system commit:** `8bb5da0b54ebdf8b8f172ba47ca08e9220dcf55a`
 
 ---
 
@@ -22,6 +22,7 @@ When a new ChatGPT conversation starts for this project:
 6. Do not switch branches unless the user explicitly approves it. Continue on **`eski`**.
 7. After each completed task, give a short status report with commit SHA and what changed.
 8. Do not switch to Work mode automatically.
+9. **Editor Preview Rule:** every new visual/runtime object added to the project must also be visible in `scenes/world_editor_preview.tscn` in the same change/commit whenever technically possible. Static `world.tscn` nodes appear automatically; runtime-spawned systems must be mirrored by the editor preview script.
 
 This rule exists because previous chats incorrectly claimed the GitHub write tools had disappeared even though the tools were still available.
 

@@ -7,6 +7,7 @@ extends Node2D
 # playable 180-250 m abyss in this layout.
 
 const CanyonTextureLoader = preload("res://scenes/canyon_texture_loader.gd")
+const FishCatalog = preload("res://scenes/fish_catalog.gd")
 
 const PREVIEW_ROOT_NAME: String = "__GeneratedEnvironmentPreview"
 const CANYON_TOP_M: float = 20.0
@@ -20,9 +21,13 @@ const FALLBACK_ZERO_Y: float = 392.6
 const TERRAIN_Z: int = -7
 const BOTTOM_Z: int = -8
 const DEEP_WATER_MARGIN_PX: float = 48.0
+const FISH_PREVIEW_Z: int = 6
+const FISH_LABEL_Z: int = 7
 
 @export var show_preview: bool = true
 @export var show_editor_depth_band: bool = true
+@export var show_fish_preview: bool = true
+@export var show_fish_labels: bool = true
 
 var _preview_root: Node2D = null
 var _terrain_texture: Texture2D = null
@@ -64,21 +69,28 @@ func _rebuild_preview() -> void:
 		return
 
 	_build_attempted = true
-	if _terrain_texture == null:
-		_terrain_texture = CanyonTextureLoader.build_texture()
-	if _terrain_texture == null:
-		push_warning("Editor HQ canyon preview olusturulamadi.")
-		return
 
-	_source_region = CanyonTextureLoader.visible_region(_terrain_texture)
-	if _source_region.size.x <= 0.0 or _source_region.size.y <= 0.0:
-		push_warning("Editor HQ canyon visible region gecersiz.")
-		return
-
+	# Preview root is created before runtime-only previews so fish/assets remain
+	# visible in the editor even if the HQ canyon preview cannot be built.
 	_preview_root = Node2D.new()
 	_preview_root.name = PREVIEW_ROOT_NAME
 	_preview_root.z_as_relative = false
 	add_child(_preview_root, false, Node.INTERNAL_MODE_BACK)
+
+	_hide_runtime_placeholder_fish()
+	if show_fish_preview:
+		_build_fish_preview()
+
+	if _terrain_texture == null:
+		_terrain_texture = CanyonTextureLoader.build_texture()
+	if _terrain_texture == null:
+		push_warning("Editor HQ canyon preview olusturulamadi; fish/object preview remains available.")
+		return
+
+	_source_region = CanyonTextureLoader.visible_region(_terrain_texture)
+	if _source_region.size.x <= 0.0 or _source_region.size.y <= 0.0:
+		push_warning("Editor HQ canyon visible region gecersiz; fish/object preview remains available.")
+		return
 
 	var bounds: Vector2 = _world_bounds()
 	var canyon_top_y: float = _world_y_for_depth(CANYON_TOP_M)
@@ -133,6 +145,100 @@ func _rebuild_preview() -> void:
 		" scale=", snappedf(uniform_scale, 0.001),
 		" pad=", snappedf(horizontal_padding, 1.0), "px"
 	)
+
+
+
+func _hide_runtime_placeholder_fish() -> void:
+	var world: Node = get_parent()
+	if world == null:
+		return
+
+	# world.tscn keeps one Fish child as an editor/runtime template. The real game
+	# removes it at runtime and spawns the catalog population, so hide the template
+	# in this dedicated editor preview to avoid a duplicate Sardalya.
+	var placeholder: CanvasItem = world.get_node_or_null("FishingSpot/Fish") as CanvasItem
+	if placeholder != null:
+		placeholder.visible = false
+
+
+func _build_fish_preview() -> void:
+	if _preview_root == null:
+		return
+
+	var fish_root: Node2D = Node2D.new()
+	fish_root.name = "FishCatalogPreview"
+	fish_root.z_as_relative = false
+	_preview_root.add_child(fish_root, false, Node.INTERNAL_MODE_BACK)
+
+	for fish_type: String in FishCatalog.FISH_ORDER:
+		var profile: Dictionary = FishCatalog.get_profile(fish_type)
+		var texture: Texture2D = FishCatalog.get_texture(fish_type)
+		if texture == null:
+			push_warning("EDITOR FISH PREVIEW: texture missing for " + fish_type)
+			continue
+
+		var spawn_position: Vector2 = _profile_spawn_midpoint(profile)
+		var visual_scale: float = float(profile.get("visual_scale", 0.06))
+
+		var sprite: Sprite2D = Sprite2D.new()
+		sprite.name = _safe_preview_node_name(fish_type) + "_Preview"
+		sprite.texture = texture
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.position = spawn_position
+		sprite.scale = Vector2.ONE * visual_scale
+		sprite.z_as_relative = false
+		sprite.z_index = FISH_PREVIEW_Z
+		fish_root.add_child(sprite, false, Node.INTERNAL_MODE_BACK)
+
+		if show_fish_labels:
+			_build_fish_preview_label(fish_root, fish_type, spawn_position)
+
+	fish_root.set_meta("preview_source", "FishCatalog.PROFILES")
+	fish_root.set_meta("preview_count", FishCatalog.FISH_ORDER.size())
+
+
+func _profile_spawn_midpoint(profile: Dictionary) -> Vector2:
+	var spawn_x: Variant = profile.get("spawn_x", [800.0, 800.0])
+	var spawn_y: Variant = profile.get("spawn_y", [700.0, 700.0])
+	return Vector2(
+		_range_midpoint(spawn_x, 800.0),
+		_range_midpoint(spawn_y, 700.0)
+	)
+
+
+func _range_midpoint(value: Variant, fallback: float) -> float:
+	if value is Array and value.size() >= 2:
+		return (float(value[0]) + float(value[1])) * 0.5
+	if value is float or value is int:
+		return float(value)
+	return fallback
+
+
+func _build_fish_preview_label(parent: Node2D, fish_type: String, spawn_position: Vector2) -> void:
+	var collision_size: Vector2 = FishCatalog.get_collision_size(fish_type)
+
+	var label: Label = Label.new()
+	label.name = _safe_preview_node_name(fish_type) + "_Label"
+	label.text = fish_type
+	label.position = spawn_position + Vector2(-90.0, -maxf(42.0, collision_size.y * 0.72))
+	label.size = Vector2(180.0, 24.0)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.z_as_relative = false
+	label.z_index = FISH_LABEL_Z
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color(0.92, 0.98, 1.0, 0.96))
+	label.add_theme_color_override("font_outline_color", Color(0.01, 0.025, 0.04, 0.95))
+	label.add_theme_constant_override("outline_size", 3)
+	parent.add_child(label, false, Node.INTERNAL_MODE_BACK)
+
+
+func _safe_preview_node_name(value: String) -> String:
+	var result: String = value
+	for character: String in [" ", "ı", "İ", "ş", "Ş", "ğ", "Ğ", "ü", "Ü", "ö", "Ö", "ç", "Ç"]:
+		result = result.replace(character, "_")
+	return result
 
 
 func _clear_preview() -> void:
