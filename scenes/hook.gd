@@ -238,8 +238,13 @@ func _physics_process(delta: float) -> void:
 		if position.y <= start_position.y:
 			land_catch()
 		elif not is_instance_valid(hooked_fish):
-			for area: Area2D in get_overlapping_areas():
-				_on_hook_area_entered(area)
+			# Collision sinyali bazı büyük/şeffaf kenarlı balık görsellerinde
+			# kancayı görsel olarak değse bile kaçırabiliyor. Önce yakınlık tabanlı
+			# güvenli kontrol yap, sonra normal overlap kontrolünü sürdür.
+			_try_hook_nearby_fish()
+			if not is_instance_valid(hooked_fish):
+				for area: Area2D in get_overlapping_areas():
+					_on_hook_area_entered(area)
 
 	hook_line.set_point_position(0, boat.get_line_origin_local())
 	hook_line.set_point_position(1, position)
@@ -364,6 +369,45 @@ func update_camera(delta: float) -> void:
 	var ratio: float = clampf((position.y - start_position.y) / maxf(max_depth, 1.0), 0.0, 1.0)
 	var target_y: float = lerpf(camera_surface_y, camera_deep_y, ratio)
 	camera.position.y = lerpf(camera.position.y, target_y, clampf(camera_follow_speed * delta, 0.0, 1.0))
+
+
+
+func _try_hook_nearby_fish() -> void:
+	if not deployed or is_instance_valid(hooked_fish) or not hud.can_add_fish():
+		return
+
+	var fishing_spot: Node = world.get_node_or_null("FishingSpot")
+	if fishing_spot == null:
+		return
+
+	var nearest_fish: Area2D = null
+	var nearest_distance: float = INF
+
+	for child: Node in fishing_spot.get_children():
+		var fish: Area2D = child as Area2D
+		if fish == null or not fish.has_method("hook_to"):
+			continue
+		if bool(fish.get("is_hooked")):
+			continue
+
+		var fish_type: String = String(fish.get("fish_type"))
+		if fish_type == "Abyssal Leviathan":
+			continue
+
+		var collision_size: Vector2 = FishCatalog.get_collision_size(fish_type)
+		var catch_radius: float = clampf(
+			maxf(collision_size.x, collision_size.y) * 0.62,
+			54.0,
+			112.0
+		)
+
+		var distance_to_hook: float = global_position.distance_to(fish.global_position)
+		if distance_to_hook <= catch_radius and distance_to_hook < nearest_distance:
+			nearest_fish = fish
+			nearest_distance = distance_to_hook
+
+	if nearest_fish != null:
+		_on_hook_area_entered(nearest_fish)
 
 
 func _on_hook_area_entered(area: Area2D) -> void:
