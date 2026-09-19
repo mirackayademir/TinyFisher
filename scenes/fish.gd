@@ -63,6 +63,8 @@ var rig_moray_mesh: MeshInstance2D
 var rig_ray_mesh: MeshInstance2D
 var rig_squid_mesh: MeshInstance2D
 var rig_sea_devil_mesh: MeshInstance2D
+var rig_shark_mesh: MeshInstance2D
+var rig_shark_gills: Array[Line2D] = []
 var rig_sea_glow_1: Polygon2D
 var rig_sea_glow_2: Polygon2D
 var rig_sea_glow_3: Polygon2D
@@ -588,7 +590,7 @@ func update_swim_animation(delta: float) -> void:
 	var vertical_error: float = behavior_vertical_target - behavior_vertical_offset
 	var motion_pitch: float = deg_to_rad(clampf(vertical_error * 0.045, -4.5, 4.5))
 	var wave_rotation: float = deg_to_rad(wave * swim_wave_angle * 0.34)
-	var exact_art: bool = FishCatalog.is_wave_1_species(fish_type)
+	var exact_art: bool = FishCatalog.is_wave_1_species(fish_type) or fish_type == "Köpekbalığı"
 
 	# Onayli 5 raster balikta resmi bukup karartma: kaynak goruntu birebir kalsin.
 	if exact_art:
@@ -687,6 +689,8 @@ func _setup_articulated_rig() -> void:
 	rig_ray_mesh = null
 	rig_squid_mesh = null
 	rig_sea_devil_mesh = null
+	rig_shark_mesh = null
+	rig_shark_gills.clear()
 	rig_sea_glow_1 = null
 	rig_sea_glow_2 = null
 	rig_sea_glow_3 = null
@@ -695,7 +699,7 @@ func _setup_articulated_rig() -> void:
 	rig_time = 0.0
 
 	# Wave-1 animasyonlarını tek tek ekliyoruz.
-	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı", "Kalamar"] or fish_sprite.texture == null:
+	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı", "Kalamar", "Köpekbalığı"] or fish_sprite.texture == null:
 		return
 
 	rig_texture_size = fish_sprite.texture.get_size()
@@ -733,6 +737,11 @@ func _setup_articulated_rig() -> void:
 		# Kalamarın ana itişi kuyruk sallamak değil, mantoyu kasıp suyu jet olarak atmaktır.
 		# Mesh manto kasılmasını, yüzgeç dalgasını ve gecikmeli tentakül akışını ayrı ayrı işler.
 		rig_squid_mesh = _create_squid_independent_limbs_mesh()
+	elif fish_type == "Köpekbalığı":
+		# Köpekbalığı: kafa sakin kalır; gövdedeki dalga kuyruğa doğru büyür.
+		# Tek parça deformasyon mesh'i sprite dilimlerinin oluşturduğu kırılmaları önler.
+		rig_shark_mesh = _create_shark_wave_mesh()
+		_setup_shark_face_details()
 
 	fish_sprite.visible = false
 	_update_rig_direction()
@@ -889,6 +898,133 @@ void fragment() {
 	material.set_shader_parameter("secondary_amount", 1.0)
 	mesh_instance.material = material
 	return mesh_instance
+
+
+
+func _create_shark_wave_mesh() -> MeshInstance2D:
+	var mesh_instance := MeshInstance2D.new()
+	mesh_instance.name = "SharkContinuousSwimMesh"
+	mesh_instance.z_index = 4
+	articulated_rig.add_child(mesh_instance)
+
+	var columns: int = 56
+	var rows: int = 6
+	var vertices := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+
+	for y_index in range(rows + 1):
+		var v: float = float(y_index) / float(rows)
+		var local_y: float = (v - 0.5) * rig_texture_size.y
+		for x_index in range(columns + 1):
+			var u: float = float(x_index) / float(columns)
+			var local_x: float = (u - 0.5) * rig_texture_size.x
+			vertices.append(Vector2(local_x, local_y))
+			uvs.append(Vector2(u, v))
+
+	for y_index in range(rows):
+		for x_index in range(columns):
+			var row_width: int = columns + 1
+			var a: int = y_index * row_width + x_index
+			var b: int = a + 1
+			var c_index: int = a + row_width
+			var d: int = c_index + 1
+			indices.append(a)
+			indices.append(c_index)
+			indices.append(b)
+			indices.append(b)
+			indices.append(c_index)
+			indices.append(d)
+
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh_instance.mesh = mesh
+
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform sampler2D fish_texture : source_color, filter_nearest;
+uniform float swim_phase = 0.0;
+uniform float tail_amplitude = 6.0;
+uniform float body_amount = 1.0;
+
+void vertex() {
+	// Görsel sağa bakıyor: kuyruk UV.x=0, kafa UV.x=1.
+	// Gerçek köpekbalığı yüzüşünde kafa neredeyse sabit, dalga kuyruğa doğru büyür.
+	float tail_gain = pow(clamp(1.0 - UV.x, 0.0, 1.0), 1.28);
+	float head_lock = 1.0 - smoothstep(0.70, 0.94, UV.x);
+	float body_gain = mix(0.16, 1.0, tail_gain);
+	float mask = head_lock * body_gain * body_amount;
+
+	// Tek geniş dalga + çok küçük ikinci harmonik: güçlü ama lastik gibi olmayan itiş.
+	float main_wave = sin(swim_phase + UV.x * 5.45);
+	float harmonic = sin(swim_phase * 0.58 + UV.x * 3.10 + 1.20);
+
+	VERTEX.y += main_wave * tail_amplitude * mask;
+	VERTEX.x += harmonic * tail_amplitude * 0.032 * mask;
+}
+
+void fragment() {
+	vec4 tex = texture(fish_texture, UV);
+	COLOR = tex * COLOR;
+}
+"""
+
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("fish_texture", fish_sprite.texture)
+	material.set_shader_parameter("swim_phase", 0.0)
+	material.set_shader_parameter("tail_amplitude", 6.0)
+	material.set_shader_parameter("body_amount", 1.0)
+	mesh_instance.material = material
+	return mesh_instance
+
+
+func _setup_shark_face_details() -> void:
+	# Kaynak sprite 330x110. Solungaçlar başın hemen arkasında dört ayrı yarık olarak nefes alır.
+	var gill_x: float = rig_texture_size.x * 0.735 - rig_texture_size.x * 0.5
+	var gill_y: float = rig_texture_size.y * 0.515 - rig_texture_size.y * 0.5
+	var spacing: float = maxf(2.2, rig_texture_size.x * 0.014)
+
+	for index: int in range(4):
+		var gill := Line2D.new()
+		gill.name = "SharkGill%02d" % (index + 1)
+		gill.width = maxf(1.0, rig_texture_size.y * 0.0105)
+		gill.default_color = Color(0.035, 0.075, 0.13, 0.74)
+		gill.antialiased = false
+		gill.position = Vector2(gill_x + spacing * float(index), gill_y + float(index) * 0.35)
+		var half_length: float = rig_texture_size.y * (0.080 - float(index) * 0.004)
+		gill.points = PackedVector2Array([
+			Vector2(-1.0, -half_length),
+			Vector2(0.6, 0.0),
+			Vector2(-0.5, half_length)
+		])
+		gill.z_index = 8
+		articulated_rig.add_child(gill)
+		rig_shark_gills.append(gill)
+
+	# Ağız/çene sadece nefes ve hızlanma sırasında çok az oynar.
+	rig_jaw = Line2D.new()
+	rig_jaw.name = "SharkJawBreath"
+	rig_jaw.width = maxf(1.0, rig_texture_size.y * 0.009)
+	rig_jaw.default_color = Color(0.035, 0.055, 0.075, 0.52)
+	rig_jaw.antialiased = false
+	var jaw_y: float = rig_texture_size.y * 0.635 - rig_texture_size.y * 0.5
+	rig_jaw.points = PackedVector2Array([
+		Vector2(rig_texture_size.x * 0.835 - rig_texture_size.x * 0.5, jaw_y),
+		Vector2(rig_texture_size.x * 0.905 - rig_texture_size.x * 0.5, jaw_y + 1.0),
+		Vector2(rig_texture_size.x * 0.975 - rig_texture_size.x * 0.5, jaw_y - 0.2)
+	])
+	rig_jaw.z_index = 9
+	articulated_rig.add_child(rig_jaw)
 
 
 func _create_ray_fin_mesh() -> MeshInstance2D:
@@ -1443,6 +1579,61 @@ func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
 			_update_sea_devil_rig(delta, speed_ratio)
 		"Kalamar":
 			_update_squid_rig(delta, speed_ratio)
+		"Köpekbalığı":
+			_update_shark_rig(delta, speed_ratio)
+
+
+
+func _update_shark_rig(delta: float, speed_ratio: float) -> void:
+	if rig_shark_mesh == null:
+		return
+
+	var speed_factor: float = clampf(speed_ratio, 0.35, 2.6)
+	var motion_rate: float = lerpf(0.78, 1.62, clampf((speed_factor - 0.35) / 2.25, 0.0, 1.0))
+	if was_dashing:
+		motion_rate *= 1.30
+	rig_time += delta * motion_rate
+
+	var phase: float = rig_time * 2.65 + swim_phase
+	var shark_material: ShaderMaterial = rig_shark_mesh.material as ShaderMaterial
+	if shark_material != null:
+		var amplitude: float = lerpf(4.2, 8.8, clampf(speed_factor / 2.25, 0.0, 1.0))
+		if was_dashing:
+			amplitude *= 1.26
+		shark_material.set_shader_parameter("swim_phase", phase)
+		shark_material.set_shader_parameter("tail_amplitude", amplitude)
+		shark_material.set_shader_parameter("body_amount", lerpf(0.88, 1.08, clampf(speed_factor / 2.4, 0.0, 1.0)))
+
+	# Kafa sabitliği için tüm gövde hareketi çok küçük tutulur; güç kuyruğun deformasyonundan gelir.
+	articulated_rig.position.y = sin(rig_time * 0.72 + swim_phase) * 0.38
+	articulated_rig.rotation += sin(rig_time * 0.60 + swim_phase + 0.35) * deg_to_rad(0.10)
+
+	# Solungaçlar tek anda mekanik açılmasın; arkaya doğru çok küçük faz farkı kullan.
+	var breath_phase: float = rig_time * 1.45 + swim_phase
+	for index: int in range(rig_shark_gills.size()):
+		var gill: Line2D = rig_shark_gills[index]
+		if gill == null:
+			continue
+		var breath: float = (sin(breath_phase - float(index) * 0.16) + 1.0) * 0.5
+		gill.scale = Vector2(
+			lerpf(0.97, 1.035, breath),
+			lerpf(0.91, 1.10, breath)
+		)
+		gill.default_color.a = lerpf(0.46, 0.82, breath)
+
+	if rig_jaw != null:
+		var jaw_points: PackedVector2Array = rig_jaw.points
+		if jaw_points.size() == 3:
+			var breath: float = (sin(breath_phase + 0.42) + 1.0) * 0.5
+			var attack_open: float = 1.9 if was_dashing else 0.0
+			var jaw_open: float = lerpf(0.0, 0.85, breath) + attack_open
+			var jaw_y: float = rig_texture_size.y * 0.635 - rig_texture_size.y * 0.5
+			jaw_points[1].y = jaw_y + 1.0 + jaw_open
+			jaw_points[2].y = jaw_y - 0.2 + jaw_open * 0.48
+			rig_jaw.points = jaw_points
+		rig_jaw.default_color.a = 0.68 if was_dashing else 0.50
+
+	_update_rig_direction()
 
 
 func _update_barracuda_rig(delta: float, speed_ratio: float) -> void:
@@ -1747,7 +1938,7 @@ func update_sprite_direction() -> void:
 
 func play_turn_animation() -> void:
 	turn_roll = -direction * deg_to_rad(turn_roll_strength)
-	if FishCatalog.is_wave_1_species(fish_type):
+	if articulated_rig != null:
 		return
 	var tween: Tween = create_tween()
 	tween.set_trans(Tween.TRANS_SINE)

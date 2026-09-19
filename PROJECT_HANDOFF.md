@@ -21,8 +21,9 @@ When a new ChatGPT conversation starts for this project:
    - screenshot / visual feedback
 6. Do not switch branches unless the user explicitly approves it. Continue on **`eski`**.
 7. After each completed task, give a short status report with commit SHA and what changed.
-8. Do not switch to Work mode automatically.
-9. **Editor Preview Rule:** every new visual/runtime object added to the project must also be visible in `scenes/world_editor_preview.tscn` in the same change/commit whenever technically possible. Static `world.tscn` nodes appear automatically; runtime-spawned systems must be mirrored by the editor preview script.
+8. **The user does not manually edit project code/repo files. ChatGPT performs all feasible implementation and repository changes directly.** The user's normal role is only `git pull`, Godot testing, and screenshots/feedback.
+9. Do not switch to Work mode automatically.
+10. **Editor Preview Rule:** every new visual/runtime object added to the project must also be visible in `scenes/world_editor_preview.tscn` in the same change/commit whenever technically possible. Static `world.tscn` nodes appear automatically; runtime-spawned systems must be mirrored by the editor preview script.
 
 This rule exists because previous chats incorrectly claimed the GitHub write tools had disappeared even though the tools were still available.
 
