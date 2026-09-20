@@ -188,7 +188,6 @@ const PROFILES: Dictionary = {
 		"tension": [31.0, 22.0, 12.0],
 		"asset_status": "animated_user_art_harbor_test"
 	},
-	,
 	"Barakuda": {
 		"value": 160,
 		"habitat": "Açık deniz / avcı",
