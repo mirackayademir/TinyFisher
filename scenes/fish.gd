@@ -47,7 +47,6 @@ var was_dashing: bool = false
 
 var angler_glow_outer: Polygon2D
 var angler_glow_inner: Polygon2D
-var sword_speed_trail: Line2D
 
 # Wave-1 gerçek raster balıklar için eklemli görsel rig.
 # İlk profil: Barakuda. Diğer dört balık tek tek aynı sisteme eklenecek.
@@ -155,8 +154,6 @@ func update_species_behavior(delta: float) -> void:
 			_update_uskumru_behavior()
 		"surge":
 			_update_tuna_behavior()
-		"dash":
-			_update_swordfish_behavior()
 		"predator":
 			_update_shark_behavior()
 		"hover":
@@ -321,37 +318,6 @@ func _update_tuna_behavior() -> void:
 		update_sprite_direction()
 		if hook_distance < 135.0:
 			behavior_speed_multiplier = 1.72
-
-
-func _update_swordfish_behavior() -> void:
-	# Uzun süre akıcı seyir, ardından gerçek kılıç balığı gibi ani hız patlamaları.
-	var dash_wave: float = sin(behavior_time * 1.48 + swim_phase)
-	was_dashing = dash_wave > 0.62
-	behavior_speed_multiplier = 2.18 if was_dashing else 0.82
-	behavior_range_multiplier = 1.55
-	behavior_vertical_target = sin(behavior_time * 0.66 + swim_phase) * 15.0
-
-	if decision_timer <= 0.0:
-		if randf() < 0.18:
-			direction *= -1.0
-			update_sprite_direction()
-			play_turn_animation()
-		decision_timer = randf_range(1.0, 1.9)
-
-	if not _hook_can_attract_fish():
-		_avoid_occupied_hook(270.0, 1.45)
-		return
-
-	var hook_distance: float = global_position.distance_to(world_hook.global_position)
-	if hook_distance < 470.0:
-		direction = 1.0 if world_hook.global_position.x > global_position.x else -1.0
-		behavior_range_multiplier = 1.95
-		behavior_vertical_target = clampf(world_hook.global_position.y - start_y, -145.0, 145.0)
-		behavior_speed_multiplier = 1.35
-		update_sprite_direction()
-		if hook_distance < 185.0:
-			behavior_speed_multiplier = 2.45
-			was_dashing = true
 
 
 func _update_shark_behavior() -> void:
@@ -633,8 +599,6 @@ func update_swim_animation(delta: float) -> void:
 		var lure_pulse: float = 0.78 + absf(sin(behavior_time * 2.35)) * 0.34
 		base_modulate.b = minf(1.16, base_modulate.b * (0.96 + lure_pulse * 0.08))
 		_update_angler_glow(lure_pulse)
-	elif fish_type == "Kılıç Balığı":
-		_update_sword_trail(was_dashing, speed_ratio)
 
 	fish_sprite.modulate = base_modulate
 	if articulated_rig != null:
@@ -1842,15 +1806,6 @@ func _setup_special_visuals() -> void:
 		add_child(angler_glow_inner)
 		_update_angler_glow(1.0)
 
-	if fish_type == "Kılıç Balığı":
-		sword_speed_trail = Line2D.new()
-		sword_speed_trail.width = 3.0
-		sword_speed_trail.default_color = Color(0.20, 0.57, 0.92, 0.0)
-		sword_speed_trail.z_index = -1
-		sword_speed_trail.antialiased = false
-		add_child(sword_speed_trail)
-		_update_sword_trail(false, 1.0)
-
 
 func _update_angler_glow(pulse: float) -> void:
 	if angler_glow_outer == null or angler_glow_inner == null:
@@ -1863,19 +1818,6 @@ func _update_angler_glow(pulse: float) -> void:
 	angler_glow_outer.color.a = lerpf(0.10, 0.25, pulse)
 	angler_glow_inner.scale = Vector2.ONE * lerpf(0.84, 1.14, pulse)
 	angler_glow_inner.color.a = lerpf(0.64, 1.0, pulse)
-
-
-func _update_sword_trail(active: bool, speed_ratio: float) -> void:
-	if sword_speed_trail == null:
-		return
-	var x_sign: float = 1.0 if direction > 0.0 else -1.0
-	if x_sign > 0.0:
-		sword_speed_trail.points = PackedVector2Array([Vector2(-112.0, -2.0), Vector2(-56.0, 0.0), Vector2(-20.0, 1.0)])
-	else:
-		sword_speed_trail.points = PackedVector2Array([Vector2(112.0, -2.0), Vector2(56.0, 0.0), Vector2(20.0, 1.0)])
-	var alpha: float = clampf((speed_ratio - 1.25) * 0.28, 0.0, 0.30) if active else 0.0
-	sword_speed_trail.default_color = Color(0.22, 0.62, 0.96, alpha)
-	sword_speed_trail.width = lerpf(2.0, 4.0, clampf(speed_ratio / 2.4, 0.0, 1.0))
 
 
 func _apply_base_shader_params() -> void:
@@ -1909,8 +1851,6 @@ func update_sprite_direction() -> void:
 	_update_rig_direction()
 	if fish_type == "Fener Balığı":
 		_update_angler_glow(1.0)
-	if fish_type == "Kılıç Balığı":
-		_update_sword_trail(was_dashing, 1.0)
 
 
 func play_turn_animation() -> void:
