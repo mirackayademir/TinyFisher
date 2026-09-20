@@ -167,11 +167,12 @@ const PROFILES: Dictionary = {
 		"depth_label": "15–20 m (TEST)",
 		"texture_path": "res://generation/fish/kilic_baligi.webp",
 		"behavior_id": "hunter",
-		"target_count": 2,
-		"spawn_x": [4300.0, 7800.0],
-		"spawn_y": [820.0, 980.0],
-		"speed": [74.0, 94.0],
-		"distance": [360.0, 620.0],
+		"target_count": 1,
+		# TEST: Kullanici F5'te hemen gorebilsin diye limanin saginda, yuzeye yakin dogar.
+		"spawn_x": [650.0, 760.0],
+		"spawn_y": [600.0, 690.0],
+		"speed": [28.0, 36.0],
+		"distance": [80.0, 130.0],
 		"bob": [4.0, 6.5],
 		"visual_scale": 0.68,
 		"swim_wave_speed": 3.4,
@@ -186,7 +187,7 @@ const PROFILES: Dictionary = {
 		"hook_struggle_angle": 14.0,
 		"fight": [315.0, 0.28, 19.0, 33.0, 56.0],
 		"tension": [31.0, 22.0, 12.0],
-		"asset_status": "restored_user_art"
+		"asset_status": "restored_user_art_harbor_test"
 	},
 	"Fener Balığı": {
 		"value": 300,
