@@ -28,6 +28,19 @@ When a new ChatGPT conversation starts for this project:
 
 This rule exists because previous chats incorrectly claimed the GitHub write tools had disappeared even though the tools were still available.
 
+### GITHUB ACCESS PREFLIGHT — MANDATORY
+
+For every repository-edit request, follow this order before making any statement about access:
+
+1. Inspect the GitHub connector tools exposed through `functions` / `mcp__GitHub__*`.
+2. Verify the target repository and branch with the GitHub connector.
+3. Treat `push: true` plus available write operations such as `create_blob`, `update_file`, `create_tree`, `create_commit`, and `update_ref` as confirmed write access.
+4. **Never use container/shell network failures (for example `git clone` -> `Could not resolve host: github.com`) as evidence that GitHub connector access is unavailable.** The container network and the GitHub connector are separate systems.
+5. Do not claim "repo write access is unavailable", "push tool is missing", or ask the user to reconnect unless the GitHub connector itself was checked in the same turn and actually failed or returned insufficient permissions.
+6. If a connector call unexpectedly fails, re-inspect available GitHub tools once and retry the relevant connector path before reporting an access problem.
+
+This preflight rule overrides any inference based on terminal/container internet access.
+
 ---
 
 ## CURRENT TASK STATE
