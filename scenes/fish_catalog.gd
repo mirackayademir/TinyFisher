@@ -1,6 +1,7 @@
 extends RefCounted
 
 const FishExactArt = preload("res://scenes/fish_exact_art.gd")
+const OarfishExactArt = preload("res://scenes/oarfish_exact_art.gd")
 
 # TinyFisher — Fish Catalog V1
 # Baliklarin statik verileri icin tek kaynak.
@@ -358,7 +359,7 @@ const PROFILES: Dictionary = {
 		"value": 540,
 		"habitat": "Derin açık deniz / nadir göçmen",
 		"depth_label": "65–90 m",
-		"texture_path": "res://generation/fish/kurek_baligi.png",
+		"texture_path": "",
 		"behavior_id": "glide",
 		# Nadir tür: normal popülasyona dahil edilmez, fishing_spot.gd özel nadirlik zarını atar.
 		"target_count": 0,
@@ -422,6 +423,13 @@ static func get_target_count(fish_type: String) -> int:
 
 
 static func get_texture(fish_type: String) -> Texture2D:
+	# Kürek Balığı binary asset yerine doğrulanmış base64 kaynaktan runtime'da kurulur.
+	# Böylece Git/Godot import sırasında PNG/WebP bozulması yaşanmaz.
+	if fish_type == "Kürek Balığı":
+		var oarfish_texture: Texture2D = OarfishExactArt.get_texture()
+		if oarfish_texture != null:
+			return oarfish_texture
+
 	# Yeni 5 tur icin kullanicinin onayladigi birebir raster sanatini,
 	# Godot importer'a bagimli olmadan base64 parcalarindan kur.
 	if FishExactArt.has_fish(fish_type):

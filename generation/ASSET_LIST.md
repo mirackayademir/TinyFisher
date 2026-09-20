@@ -18,7 +18,7 @@ Bu dosya `./generation/` klasörünün güncel görsel envanteridir. Yeni üreti
 | Balık | Vatoz | `generation/fish/vatoz.webp` |
 | Balık | Deniz Şeytanı | `generation/fish/deniz_seytani.webp` |
 | Balık | Kalamar | `generation/fish/kalamar.webp` |
-| Balık | Kürek Balığı | `generation/fish/kurek_baligi.png` |
+| Balık | Kürek Balığı | runtime decode → `generation/runtime_encoded/fish/kurek_baligi.b64` |
 | Dünya | Tekne | `generation/world/boat.webp` |
 | Dünya | Liman | `generation/world/harbor.webp` |
 | Boss | Leviathan | `generation/boss/leviathan.webp` |
