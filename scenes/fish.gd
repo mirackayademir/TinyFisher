@@ -556,7 +556,7 @@ func update_swim_animation(delta: float) -> void:
 	var vertical_error: float = behavior_vertical_target - behavior_vertical_offset
 	var motion_pitch: float = deg_to_rad(clampf(vertical_error * 0.045, -4.5, 4.5))
 	var wave_rotation: float = deg_to_rad(wave * swim_wave_angle * 0.34)
-	var exact_art: bool = FishCatalog.is_wave_1_species(fish_type) or fish_type == "Köpekbalığı"
+	var exact_art: bool = FishCatalog.is_wave_1_species(fish_type) or fish_type in ["Köpekbalığı", "Kılıç Balığı"]
 
 	# Onayli 5 raster balikta resmi bukup karartma: kaynak goruntu birebir kalsin.
 	if exact_art:
