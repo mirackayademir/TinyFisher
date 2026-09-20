@@ -10,14 +10,13 @@ Bu dosya `./generation/` klasörünün güncel görsel envanteridir. Yeni üreti
 | Balık | Levrek | `generation/fish/levrek.png` |
 | Balık | Uskumru | `generation/fish/uskumru.png` |
 | Balık | Ton Balığı | `generation/fish/ton_baligi.png` |
-| Balık | Kılıç Balığı | `generation/fish/kilic_baligi.webp` |
 | Balık | Köpekbalığı | `generation/fish/kopek_baligi.webp` |
 | Balık | Fener Balığı | `generation/fish/fener_baligi.svg` |
-| Balık | Barakuda | `generation/fish/barakuda.png` |
-| Balık | Müren | `generation/fish/muren.png` |
-| Balık | Vatoz | `generation/fish/vatoz.png` |
-| Balık | Deniz Şeytanı | `generation/fish/deniz_seytani.png` |
-| Balık | Kalamar | `generation/fish/kalamar.png` |
+| Balık | Barakuda | `generation/fish/barakuda.webp` |
+| Balık | Müren | `generation/fish/muren.webp` |
+| Balık | Vatoz | `generation/fish/vatoz.webp` |
+| Balık | Deniz Şeytanı | `generation/fish/deniz_seytani.webp` |
+| Balık | Kalamar | `generation/fish/kalamar.webp` |
 | Dünya | Tekne | `generation/world/boat.webp` |
 | Dünya | Liman | `generation/world/harbor.webp` |
 | Boss | Leviathan | `generation/boss/leviathan.webp` |
@@ -66,6 +65,10 @@ Bu dosya `./generation/` klasörünün güncel görsel envanteridir. Yeni üreti
 | `assets/environment/surface/wave_front_01.png` | `generation/environment/surface/wave_front_01.png` |
 
 ## Arşiv / alternatif görseller
+
+- Kılıç Balığı oyundan kaldırıldı; görseli geri dönüş için `generation/fish/kilic_baligi.webp` altında korunuyor.
+- Bozuk legacy WebP kopyaları kaldırıldı.
+- Barakuda, Müren, Vatoz, Deniz Şeytanı, Kalamar ve Köpekbalığı WebP dosyaları sağlam runtime verisinden yeniden oluşturuldu.
 
 Eski fallback ve alternatif formatlar `generation/archive/` altında tutulur. Bunlar karşılaştırma ve geri dönüş içindir; kanonik oyun assetleri değildir.
 
