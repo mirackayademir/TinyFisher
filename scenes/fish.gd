@@ -64,6 +64,7 @@ var rig_squid_mesh: MeshInstance2D
 var rig_sea_devil_mesh: MeshInstance2D
 var rig_shark_mesh: MeshInstance2D
 var rig_shark_gills: Array[Line2D] = []
+var rig_angler_mesh: MeshInstance2D
 var rig_swordfish_mesh: MeshInstance2D
 var rig_swordfish_gills: Array[Line2D] = []
 var rig_sea_glow_1: Polygon2D
@@ -597,7 +598,7 @@ func update_swim_animation(delta: float) -> void:
 	var vertical_error: float = behavior_vertical_target - behavior_vertical_offset
 	var motion_pitch: float = deg_to_rad(clampf(vertical_error * 0.045, -4.5, 4.5))
 	var wave_rotation: float = deg_to_rad(wave * swim_wave_angle * 0.34)
-	var exact_art: bool = FishCatalog.is_wave_1_species(fish_type) or fish_type in ["Köpekbalığı", "Kılıç Balığı"]
+	var exact_art: bool = FishCatalog.is_wave_1_species(fish_type) or fish_type in ["Köpekbalığı", "Kılıç Balığı", "Fener Balığı"]
 
 	# Onayli 5 raster balikta resmi bukup karartma: kaynak goruntu birebir kalsin.
 	if exact_art:
@@ -696,6 +697,7 @@ func _setup_articulated_rig() -> void:
 	rig_sea_devil_mesh = null
 	rig_shark_mesh = null
 	rig_shark_gills.clear()
+	rig_angler_mesh = null
 	rig_swordfish_mesh = null
 	rig_swordfish_gills.clear()
 	rig_sea_glow_1 = null
@@ -706,7 +708,7 @@ func _setup_articulated_rig() -> void:
 	rig_time = 0.0
 
 	# Wave-1 animasyonlarını tek tek ekliyoruz.
-	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı", "Kalamar", "Köpekbalığı", "Kılıç Balığı"] or fish_sprite.texture == null:
+	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı", "Kalamar", "Köpekbalığı", "Kılıç Balığı", "Fener Balığı"] or fish_sprite.texture == null:
 		return
 
 	rig_texture_size = fish_sprite.texture.get_size()
@@ -718,7 +720,11 @@ func _setup_articulated_rig() -> void:
 	articulated_rig.z_index = fish_sprite.z_index
 	add_child(articulated_rig)
 
-	if fish_type == "Barakuda":
+	if fish_type == "Fener Balığı":
+		# Fener balığı hızlı yüzmez; ağır gövdeyi küçük kuyruk vuruşları taşır.
+		# Tek parça mesh üzerinde kuyruk, yüzgeçler, çene ve fener ayrı maskelerle hareket eder.
+		rig_angler_mesh = _create_anglerfish_swim_mesh()
+	elif fish_type == "Barakuda":
 		# Barakuda: baş stabil, kuyrukta güçlü itiş.
 		rig_tail = _create_rig_region("TailFin", 0.00, 0.28, 0.25, 1)
 		rig_rear_body = _create_rig_region("RearBody", 0.20, 0.53, 0.49, 2)
@@ -911,6 +917,133 @@ void fragment() {
 	return mesh_instance
 
 
+
+
+
+func _create_anglerfish_swim_mesh() -> MeshInstance2D:
+	var mesh_instance := MeshInstance2D.new()
+	mesh_instance.name = "AnglerfishContinuousSwimMesh"
+	mesh_instance.z_index = 4
+	articulated_rig.add_child(mesh_instance)
+
+	# Sık grid, tek raster görseli koparmadan bölgesel deformasyon yapar.
+	# Kaynak görsel sağa bakıyor: UV.x=0 kuyruk, UV.x=1 kafa/fener.
+	var columns: int = 64
+	var rows: int = 12
+	var vertices := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+
+	for y_index in range(rows + 1):
+		var v: float = float(y_index) / float(rows)
+		var local_y: float = (v - 0.5) * rig_texture_size.y
+		for x_index in range(columns + 1):
+			var u: float = float(x_index) / float(columns)
+			var local_x: float = (u - 0.5) * rig_texture_size.x
+			vertices.append(Vector2(local_x, local_y))
+			uvs.append(Vector2(u, v))
+
+	for y_index in range(rows):
+		for x_index in range(columns):
+			var row_width: int = columns + 1
+			var a: int = y_index * row_width + x_index
+			var b: int = a + 1
+			var c_index: int = a + row_width
+			var d: int = c_index + 1
+			indices.append(a)
+			indices.append(c_index)
+			indices.append(b)
+			indices.append(b)
+			indices.append(c_index)
+			indices.append(d)
+
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh_instance.mesh = mesh
+
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform sampler2D fish_texture : source_color, filter_nearest;
+uniform float swim_phase = 0.0;
+uniform float tail_amplitude = 5.0;
+uniform float body_amplitude = 1.6;
+uniform float fin_amplitude = 2.2;
+uniform float jaw_open = 1.0;
+uniform float lure_sway = 3.0;
+uniform float lure_bob = 2.0;
+
+void vertex() {
+	float u = UV.x;
+	float v = UV.y;
+
+	// Ağır gövde: hareket kuyruğa doğru büyür, kafa neredeyse sabit kalır.
+	float tail_mask = 1.0 - smoothstep(0.25, 0.47, u);
+	float rear_mask = smoothstep(0.18, 0.34, u) * (1.0 - smoothstep(0.58, 0.73, u));
+	float core_mask = smoothstep(0.38, 0.54, u) * (1.0 - smoothstep(0.72, 0.84, u));
+
+	float tail_wave = sin(swim_phase + u * 6.15);
+	float rear_wave = sin(swim_phase + 0.72 + u * 4.20);
+	float core_wave = sin(swim_phase + 1.12 + u * 2.55);
+
+	VERTEX.y += tail_wave * tail_amplitude * tail_mask;
+	VERTEX.y += rear_wave * body_amplitude * rear_mask;
+	VERTEX.y += core_wave * body_amplitude * 0.36 * core_mask;
+	VERTEX.x += cos(swim_phase * 0.82 + u * 4.0) * tail_amplitude * 0.032 * (tail_mask + rear_mask * 0.45);
+
+	// Pektoral/dorsal yüzgeç bölgeleri gövdeden farklı fazda, kürek çeker gibi çalışır.
+	float mid_x = smoothstep(0.34, 0.48, u) * (1.0 - smoothstep(0.69, 0.82, u));
+	float upper_fin = mid_x * (1.0 - smoothstep(0.18, 0.46, v)) * smoothstep(0.05, 0.18, v);
+	float lower_fin = mid_x * smoothstep(0.55, 0.69, v) * (1.0 - smoothstep(0.91, 0.98, v));
+	float fin_wave_a = sin(swim_phase * 0.63 + 0.55);
+	float fin_wave_b = sin(swim_phase * 0.63 + 2.55);
+	VERTEX.y += upper_fin * fin_wave_a * fin_amplitude;
+	VERTEX.y += lower_fin * fin_wave_b * fin_amplitude;
+	VERTEX.x += (upper_fin - lower_fin) * cos(swim_phase * 0.47) * fin_amplitude * 0.22;
+
+	// Alt çene, nefes ve saldırı sırasında baştan bağımsız aşağı doğru açılır.
+	float jaw_x = smoothstep(0.66, 0.77, u) * (1.0 - smoothstep(0.93, 0.995, u));
+	float jaw_y = smoothstep(0.51, 0.62, v) * (1.0 - smoothstep(0.90, 0.98, v));
+	float jaw_mask = jaw_x * jaw_y;
+	float jaw_arm = clamp((u - 0.66) / 0.28, 0.0, 1.0);
+	VERTEX.y += jaw_mask * jaw_open * jaw_arm;
+
+	// Fener/anten baştan bağımsız gecikmeli sallanır.
+	// Mevcut glow konumu u~0.895, v~0.215 olduğu için maske bu bölgeye odaklanır.
+	float lure_x = smoothstep(0.69, 0.78, u) * (1.0 - smoothstep(0.985, 1.0, u));
+	float lure_y = 1.0 - smoothstep(0.30, 0.44, v);
+	float lure_mask = lure_x * lure_y;
+	float lure_tip = smoothstep(0.78, 0.91, u);
+	VERTEX.x += lure_mask * sin(swim_phase * 0.42 + 0.9) * lure_sway * (0.35 + lure_tip * 0.65);
+	VERTEX.y += lure_mask * sin(swim_phase * 0.58 + 1.8) * lure_bob * (0.45 + lure_tip * 0.55);
+}
+
+void fragment() {
+	vec4 tex = texture(fish_texture, UV);
+	COLOR = tex * COLOR;
+}
+"""
+
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("fish_texture", fish_sprite.texture)
+	material.set_shader_parameter("swim_phase", 0.0)
+	material.set_shader_parameter("tail_amplitude", rig_texture_size.y * 0.032)
+	material.set_shader_parameter("body_amplitude", rig_texture_size.y * 0.010)
+	material.set_shader_parameter("fin_amplitude", rig_texture_size.y * 0.018)
+	material.set_shader_parameter("jaw_open", rig_texture_size.y * 0.008)
+	material.set_shader_parameter("lure_sway", rig_texture_size.x * 0.012)
+	material.set_shader_parameter("lure_bob", rig_texture_size.y * 0.022)
+	mesh_instance.material = material
+	return mesh_instance
 
 
 func _create_swordfish_swim_mesh() -> MeshInstance2D:
@@ -1701,6 +1834,8 @@ func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
 		return
 
 	match fish_type:
+		"Fener Balığı":
+			_update_anglerfish_rig(delta, speed_ratio)
 		"Barakuda":
 			_update_barracuda_rig(delta, speed_ratio)
 		"Müren":
@@ -1717,6 +1852,58 @@ func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
 			_update_shark_rig(delta, speed_ratio)
 
 
+
+
+
+func _update_anglerfish_rig(delta: float, speed_ratio: float) -> void:
+	if rig_angler_mesh == null:
+		return
+
+	var speed_factor: float = clampf(speed_ratio, 0.22, 2.35)
+	var normalized_speed: float = clampf((speed_factor - 0.22) / 2.13, 0.0, 1.0)
+	rig_time += delta
+
+	# Fener balığı enerji tasarruflu ve ağır görünür:
+	# kuyruk seyrek vurur, yüzgeçler gövdeyi dengeler, kafa sabit kalır.
+	var phase_rate: float = lerpf(1.55, 2.65, normalized_speed)
+	if was_dashing:
+		phase_rate *= 1.34
+	var phase: float = rig_time * phase_rate + swim_phase
+
+	var breath: float = (sin(rig_time * 0.92 + swim_phase) + 1.0) * 0.5
+	var fin_breath: float = (sin(rig_time * 0.72 + swim_phase + 0.8) + 1.0) * 0.5
+
+	var angler_material: ShaderMaterial = rig_angler_mesh.material as ShaderMaterial
+	if angler_material != null:
+		var tail_amp: float = rig_texture_size.y * lerpf(0.026, 0.048, normalized_speed)
+		var body_amp: float = rig_texture_size.y * lerpf(0.006, 0.013, normalized_speed)
+		var fin_amp: float = rig_texture_size.y * lerpf(0.014, 0.024, fin_breath)
+		var jaw_amount: float = rig_texture_size.y * lerpf(0.004, 0.012, breath)
+		var lure_amount_x: float = rig_texture_size.x * 0.012
+		var lure_amount_y: float = rig_texture_size.y * 0.021
+
+		if was_dashing:
+			# Yeme saldırırken kısa süreli güçlü itiş; fener geriden savrulur, ağız daha çok açılır.
+			tail_amp *= 1.55
+			body_amp *= 1.28
+			fin_amp *= 1.20
+			jaw_amount += rig_texture_size.y * 0.028
+			lure_amount_x *= 1.45
+			lure_amount_y *= 1.34
+
+		angler_material.set_shader_parameter("swim_phase", phase)
+		angler_material.set_shader_parameter("tail_amplitude", tail_amp)
+		angler_material.set_shader_parameter("body_amplitude", body_amp)
+		angler_material.set_shader_parameter("fin_amplitude", fin_amp)
+		angler_material.set_shader_parameter("jaw_open", jaw_amount)
+		angler_material.set_shader_parameter("lure_sway", lure_amount_x)
+		angler_material.set_shader_parameter("lure_bob", lure_amount_y)
+
+	# Tüm gövde su içinde asılı kalır; mikro pitch ve dikey atalet ayrı ritimde.
+	articulated_rig.position.y = sin(rig_time * 0.66 + swim_phase) * 0.72
+	articulated_rig.rotation += sin(rig_time * 0.48 + swim_phase + 0.35) * deg_to_rad(0.18)
+
+	_update_rig_direction()
 
 
 func _update_swordfish_rig(delta: float, speed_ratio: float) -> void:
@@ -2057,9 +2244,14 @@ func _update_angler_glow(pulse: float) -> void:
 		return
 	var x_sign: float = 1.0 if direction > 0.0 else -1.0
 	var texture_size: Vector2 = fish_sprite.texture.get_size() if fish_sprite.texture != null else Vector2(384.0, 275.0)
+	var lure_sway_x: float = sin(behavior_time * 1.12 + swim_phase) * texture_size.x * 0.012 * base_sprite_scale.x
+	var lure_sway_y: float = sin(behavior_time * 1.46 + swim_phase + 0.72) * texture_size.y * 0.022 * base_sprite_scale.y
+	if was_dashing:
+		lure_sway_x *= 1.45
+		lure_sway_y *= 1.35
 	var lure_position := Vector2(
-		texture_size.x * 0.395 * base_sprite_scale.x * x_sign,
-		-texture_size.y * 0.285 * base_sprite_scale.y
+		texture_size.x * 0.395 * base_sprite_scale.x * x_sign + lure_sway_x * x_sign,
+		-texture_size.y * 0.285 * base_sprite_scale.y + lure_sway_y
 	)
 	angler_glow_outer.position = lure_position
 	angler_glow_inner.position = lure_position
