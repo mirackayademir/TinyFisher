@@ -15,6 +15,8 @@ const RARE_SPAWN_CHANCE: float = 0.018
 const OARFISH_TYPE: String = "Kürek Balığı"
 # Her 6 saniyelik nadirlik kontrolünde %1; aynı anda yalnızca bir Kürek Balığı bulunabilir.
 const OARFISH_SPAWN_CHANCE: float = 0.010
+# Geçici doğrulama modu: Godot F5 testinde Kürek Balığı bir kez garanti doğar.
+const TEST_GUARANTEED_OARFISH_SPAWN: bool = true
 const RARE_CHECK_INTERVAL: float = 6.0
 
 const SARDINE_SCHOOL_GLOBAL_CENTERS: Array[Vector2] = [
@@ -90,6 +92,9 @@ func _spawn_initial_population() -> void:
 		var target_count: int = _target_for_type(fish_type)
 		for i: int in range(target_count):
 			spawn_fish_type(fish_type, i)
+
+	if TEST_GUARANTEED_OARFISH_SPAWN and get_type_count(OARFISH_TYPE) == 0:
+		spawn_fish_type(OARFISH_TYPE, randi())
 
 
 func respawn_fish() -> void:

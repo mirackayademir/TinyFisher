@@ -182,7 +182,7 @@ func _build_fish_preview() -> void:
 	var start_y: float = 610.0
 	var column_spacing: float = 360.0
 	var row_spacing: float = 230.0
-	var columns: int = 6
+	var columns: int = 7
 
 	for index: int in range(FishCatalog.FISH_ORDER.size()):
 		var fish_type: String = FishCatalog.FISH_ORDER[index]
