@@ -5,7 +5,6 @@ extends Node
 # Leviathan testi ise dogrudan Sprite2D olarak denize eklenir; fish.gd/autoload/boss
 # mantigina bagli degildir. Boylece once gorselin oyunda kesin gorundugunu dogrulariz.
 
-const KILIC_OLD: String = "res://assets/kilic_baligi.svg"
 const KOPEK_OLD: String = "res://assets/kopekbaligi.svg"
 const FENER_OLD: String = "res://assets/fener_baligi.svg"
 const LEVIATHAN_TEXTURE_PATH: String = "res://assets/leviathan.webp"
@@ -33,7 +32,6 @@ const LEVIATHAN_EYE_Y_RATIO: float = -0.095
 
 var _scan_timer: float = 0.0
 var _time: float = 0.0
-var _kilic_approved: Texture2D = null
 var _kopek_approved: Texture2D = null
 var _fener_approved: Texture2D = null
 var _leviathan_texture: Texture2D = null
@@ -70,7 +68,6 @@ func _process(delta: float) -> void:
 
 
 func _load_safe_textures() -> void:
-	_kilic_approved = load(KILIC_OLD) as Texture2D
 	_kopek_approved = load(KOPEK_OLD) as Texture2D
 	_fener_approved = load(FENER_OLD) as Texture2D
 
@@ -252,8 +249,6 @@ func _create_radial_glow_texture(size: int) -> Texture2D:
 
 func get_texture_for_fish(fish_type: String) -> Texture2D:
 	match fish_type:
-		"Kılıç Balığı":
-			return _kilic_approved
 		"Köpekbalığı":
 			return _kopek_approved
 		"Fener Balığı":
@@ -306,9 +301,6 @@ func _replace_sprite(sprite: Sprite2D) -> void:
 	var approved: Texture2D = null
 
 	match old_path:
-		KILIC_OLD:
-			fish_type = "Kılıç Balığı"
-			approved = _kilic_approved
 		KOPEK_OLD:
 			fish_type = "Köpekbalığı"
 			approved = _kopek_approved
@@ -332,8 +324,6 @@ func _replace_texture_rect(rect: TextureRect) -> void:
 
 	var approved: Texture2D = null
 	match rect.texture.resource_path:
-		KILIC_OLD:
-			approved = _kilic_approved
 		KOPEK_OLD:
 			approved = _kopek_approved
 		FENER_OLD:
@@ -355,8 +345,6 @@ func _compensate_fish_scale(sprite: Sprite2D, fish_type: String) -> void:
 
 	var target_scale: Vector2 = Vector2.ONE
 	match fish_type:
-		"Kılıç Balığı":
-			target_scale = Vector2(0.57, 0.57)
 		"Köpekbalığı":
 			target_scale = Vector2(0.61, 0.61)
 		"Fener Balığı":
