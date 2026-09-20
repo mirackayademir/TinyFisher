@@ -64,6 +64,8 @@ var rig_squid_mesh: MeshInstance2D
 var rig_sea_devil_mesh: MeshInstance2D
 var rig_shark_mesh: MeshInstance2D
 var rig_shark_gills: Array[Line2D] = []
+var rig_swordfish_mesh: MeshInstance2D
+var rig_swordfish_gills: Array[Line2D] = []
 var rig_sea_glow_1: Polygon2D
 var rig_sea_glow_2: Polygon2D
 var rig_sea_glow_3: Polygon2D
@@ -158,6 +160,8 @@ func update_species_behavior(delta: float) -> void:
 			_update_shark_behavior()
 		"hover":
 			_update_angler_behavior()
+		"swordfish":
+			_update_swordfish_behavior()
 		"hunter":
 			_update_barracuda_behavior()
 		"ambush":
@@ -374,6 +378,43 @@ func _update_angler_behavior() -> void:
 		behavior_range_multiplier = 1.16
 		behavior_vertical_target = clampf(world_hook.global_position.y - start_y, -120.0, 120.0)
 		update_sprite_direction()
+
+
+
+func _update_swordfish_behavior() -> void:
+	# Kılıç balığı thunniform karakterde yüzer: gövde sert kalır, hızın çoğu
+	# kuyruk sapı ve hilal biçimli kuyruktan gelir. Uzun düz devriye + kısa burst.
+	var cruise_wave: float = (sin(behavior_time * 1.18 + swim_phase) + 1.0) * 0.5
+	behavior_speed_multiplier = lerpf(1.10, 1.42, cruise_wave)
+	behavior_range_multiplier = 1.42
+	behavior_vertical_target = sin(behavior_time * 0.66 + swim_phase) * 6.5
+
+	if decision_timer <= 0.0:
+		# Sık yön değiştirmez; arada kısa hız patlaması yapar.
+		behavior_state = 1 if randf() < 0.38 else 0
+		decision_timer = randf_range(0.55, 1.05) if behavior_state == 1 else randf_range(1.25, 2.35)
+
+	if behavior_state == 1:
+		behavior_speed_multiplier = 2.05
+		behavior_range_multiplier = 1.60
+		was_dashing = true
+
+	if not _hook_can_attract_fish():
+		_avoid_occupied_hook(300.0, 1.55)
+		return
+
+	var hook_distance: float = global_position.distance_to(world_hook.global_position)
+	if hook_distance < 560.0:
+		direction = 1.0 if world_hook.global_position.x > global_position.x else -1.0
+		behavior_vertical_target = clampf(world_hook.global_position.y - start_y, -135.0, 135.0)
+		behavior_range_multiplier = 1.90
+		behavior_speed_multiplier = maxf(behavior_speed_multiplier, 1.48)
+		update_sprite_direction()
+
+		if hook_distance < 190.0:
+			# Yeme yaklaşırken kılıç balığına özgü çok hızlı son hamle.
+			behavior_speed_multiplier = 2.55
+			was_dashing = true
 
 
 func _update_barracuda_behavior() -> void:
@@ -655,6 +696,8 @@ func _setup_articulated_rig() -> void:
 	rig_sea_devil_mesh = null
 	rig_shark_mesh = null
 	rig_shark_gills.clear()
+	rig_swordfish_mesh = null
+	rig_swordfish_gills.clear()
 	rig_sea_glow_1 = null
 	rig_sea_glow_2 = null
 	rig_sea_glow_3 = null
@@ -663,7 +706,7 @@ func _setup_articulated_rig() -> void:
 	rig_time = 0.0
 
 	# Wave-1 animasyonlarını tek tek ekliyoruz.
-	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı", "Kalamar", "Köpekbalığı"] or fish_sprite.texture == null:
+	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı", "Kalamar", "Köpekbalığı", "Kılıç Balığı"] or fish_sprite.texture == null:
 		return
 
 	rig_texture_size = fish_sprite.texture.get_size()
@@ -701,6 +744,10 @@ func _setup_articulated_rig() -> void:
 		# Kalamarın ana itişi kuyruk sallamak değil, mantoyu kasıp suyu jet olarak atmaktır.
 		# Mesh manto kasılmasını, yüzgeç dalgasını ve gecikmeli tentakül akışını ayrı ayrı işler.
 		rig_squid_mesh = _create_squid_independent_limbs_mesh()
+	elif fish_type == "Kılıç Balığı":
+		# Kılıç balığı: baş ve kılıç stabil, gövde sert; itiş arka gövde + kuyruktan gelir.
+		rig_swordfish_mesh = _create_swordfish_swim_mesh()
+		_setup_swordfish_gill_details()
 	elif fish_type == "Köpekbalığı":
 		# Köpekbalığı: kafa sakin kalır; gövdedeki dalga kuyruğa doğru büyür.
 		# Tek parça deformasyon mesh'i sprite dilimlerinin oluşturduğu kırılmaları önler.
@@ -863,6 +910,138 @@ void fragment() {
 	mesh_instance.material = material
 	return mesh_instance
 
+
+
+
+func _create_swordfish_swim_mesh() -> MeshInstance2D:
+	var mesh_instance := MeshInstance2D.new()
+	mesh_instance.name = "SwordfishContinuousSwimMesh"
+	mesh_instance.z_index = 4
+	articulated_rig.add_child(mesh_instance)
+
+	# Sık grid; tek parça görselde kuyruk/gövde/kafa bölgeleri ayrı maskelerle hareket eder.
+	# Böylece sprite dilimlerinde görülen ek yerleri oluşmaz.
+	var columns: int = 64
+	var rows: int = 8
+	var vertices := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+
+	for y_index in range(rows + 1):
+		var v: float = float(y_index) / float(rows)
+		var local_y: float = (v - 0.5) * rig_texture_size.y
+		for x_index in range(columns + 1):
+			var u: float = float(x_index) / float(columns)
+			var local_x: float = (u - 0.5) * rig_texture_size.x
+			vertices.append(Vector2(local_x, local_y))
+			uvs.append(Vector2(u, v))
+
+	for y_index in range(rows):
+		for x_index in range(columns):
+			var row_width: int = columns + 1
+			var a: int = y_index * row_width + x_index
+			var b: int = a + 1
+			var c_index: int = a + row_width
+			var d: int = c_index + 1
+			indices.append(a)
+			indices.append(c_index)
+			indices.append(b)
+			indices.append(b)
+			indices.append(c_index)
+			indices.append(d)
+
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh_instance.mesh = mesh
+
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform sampler2D fish_texture : source_color, filter_nearest;
+uniform float swim_phase = 0.0;
+uniform float tail_amplitude = 7.0;
+uniform float rear_body_amplitude = 3.4;
+uniform float core_body_amplitude = 1.0;
+uniform float head_pitch = 0.0;
+uniform float head_lift = 0.0;
+
+void vertex() {
+	// Kaynak görsel sağa bakıyor: UV.x=0 kuyruk, UV.x=1 kılıç ucu.
+	float u = UV.x;
+
+	// Kuyruk, arka gövde, merkez gövde ve kafa birbirinden bağımsız ağırlıklar.
+	float tail_mask = 1.0 - smoothstep(0.17, 0.34, u);
+	float rear_mask = smoothstep(0.15, 0.29, u) * (1.0 - smoothstep(0.51, 0.69, u));
+	float core_mask = smoothstep(0.39, 0.53, u) * (1.0 - smoothstep(0.69, 0.82, u));
+	float head_mask = smoothstep(0.72, 0.89, u);
+
+	// Thunniform yüzüş: dalga öne doğru hızla sönümlenir, kuyrukta büyür.
+	float tail_wave = sin(swim_phase + u * 5.80);
+	float rear_wave = sin(swim_phase + 0.48 + u * 4.35);
+	float core_wave = sin(swim_phase + 1.02 + u * 2.85);
+
+	VERTEX.y += tail_wave * tail_amplitude * tail_mask;
+	VERTEX.y += rear_wave * rear_body_amplitude * rear_mask;
+	VERTEX.y += core_wave * core_body_amplitude * core_mask;
+
+	// Kuyruk sapında çok küçük ileri-geri sıkışma, itiş hissini güçlendirir.
+	VERTEX.x += cos(swim_phase + u * 4.10) * tail_amplitude * 0.030 * (tail_mask + rear_mask * 0.42);
+
+	// Baş ve kılıç gövdeden bağımsız fakat çok stabil hareket eder.
+	// head_pitch kılıç ucuna doğru kademeli artar, bağlantı noktasında sıfırdır.
+	float head_arm = clamp((u - 0.72) / 0.28, 0.0, 1.0);
+	VERTEX.y += (head_lift + head_pitch * head_arm) * head_mask;
+}
+
+void fragment() {
+	vec4 tex = texture(fish_texture, UV);
+	COLOR = tex * COLOR;
+}
+"""
+
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("fish_texture", fish_sprite.texture)
+	material.set_shader_parameter("swim_phase", 0.0)
+	material.set_shader_parameter("tail_amplitude", rig_texture_size.y * 0.060)
+	material.set_shader_parameter("rear_body_amplitude", rig_texture_size.y * 0.030)
+	material.set_shader_parameter("core_body_amplitude", rig_texture_size.y * 0.008)
+	material.set_shader_parameter("head_pitch", 0.0)
+	material.set_shader_parameter("head_lift", 0.0)
+	mesh_instance.material = material
+	return mesh_instance
+
+
+func _setup_swordfish_gill_details() -> void:
+	# Kılıç balığında köpekbalığı gibi açık yarıklar yerine operkulum/solungaç kapağı hareketi var.
+	# İki ince kavis, resmin kendi çizgisini bozmadan nefes ritmini görünür kılar.
+	var base_x: float = rig_texture_size.x * 0.635 - rig_texture_size.x * 0.5
+	var base_y: float = rig_texture_size.y * 0.505 - rig_texture_size.y * 0.5
+
+	for index: int in range(2):
+		var gill := Line2D.new()
+		gill.name = "SwordfishGill%02d" % (index + 1)
+		gill.width = maxf(1.0, rig_texture_size.y * 0.009)
+		gill.default_color = Color(0.05, 0.12, 0.18, 0.58)
+		gill.antialiased = false
+		gill.position = Vector2(base_x + float(index) * rig_texture_size.x * 0.010, base_y)
+		var half_length: float = rig_texture_size.y * (0.070 - float(index) * 0.012)
+		gill.points = PackedVector2Array([
+			Vector2(-0.8, -half_length),
+			Vector2(0.8, 0.0),
+			Vector2(-0.4, half_length)
+		])
+		gill.z_index = 8
+		articulated_rig.add_child(gill)
+		rig_swordfish_gills.append(gill)
 
 
 func _create_shark_wave_mesh() -> MeshInstance2D:
@@ -1532,9 +1711,75 @@ func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
 			_update_sea_devil_rig(delta, speed_ratio)
 		"Kalamar":
 			_update_squid_rig(delta, speed_ratio)
+		"Kılıç Balığı":
+			_update_swordfish_rig(delta, speed_ratio)
 		"Köpekbalığı":
 			_update_shark_rig(delta, speed_ratio)
 
+
+
+
+func _update_swordfish_rig(delta: float, speed_ratio: float) -> void:
+	if rig_swordfish_mesh == null:
+		return
+
+	var speed_factor: float = clampf(speed_ratio, 0.55, 3.1)
+	var normalized_speed: float = clampf((speed_factor - 0.55) / 2.55, 0.0, 1.0)
+	rig_time += delta
+
+	# Hız arttıkça kuyruk frekansı belirgin yükselir; gövdenin ön yarısı sakin kalır.
+	var phase_rate: float = lerpf(5.2, 8.4, normalized_speed)
+	if was_dashing:
+		phase_rate *= 1.18
+	var phase: float = rig_time * phase_rate + swim_phase
+
+	var sword_material: ShaderMaterial = rig_swordfish_mesh.material as ShaderMaterial
+	if sword_material != null:
+		var tail_amp: float = rig_texture_size.y * lerpf(0.050, 0.082, normalized_speed)
+		var rear_amp: float = rig_texture_size.y * lerpf(0.022, 0.040, normalized_speed)
+		var core_amp: float = rig_texture_size.y * lerpf(0.005, 0.011, normalized_speed)
+
+		if was_dashing:
+			tail_amp *= 1.20
+			rear_amp *= 1.12
+			core_amp *= 0.92
+
+		# Kafa/kılıç karşı denge yapar; gövde gibi sallanmaz.
+		var head_pitch_px: float = (
+			-sin(phase + 0.35) * rig_texture_size.y * 0.0042
+			+ sin(rig_time * 0.78 + swim_phase) * rig_texture_size.y * 0.0018
+		)
+		var head_lift_px: float = sin(rig_time * 0.92 + swim_phase + 0.55) * rig_texture_size.y * 0.0018
+
+		sword_material.set_shader_parameter("swim_phase", phase)
+		sword_material.set_shader_parameter("tail_amplitude", tail_amp)
+		sword_material.set_shader_parameter("rear_body_amplitude", rear_amp)
+		sword_material.set_shader_parameter("core_body_amplitude", core_amp)
+		sword_material.set_shader_parameter("head_pitch", head_pitch_px)
+		sword_material.set_shader_parameter("head_lift", head_lift_px)
+
+	# Balığın tamamı neredeyse ray üzerinde gider; çok küçük atalet salınımı yeterli.
+	articulated_rig.position.y = sin(rig_time * 0.88 + swim_phase) * 0.28
+	articulated_rig.rotation += sin(phase * 0.50 + 0.40) * deg_to_rad(0.10)
+
+	# Solungaç ritmi hızla birlikte artar; iki kapak milisaniyelik faz farkıyla çalışır.
+	var breath_rate: float = lerpf(1.85, 2.85, normalized_speed)
+	if was_dashing:
+		breath_rate *= 1.18
+	var breath_phase: float = rig_time * breath_rate + swim_phase
+
+	for index: int in range(rig_swordfish_gills.size()):
+		var gill: Line2D = rig_swordfish_gills[index]
+		if gill == null:
+			continue
+		var breath: float = (sin(breath_phase - float(index) * 0.20) + 1.0) * 0.5
+		gill.scale = Vector2(
+			lerpf(0.96, 1.035, breath),
+			lerpf(0.90, 1.12, breath)
+		)
+		gill.default_color.a = lerpf(0.34, 0.72, breath)
+
+	_update_rig_direction()
 
 
 func _update_shark_rig(delta: float, speed_ratio: float) -> void:
