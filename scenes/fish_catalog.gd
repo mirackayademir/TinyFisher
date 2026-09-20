@@ -203,7 +203,7 @@ const PROFILES: Dictionary = {
 		"speed": [16.0, 22.0],
 		"distance": [95.0, 145.0],
 		"bob": [9.0, 14.0],
-		"visual_scale": 0.34,
+		"visual_scale": 0.56,
 		"swim_wave_speed": 1.55,
 		"swim_wave_angle": 2.2,
 		"acceleration": 82.0,
