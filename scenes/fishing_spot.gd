@@ -12,6 +12,9 @@ var rare_spawn_roll_timer: float = 0.0
 const FISH_TYPES: Array[String] = FishCatalog.FISH_ORDER
 const RARE_FISH_TYPE: String = "Abyssal Leviathan"
 const RARE_SPAWN_CHANCE: float = 0.018
+const OARFISH_TYPE: String = "Kürek Balığı"
+# Her 6 saniyelik nadirlik kontrolünde %1; aynı anda yalnızca bir Kürek Balığı bulunabilir.
+const OARFISH_SPAWN_CHANCE: float = 0.010
 const RARE_CHECK_INTERVAL: float = 6.0
 
 const SARDINE_SCHOOL_GLOBAL_CENTERS: Array[Vector2] = [
@@ -63,8 +66,10 @@ func get_target_total() -> int:
 func get_fish_count() -> int:
 	var count: int = 0
 	for child: Node in get_children():
-		if child.has_method("hook_to") and String(child.get("fish_type")) != RARE_FISH_TYPE:
-			count += 1
+		if child.has_method("hook_to"):
+			var child_fish_type: String = String(child.get("fish_type"))
+			if child_fish_type not in [RARE_FISH_TYPE, OARFISH_TYPE]:
+				count += 1
 	return count
 
 
@@ -106,11 +111,11 @@ func respawn_fish() -> void:
 
 
 func _try_spawn_rare_fish() -> void:
-	if get_type_count(RARE_FISH_TYPE) > 0:
-		return
-	if randf() > RARE_SPAWN_CHANCE:
-		return
-	spawn_fish_type(RARE_FISH_TYPE, randi())
+	if get_type_count(RARE_FISH_TYPE) == 0 and randf() <= RARE_SPAWN_CHANCE:
+		spawn_fish_type(RARE_FISH_TYPE, randi())
+
+	if get_type_count(OARFISH_TYPE) == 0 and randf() <= OARFISH_SPAWN_CHANCE:
+		spawn_fish_type(OARFISH_TYPE, randi())
 
 
 func spawn_fish_type(fish_type: String, index_seed: int = 0) -> void:

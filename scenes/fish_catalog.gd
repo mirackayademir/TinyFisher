@@ -19,7 +19,8 @@ const FISH_ORDER: Array[String] = [
 	"Müren",
 	"Vatoz",
 	"Deniz Şeytanı",
-	"Kalamar"
+	"Kalamar",
+	"Kürek Balığı"
 ]
 
 const EXPANSION_WAVE_1: Array[String] = [
@@ -352,6 +353,34 @@ const PROFILES: Dictionary = {
 		"fight": [255.0, 0.34, 18.0, 33.0, 58.0],
 		"tension": [31.0, 22.0, 11.5],
 		"asset_status": "exact_user_art_test"
+	},
+	"Kürek Balığı": {
+		"value": 540,
+		"habitat": "Derin açık deniz / nadir göçmen",
+		"depth_label": "65–90 m",
+		"texture_path": "res://generation/fish/kurek_baligi.webp",
+		"behavior_id": "glide",
+		# Nadir tür: normal popülasyona dahil edilmez, fishing_spot.gd özel nadirlik zarını atar.
+		"target_count": 0,
+		"spawn_x": [5200.0, 9200.0],
+		"spawn_y": [2550.0, 3450.0],
+		"speed": [22.0, 30.0],
+		"distance": [520.0, 860.0],
+		"bob": [12.0, 20.0],
+		"visual_scale": 1.18,
+		"swim_wave_speed": 1.35,
+		"swim_wave_angle": 2.0,
+		"acceleration": 82.0,
+		"vertical_response": 24.0,
+		"turn_roll": 3.0,
+		"tail_strength": 34.0,
+		"tail_speed": 2.1,
+		"body_strength": 7.5,
+		"collision": [390.0, 72.0],
+		"hook_struggle_angle": 11.0,
+		"fight": [345.0, 0.24, 17.0, 36.0, 52.0],
+		"tension": [34.0, 20.0, 13.0],
+		"asset_status": "approved_generated_rare"
 	}
 
 }
