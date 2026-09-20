@@ -94,7 +94,22 @@ func _spawn_initial_population() -> void:
 			spawn_fish_type(fish_type, i)
 
 	if TEST_GUARANTEED_OARFISH_SPAWN and get_type_count(OARFISH_TYPE) == 0:
-		spawn_fish_type(OARFISH_TYPE, randi())
+		_spawn_test_oarfish_near_harbor()
+
+
+func _spawn_test_oarfish_near_harbor() -> void:
+	if fish_scene == null:
+		return
+
+	var fish: Node2D = fish_scene.instantiate() as Node2D
+	if fish == null:
+		return
+
+	# TEST: Animasyon onayı bitene kadar Kürek Balığı F5'te limanın hemen sağında görünür.
+	# Doğal nadir spawn profili FishCatalog içinde derin suda kalmaya devam eder.
+	fish.position = _local_from_global(Vector2(920.0, 690.0))
+	_apply_catalog_stats(fish, OARFISH_TYPE)
+	add_child(fish)
 
 
 func respawn_fish() -> void:
