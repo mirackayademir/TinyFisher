@@ -2056,7 +2056,11 @@ func _update_angler_glow(pulse: float) -> void:
 	if angler_glow_outer == null or angler_glow_inner == null:
 		return
 	var x_sign: float = 1.0 if direction > 0.0 else -1.0
-	var lure_position := Vector2(18.0 * x_sign, -47.0)
+	var texture_size: Vector2 = fish_sprite.texture.get_size() if fish_sprite.texture != null else Vector2(384.0, 275.0)
+	var lure_position := Vector2(
+		texture_size.x * 0.395 * base_sprite_scale.x * x_sign,
+		-texture_size.y * 0.285 * base_sprite_scale.y
+	)
 	angler_glow_outer.position = lure_position
 	angler_glow_inner.position = lure_position
 	angler_glow_outer.scale = Vector2.ONE * lerpf(0.86, 1.28, pulse)

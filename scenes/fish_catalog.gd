@@ -14,6 +14,7 @@ const FISH_ORDER: Array[String] = [
 	"Ton Balığı",
 	"Köpekbalığı",
 	"Kılıç Balığı",
+	"Fener Balığı",
 	"Barakuda",
 	"Müren",
 	"Vatoz",
@@ -187,6 +188,35 @@ const PROFILES: Dictionary = {
 		"fight": [315.0, 0.28, 19.0, 33.0, 56.0],
 		"tension": [31.0, 22.0, 12.0],
 		"asset_status": "animated_user_art_harbor_test"
+	},
+
+	"Fener Balığı": {
+		"value": 320,
+		"habitat": "Karanlık derinlik / pusu avcısı",
+		"depth_label": "15–20 m (TEST)",
+		"texture_path": "res://generation/fish/fener_baligi_yeni.webp",
+		"behavior_id": "hover",
+		"target_count": 1,
+		# TEST: yeni görseli F5'te hemen görebilmek için limanın yakınında doğar.
+		"spawn_x": [790.0, 900.0],
+		"spawn_y": [650.0, 760.0],
+		"speed": [16.0, 22.0],
+		"distance": [95.0, 145.0],
+		"bob": [9.0, 14.0],
+		"visual_scale": 0.34,
+		"swim_wave_speed": 1.55,
+		"swim_wave_angle": 2.2,
+		"acceleration": 82.0,
+		"vertical_response": 22.0,
+		"turn_roll": 5.0,
+		"tail_strength": 11.0,
+		"tail_speed": 3.4,
+		"body_strength": 2.5,
+		"collision": [118.0, 82.0],
+		"hook_struggle_angle": 15.0,
+		"fight": [190.0, 0.48, 18.0, 32.0, 55.0],
+		"tension": [32.0, 21.0, 11.5],
+		"asset_status": "new_generated_art_harbor_test"
 	},
 	"Barakuda": {
 		"value": 160,
