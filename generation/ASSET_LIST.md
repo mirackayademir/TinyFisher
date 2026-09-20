@@ -12,7 +12,6 @@ Bu dosya `./generation/` klasörünün güncel görsel envanteridir. Yeni üreti
 | Balık | Ton Balığı | `generation/fish/ton_baligi.png` |
 | Balık | Köpekbalığı | `generation/fish/kopek_baligi.webp` |
 | Balık | Kılıç Balığı | `generation/fish/kilic_baligi.webp` |
-| Balık | Fener Balığı | `generation/fish/fener_baligi.svg` |
 | Balık | Barakuda | `generation/fish/barakuda.webp` |
 | Balık | Müren | `generation/fish/muren.webp` |
 | Balık | Vatoz | `generation/fish/vatoz.webp` |
@@ -67,6 +66,7 @@ Bu dosya `./generation/` klasörünün güncel görsel envanteridir. Yeni üreti
 
 ## Arşiv / alternatif görseller
 
+- Fener Balığı oyundan kaldırıldı; görseli geri dönüş için `generation/fish/fener_baligi.svg` altında korunuyor.
 - Kılıç Balığı yeniden aktif tür olarak oyuna eklendi; kanonik görsel `generation/fish/kilic_baligi.webp`.
 - Bozuk legacy WebP kopyaları kaldırıldı.
 - Barakuda, Müren, Vatoz, Deniz Şeytanı, Kalamar ve Köpekbalığı WebP dosyaları sağlam runtime verisinden yeniden oluşturuldu.
