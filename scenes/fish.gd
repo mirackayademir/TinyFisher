@@ -67,6 +67,8 @@ var rig_shark_gills: Array[Line2D] = []
 var rig_angler_mesh: MeshInstance2D
 var rig_swordfish_mesh: MeshInstance2D
 var rig_swordfish_gills: Array[Line2D] = []
+var rig_oarfish_mesh: MeshInstance2D
+var oarfish_posture_blend: float = 0.0
 var rig_sea_glow_1: Polygon2D
 var rig_sea_glow_2: Polygon2D
 var rig_sea_glow_3: Polygon2D
@@ -173,6 +175,8 @@ func update_species_behavior(delta: float) -> void:
 			_update_sea_devil_behavior()
 		"jet":
 			_update_squid_behavior()
+		"oarfish":
+			_update_oarfish_behavior(delta)
 		_:
 			behavior_speed_multiplier = 1.0
 
@@ -448,6 +452,68 @@ func _update_barracuda_behavior() -> void:
 			was_dashing = true
 
 
+func _update_oarfish_behavior(delta: float) -> void:
+	# Gerçek kürek balıkları çoğunlukla uzun sırt yüzgecini dalgalandırarak ilerler ve
+	# zaman zaman baş-yukarı dikey duruşta asılı kalır. Oyun stilinde buna ek olarak
+	# kullanıcının istediği belirgin ama ağır bir S-gövde salınımı korunur.
+	var posture_target: float = 0.0
+	var cruise_wave: float = sin(behavior_time * 0.46 + swim_phase)
+
+	behavior_speed_multiplier = 0.58 + absf(cruise_wave) * 0.14
+	behavior_range_multiplier = 1.45
+	behavior_vertical_target = sin(behavior_time * 0.38 + swim_phase + 0.7) * 10.0
+
+	if decision_timer <= 0.0:
+		var choice: float = randf()
+		if choice < 0.20:
+			# Kürek balığına özgü baş-yukarı gözlem/beslenme duruşu.
+			behavior_state = 2
+			decision_timer = randf_range(2.4, 4.2)
+		elif choice < 0.42:
+			# Çok yavaş süzülme.
+			behavior_state = 1
+			decision_timer = randf_range(1.5, 2.8)
+		else:
+			behavior_state = 0
+			decision_timer = randf_range(2.0, 3.8)
+
+	match behavior_state:
+		2:
+			posture_target = 0.82
+			behavior_speed_multiplier = 0.16
+			behavior_range_multiplier = 0.72
+			behavior_vertical_target = -18.0 + sin(behavior_time * 0.52 + swim_phase) * 7.0
+		1:
+			posture_target = 0.18
+			behavior_speed_multiplier = 0.38
+			behavior_range_multiplier = 1.05
+			behavior_vertical_target = sin(behavior_time * 0.44 + swim_phase) * 13.0
+		_:
+			posture_target = 0.0
+
+	# Yemi fark ettiğinde dikey duruştan çıkar, uzun gövdesini toparlayıp sakin biçimde yaklaşır.
+	if _hook_can_attract_fish():
+		var hook_distance: float = global_position.distance_to(world_hook.global_position)
+		if hook_distance < 430.0:
+			behavior_state = 0
+			posture_target = 0.0
+			direction = 1.0 if world_hook.global_position.x > global_position.x else -1.0
+			behavior_speed_multiplier = 0.88
+			behavior_range_multiplier = 1.55
+			behavior_vertical_target = clampf(world_hook.global_position.y - start_y, -115.0, 115.0)
+			update_sprite_direction()
+
+			if hook_distance < 150.0:
+				behavior_speed_multiplier = 1.28
+				was_dashing = true
+
+	oarfish_posture_blend = move_toward(
+		oarfish_posture_blend,
+		posture_target,
+		delta * (0.58 if posture_target > oarfish_posture_blend else 0.82)
+	)
+
+
 func _update_moray_behavior() -> void:
 	# Kaya kovugunda pusuda bekler; yem yakinlasinca kisa ama cok sert bir atak yapar.
 	behavior_speed_multiplier = 0.26 + absf(sin(behavior_time * 0.54 + swim_phase)) * 0.16
@@ -598,7 +664,7 @@ func update_swim_animation(delta: float) -> void:
 	var vertical_error: float = behavior_vertical_target - behavior_vertical_offset
 	var motion_pitch: float = deg_to_rad(clampf(vertical_error * 0.045, -4.5, 4.5))
 	var wave_rotation: float = deg_to_rad(wave * swim_wave_angle * 0.34)
-	var exact_art: bool = FishCatalog.is_wave_1_species(fish_type) or fish_type in ["Köpekbalığı", "Kılıç Balığı", "Fener Balığı"]
+	var exact_art: bool = FishCatalog.is_wave_1_species(fish_type) or fish_type in ["Köpekbalığı", "Kılıç Balığı", "Fener Balığı", "Kürek Balığı"]
 
 	# Onayli 5 raster balikta resmi bukup karartma: kaynak goruntu birebir kalsin.
 	if exact_art:
@@ -700,6 +766,8 @@ func _setup_articulated_rig() -> void:
 	rig_angler_mesh = null
 	rig_swordfish_mesh = null
 	rig_swordfish_gills.clear()
+	rig_oarfish_mesh = null
+	oarfish_posture_blend = 0.0
 	rig_sea_glow_1 = null
 	rig_sea_glow_2 = null
 	rig_sea_glow_3 = null
@@ -708,7 +776,7 @@ func _setup_articulated_rig() -> void:
 	rig_time = 0.0
 
 	# Wave-1 animasyonlarını tek tek ekliyoruz.
-	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı", "Kalamar", "Köpekbalığı", "Kılıç Balığı", "Fener Balığı"] or fish_sprite.texture == null:
+	if fish_type not in ["Barakuda", "Müren", "Vatoz", "Deniz Şeytanı", "Kalamar", "Köpekbalığı", "Kılıç Balığı", "Fener Balığı", "Kürek Balığı"] or fish_sprite.texture == null:
 		return
 
 	rig_texture_size = fish_sprite.texture.get_size()
@@ -759,6 +827,10 @@ func _setup_articulated_rig() -> void:
 		# Tek parça deformasyon mesh'i sprite dilimlerinin oluşturduğu kırılmaları önler.
 		rig_shark_mesh = _create_shark_wave_mesh()
 		_setup_shark_face_details()
+	elif fish_type == "Kürek Balığı":
+		# Kürek Balığı: tüm uzun gövde ağır bir S eğrisi çizer.
+		# Asıl itiş hissi, gerçek hayattaki gibi sırt boyunca ilerleyen hızlı fin dalgasından gelir.
+		rig_oarfish_mesh = _create_oarfish_swim_mesh()
 
 	fish_sprite.visible = false
 	_update_rig_direction()
@@ -918,6 +990,118 @@ void fragment() {
 
 
 
+
+
+func _create_oarfish_swim_mesh() -> MeshInstance2D:
+	var mesh_instance := MeshInstance2D.new()
+	mesh_instance.name = "OarfishContinuousRibbonMesh"
+	mesh_instance.z_index = 4
+	articulated_rig.add_child(mesh_instance)
+
+	# Çok uzun ve ince gövde için yüksek yatay çözünürlük.
+	# Böylece S kıvrımı tek parça ve kırılmadan akar.
+	var columns: int = 96
+	var rows: int = 8
+	var vertices := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+
+	for y_index in range(rows + 1):
+		var v: float = float(y_index) / float(rows)
+		var local_y: float = (v - 0.5) * rig_texture_size.y
+		for x_index in range(columns + 1):
+			var u: float = float(x_index) / float(columns)
+			var local_x: float = (u - 0.5) * rig_texture_size.x
+			vertices.append(Vector2(local_x, local_y))
+			uvs.append(Vector2(u, v))
+
+	for y_index in range(rows):
+		for x_index in range(columns):
+			var row_width: int = columns + 1
+			var a: int = y_index * row_width + x_index
+			var b: int = a + 1
+			var c_index: int = a + row_width
+			var d: int = c_index + 1
+			indices.append(a)
+			indices.append(c_index)
+			indices.append(b)
+			indices.append(b)
+			indices.append(c_index)
+			indices.append(d)
+
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh_instance.mesh = mesh
+
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform sampler2D fish_texture : source_color, filter_linear;
+uniform float body_phase = 0.0;
+uniform float body_amplitude = 14.0;
+uniform float body_frequency = 8.8;
+uniform float fin_phase = 0.0;
+uniform float fin_amplitude = 5.0;
+uniform float crest_sway = 4.0;
+
+void vertex() {
+	float u = UV.x;
+	float v = UV.y;
+
+	// Kaynak görsel sağa bakıyor: u=0 kuyruk, u=1 kafa.
+	// Tüm gövde S çizer; baş da hareket eder ama kuyruğa göre daha kontrollüdür.
+	float tail_gain = pow(clamp(1.0 - u, 0.0, 1.0), 0.42);
+	float head_soft_lock = 1.0 - smoothstep(0.82, 0.99, u) * 0.74;
+	float body_mask = mix(0.48, 1.0, tail_gain) * head_soft_lock;
+
+	float main_wave = sin(body_phase + u * body_frequency);
+	float secondary_wave = sin(body_phase * 0.58 + u * 4.2 + 1.30);
+
+	VERTEX.y += main_wave * body_amplitude * body_mask;
+	VERTEX.x += secondary_wave * body_amplitude * 0.085 * body_mask;
+
+	// Gerçek kürek balığının ana lokomosyonuna gönderme:
+	// sırt yüzgecinde kuyruktan başa doğru seri, küçük bir ilerleyen dalga.
+	float dorsal_y = 1.0 - smoothstep(0.18, 0.50, v);
+	float dorsal_x = smoothstep(0.015, 0.08, u) * (1.0 - smoothstep(0.985, 1.0, u));
+	float dorsal_mask = dorsal_y * dorsal_x;
+	float dorsal_wave = sin(fin_phase + u * 21.0);
+	VERTEX.y += dorsal_wave * fin_amplitude * dorsal_mask;
+	VERTEX.x += cos(fin_phase * 0.82 + u * 16.0) * fin_amplitude * 0.09 * dorsal_mask;
+
+	// Başın üstündeki uzun kırmızı ışınlar, gövdeden gecikmeli şekilde suyla sürüklenir.
+	float crest_x = smoothstep(0.70, 0.82, u) * (1.0 - smoothstep(0.995, 1.0, u));
+	float crest_y = 1.0 - smoothstep(0.38, 0.58, v);
+	float crest_mask = crest_x * crest_y;
+	VERTEX.x += sin(fin_phase * 0.44 + 1.15) * crest_sway * crest_mask;
+	VERTEX.y += cos(fin_phase * 0.56 + 0.40) * crest_sway * 0.44 * crest_mask;
+}
+
+void fragment() {
+	vec4 tex = texture(fish_texture, UV);
+	COLOR = tex * COLOR;
+}
+"""
+
+	var oarfish_material := ShaderMaterial.new()
+	oarfish_material.shader = shader
+	oarfish_material.set_shader_parameter("fish_texture", fish_sprite.texture)
+	oarfish_material.set_shader_parameter("body_phase", 0.0)
+	oarfish_material.set_shader_parameter("body_amplitude", rig_texture_size.y * 0.082)
+	oarfish_material.set_shader_parameter("body_frequency", 8.8)
+	oarfish_material.set_shader_parameter("fin_phase", 0.0)
+	oarfish_material.set_shader_parameter("fin_amplitude", rig_texture_size.y * 0.030)
+	oarfish_material.set_shader_parameter("crest_sway", rig_texture_size.x * 0.008)
+	mesh_instance.material = oarfish_material
+	return mesh_instance
 
 
 func _create_anglerfish_swim_mesh() -> MeshInstance2D:
@@ -1850,9 +2034,58 @@ func _update_articulated_rig(delta: float, speed_ratio: float) -> void:
 			_update_swordfish_rig(delta, speed_ratio)
 		"Köpekbalığı":
 			_update_shark_rig(delta, speed_ratio)
+		"Kürek Balığı":
+			_update_oarfish_rig(delta, speed_ratio)
 
 
 
+
+
+func _update_oarfish_rig(delta: float, speed_ratio: float) -> void:
+	if rig_oarfish_mesh == null:
+		return
+
+	rig_time += delta
+	var speed_factor: float = clampf(speed_ratio, 0.16, 1.65)
+	var normalized_speed: float = clampf((speed_factor - 0.16) / 1.49, 0.0, 1.0)
+
+	# Gövde yavaş ve ağır S çizer. Dikey duruşta gövde daha sertleşir;
+	# sırt yüzgeci ise daha aktif çalışarak balığı su kolonunda tutar.
+	var body_rate: float = lerpf(1.35, 2.35, normalized_speed)
+	var fin_rate: float = lerpf(4.6, 7.0, normalized_speed)
+	var body_phase: float = rig_time * body_rate + swim_phase
+	var fin_phase: float = rig_time * fin_rate + swim_phase * 0.62
+
+	var oarfish_material: ShaderMaterial = rig_oarfish_mesh.material as ShaderMaterial
+	if oarfish_material != null:
+		var body_amp: float = rig_texture_size.y * lerpf(0.072, 0.105, normalized_speed)
+		var fin_amp: float = rig_texture_size.y * lerpf(0.024, 0.044, normalized_speed)
+		var crest_amount: float = rig_texture_size.x * lerpf(0.006, 0.010, normalized_speed)
+
+		# Gerçek oarfish dikey pozda gövdesini daha sert tutar; fin dalgası baskın hale gelir.
+		body_amp *= lerpf(1.0, 0.52, oarfish_posture_blend)
+		fin_amp *= lerpf(1.0, 1.38, oarfish_posture_blend)
+
+		if was_dashing:
+			body_amp *= 1.18
+			fin_amp *= 1.22
+			crest_amount *= 1.20
+
+		oarfish_material.set_shader_parameter("body_phase", body_phase)
+		oarfish_material.set_shader_parameter("body_amplitude", body_amp)
+		oarfish_material.set_shader_parameter("body_frequency", 8.8)
+		oarfish_material.set_shader_parameter("fin_phase", fin_phase)
+		oarfish_material.set_shader_parameter("fin_amplitude", fin_amp)
+		oarfish_material.set_shader_parameter("crest_sway", crest_amount)
+
+	# Gerçekte sık görülen baş-yukarı duruşu oyunun yatay kamerasına uyarlanmış biçimde kullan.
+	# Tam 90 derece yerine ~58 derece: karakteristik görünür ama oyun okunabilirliği bozulmaz.
+	var posture_angle: float = deg_to_rad(-58.0 * direction) * oarfish_posture_blend
+	articulated_rig.rotation += posture_angle
+	articulated_rig.rotation += sin(rig_time * 0.42 + swim_phase) * deg_to_rad(0.28)
+	articulated_rig.position.y = sin(rig_time * 0.56 + swim_phase + 0.5) * 0.55
+
+	_update_rig_direction()
 
 
 func _update_anglerfish_rig(delta: float, speed_ratio: float) -> void:
@@ -2356,6 +2589,7 @@ func release_from_hook() -> void:
 	behavior_vertical_offset = 0.0
 	behavior_vertical_target = 0.0
 	behavior_state = 0
+	oarfish_posture_blend = 0.0
 	current_swim_velocity_x = swim_speed * direction * 0.45
 	turn_roll = 0.0
 	fish_sprite.rotation = 0.0
@@ -2397,4 +2631,9 @@ func release_from_hook() -> void:
 				squid_reset_material.set_shader_parameter("jet_power", 0.0)
 				squid_reset_material.set_shader_parameter("swim_strength", 1.0)
 				squid_reset_material.set_shader_parameter("fin_strength", 1.0)
+		if rig_oarfish_mesh != null:
+			var oarfish_reset_material: ShaderMaterial = rig_oarfish_mesh.material as ShaderMaterial
+			if oarfish_reset_material != null:
+				oarfish_reset_material.set_shader_parameter("body_phase", 0.0)
+				oarfish_reset_material.set_shader_parameter("fin_phase", 0.0)
 		_update_rig_direction()
