@@ -3,7 +3,7 @@
 **Last updated:** 2026-09-20  
 **Active repo:** `mirackayademir/TinyFisher`  
 **Active branch:** `eski`  
-**Current gameplay head before this handoff commit:** `5abc1f340ca7dacebce6a0eaa631444539e2062b`
+**Current gameplay head before this handoff commit:** `ba05b3c9ac43955f471734a43bdbc552015f2789`
 
 ---
 
@@ -11,12 +11,12 @@
 
 When a new ChatGPT conversation starts for this project:
 
-1. **Do not tell the user GitHub/repo write access is unavailable without checking first.**
+1. Do not tell the user GitHub/repo write access is unavailable without checking first.
 2. First inspect the available GitHub connector tools.
 3. Verify `mirackayademir/TinyFisher` and branch `eski`.
-4. If GitHub write tools are available, **apply project changes directly**.
+4. If GitHub write tools are available, apply project changes directly.
 5. Do not ask the user for zip/manual code/reconnect unless the connector itself was checked and actually failed.
-6. **Do not create or switch branches without user approval. Continue on `eski`.**
+6. Do not create or switch branches without user approval. Continue on `eski`.
 7. The user normally only does:
    - `git pull`
    - Godot F5 test
@@ -24,142 +24,195 @@ When a new ChatGPT conversation starts for this project:
 8. Do not send project implementation code unless the user explicitly asks; edit the repo directly.
 9. Do not switch to Work mode automatically.
 10. After each completed task, give a short report and commit SHA.
-11. Container/terminal network errors are **not** evidence that the GitHub connector is unavailable.
-12. **Editor Preview Rule:** new runtime visual objects should also be mirrored in `scenes/world_editor_preview.tscn` when technically appropriate.
+11. Container/terminal network errors are not evidence that the GitHub connector is unavailable.
+12. New runtime visual objects should also be mirrored in `scenes/world_editor_preview.tscn` when technically appropriate.
 
 ---
 
 ## CURRENT STOPPING POINT — 2026-09-20
 
-We stopped after replacing/restoring the **Swordfish** and **Anglerfish** and adding their species-specific animation work.
+We stopped after adding and validating the new **Kürek Balığı (Oarfish)** and then adding its first dedicated animation pass.
 
-The user tested the current Anglerfish animation and said:
+The user confirmed:
 
-> “tamam fena değil”
+> “tamam çalışıyor burda duralım”
 
-So **do not rework it automatically tomorrow**. Continue from this state unless the user specifically asks for changes.
+So the current Oarfish implementation is the accepted baseline for the next chat. Do not rework it automatically unless the user asks.
+
+---
+
+## KÜREK BALIĞI / OARFISH — CURRENT STATE
+
+### Artwork / loading
+
+The first direct WebP and PNG attempts were rejected by Godot as corrupt.
+
+Final solution:
+
+- The approved Oarfish artwork is stored as verified Base64 text:
+  - `generation/runtime_encoded/fish/kurek_baligi.b64`
+- Runtime texture loader:
+  - `scenes/oarfish_exact_art.gd`
+- `scenes/fish_catalog.gd` calls `OarfishExactArt.get_texture()`.
+- The old corrupt:
+  - `generation/fish/kurek_baligi.webp`
+  - `generation/fish/kurek_baligi.png`
+  are no longer used.
+
+Relevant commit:
+
+- `0407e207` — **Load oarfish art from verified runtime base64**
+
+### Test placement
+
+For easy F5 visual inspection, the Oarfish currently has a guaranteed temporary test spawn beside the harbor.
+
+Current test position:
+
+- `Vector2(920.0, 690.0)`
+
+Implemented in:
+
+- `scenes/fishing_spot.gd`
+
+Relevant commit:
+
+- `63b4554a` — **Move test oarfish spawn beside harbor**
+
+Important:
+
+- This is a **temporary test placement**.
+- The natural rare/deep-water spawn profile remains preserved for later balancing.
+
+### Catalog / rarity
+
+Current profile:
+
+- Name: `Kürek Balığı`
+- Value: `$540`
+- Natural habitat: deep open sea
+- Natural depth label: `65–90 m`
+- Normal population target: `0`
+- Rare spawn chance system remains active.
+- Dedicated behavior id: `oarfish`
+
+The F5 guaranteed harbor spawn is only for animation/testing convenience.
+
+---
+
+## KÜREK BALIĞI — CURRENT ANIMATION
+
+Latest implementation:
+
+- `ba05b3c9` — **Add oarfish ribbon-body and dorsal-fin animation**
+
+Implemented mainly in:
+
+- `scenes/fish.gd`
+- `scenes/fish_catalog.gd`
+
+### Motion design
+
+The animation combines the user's requested eel-like visual motion with Oarfish-specific behavior.
+
+#### Whole body
+
+- The long body uses a single continuous mesh.
+- The whole fish bends into a smooth **S-shaped ribbon curve**.
+- No separated sprite chunks.
+- The wave is slower/heavier than a normal eel.
+- Tail/rear body flexes more strongly than the head.
+
+#### Dorsal fin
+
+- The long red dorsal fin gets a separate traveling wave.
+- The fin wave is faster than the body wave.
+- This is intentionally the dominant propulsion detail.
+
+#### Head crest / long red rays
+
+- The long red rays near the head have delayed independent sway.
+- They drag through the water rather than moving rigidly with the body.
+
+#### Special posture
+
+The fish occasionally enters an Oarfish-specific **head-up posture**:
+
+- approximately 58° in the game for readability,
+- movement slows strongly,
+- body stiffens,
+- dorsal-fin wave becomes more active,
+- then it gradually returns to horizontal swimming.
+
+When the hook/bait is nearby:
+
+- it exits the head-up posture,
+- turns toward the hook,
+- approaches calmly,
+- uses a short stronger movement near the bait.
+
+### User verdict
+
+The user tested F5 and confirmed the animation is working.
+
+Treat this state as accepted unless the user asks for refinement.
 
 ---
 
 ## SWORD FISH — CURRENT STATE
 
 ### Artwork
-- Current asset:
-  - `generation/fish/kilic_baligi.webp`
-- Previous Swordfish was removed, then the new approved artwork was restored.
-
-### Runtime/test placement
-- Fish is active in the catalog.
-- Temporarily placed near the harbor so the user can inspect it immediately with F5.
-- Current target count: 1.
+- `generation/fish/kilic_baligi.webp`
 
 ### Animation
-Swordfish now has a dedicated realistic swim mesh.
+Dedicated Swordfish animation remains active:
 
-Motion character:
-- Thunniform/high-speed swimmer.
-- Head and sword stay comparatively stable.
-- Rear body provides small controlled flex.
-- Tail provides most of the propulsion.
-- Cruise and short burst behavior.
-- Gill-cover breathing details.
-- Very small whole-body inertia movement.
+- head/sword comparatively stable,
+- rear-body flex,
+- tail-driven propulsion,
+- short burst behavior,
+- gill-cover breathing.
 
-### Important commits
-- `77e7fdc` — **feat: restore swordfish with new artwork**
-- `941f0ad` — **fix: spawn swordfish beside harbor for testing**
-- `0ee5ee9` — **feat: add realistic swordfish swim animation**
+Relevant commits:
+
+- `77e7fdc` — restore Swordfish with new artwork
+- `941f0ad` — spawn Swordfish beside harbor for testing
+- `0ee5ee9` — realistic Swordfish swim animation
 
 ---
 
 ## ANGLERFISH / FENER BALIĞI — CURRENT STATE
 
-### Artwork
-Current approved/new asset:
+Current artwork:
 
 - `generation/fish/fener_baligi_yeni.webp`
 
-The previous Anglerfish was deliberately removed first and then replaced with this new artwork.
+Dedicated articulated animation remains active:
 
-### Catalog/runtime
-`scenes/fish_catalog.gd` currently contains:
+- slow heavy tail,
+- rear-body follow-through,
+- stabilizing fins,
+- subtle jaw motion,
+- independently swaying lure,
+- glow following lure motion,
+- slow hover/inertia.
 
-- Fish: `Fener Balığı`
-- Behavior: `hover`
-- Target count: 1
-- Temporary harbor test spawn
-- Slow deep-water movement profile
-- New generated artwork path
-
-### Asset/import commits
-- `e334970` — **chore: remove anglerfish from active roster**
-- `58a06c8` — **fix: clean fish catalog after anglerfish removal**
-- `250fd20` — **feat: add new anglerfish artwork and restore species**
-- `e36bfae` — **fix: finalize anglerfish asset import**
-
-### Dedicated special animation
-Latest implementation:
+Latest relevant commit:
 
 - `5abc1f340ca7dacebce6a0eaa631444539e2062b`
 - **feat: add articulated anglerfish animation**
 
-Implemented in:
-- `scenes/fish.gd`
-
-The Anglerfish now uses a **single continuous deformation mesh**, rather than visibly separated sprite chunks.
-
-#### Animated regions / behavior
-
-**Tail**
-- Slow, low-frequency propulsion.
-- Stronger movement when the fish accelerates/attacks.
-- Designed to feel heavy rather than fast.
-
-**Rear body**
-- Soft follow-through from the tail.
-- Movement decreases toward the head.
-
-**Main body / head**
-- Mostly stable.
-- Very small heavy-water inertia.
-- Avoids rubbery full-body bending.
-
-**Upper/lower fin areas**
-- Separate phase behavior.
-- Slow paddle-like stabilizing movement.
-- Intentionally different from fast fish tail motion.
-
-**Jaw**
-- Subtle breathing/open-close motion.
-- Opens more during attack/dash behavior.
-
-**Angler lure / antenna**
-- Independent sway and bob.
-- Delayed movement relative to body.
-- Moves more during an attack.
-
-**Glow**
-- Existing Anglerfish glow remains active.
-- Glow position follows the animated lure movement.
-- Soft pulsing remains part of the fish's look.
-
-**Whole fish**
-- Slow vertical hover.
-- Tiny pitch/inertia movement.
-- Designed to feel like a deep-water ambush predator.
-
-### User verdict
-Current result was accepted as:
+The user previously accepted this as:
 
 > “fena değil”
 
-Treat the current Anglerfish animation as the accepted baseline.
+Do not rework automatically.
 
 ---
 
-## OTHER SPECIAL FISH — STILL PRESENT
+## OTHER SPECIAL FISH STILL PRESENT
 
-Previous special animation work remains in `scenes/fish.gd`:
+Existing dedicated animation work remains active for:
 
 - Barakuda
 - Müren
@@ -169,85 +222,83 @@ Previous special animation work remains in `scenes/fish.gd`:
 - Köpekbalığı
 - Kılıç Balığı
 - Fener Balığı
+- Kürek Balığı
 
-Do not remove or rewrite these systems unless the task requires it.
-
-### Previous five-fish state
-The earlier animation test group remains intentionally in enlarged/test-friendly state unless changed later:
-
-- Barakuda
-- Müren
-- Vatoz
-- Deniz Şeytanı
-- Kalamar
-
-The user previously accepted these as “eh işte idare ederler”.
+Do not remove or rewrite these systems unless the requested task requires it.
 
 ---
 
-## IMPORTANT FILES RIGHT NOW
+## IMPORTANT FILES
 
 ### Fish systems
+
 - `scenes/fish.gd`
-  - Fish species behavior.
-  - Hook attraction.
-  - Base movement.
-  - Special articulated/mesh animation systems.
-  - Current Swordfish and Anglerfish custom rigs.
+  - species behavior
+  - movement
+  - hook attraction
+  - special articulated/mesh animation systems
+  - Oarfish ribbon-body animation
 
 - `scenes/fish_catalog.gd`
-  - Species profiles.
-  - Asset paths.
-  - Spawn positions.
-  - Speeds/scales.
-  - Fight/tension profiles.
+  - fish profiles
+  - rarity/spawn ranges
+  - movement/fight stats
+  - Oarfish runtime texture hookup
 
-- `scenes/fish.tscn`
-  - Base fish scene.
+- `scenes/fishing_spot.gd`
+  - fish spawning
+  - rare spawn checks
+  - temporary harbor test spawn for Oarfish
 
-### Current generated fish assets
-- `generation/fish/kilic_baligi.webp`
-- `generation/fish/fener_baligi_yeni.webp`
+- `scenes/oarfish_exact_art.gd`
+  - runtime Base64 → PNG texture decode
 
-### Asset tracking
+- `generation/runtime_encoded/fish/kurek_baligi.b64`
+  - approved Oarfish image data
+
 - `generation/ASSET_LIST.md`
+  - asset tracking
 
 ---
 
 ## MOST RECENT DEVELOPMENT CHAIN
 
-Current recent sequence on branch `eski`:
+Recent Oarfish work on branch `eski`:
 
-1. Remove old Swordfish.
-2. Repair generated fish imports.
-3. Restore Swordfish using new artwork.
-4. Move Swordfish beside harbor for test.
-5. Add realistic Swordfish animation.
-6. Remove old Anglerfish.
-7. Clean Anglerfish from catalog/runtime.
-8. Restore Anglerfish with new artwork.
-9. Fix Anglerfish asset import.
-10. Add dedicated articulated Anglerfish animation.
+1. Added Oarfish to catalog and rare spawn system.
+2. Discovered corrupt WebP import.
+3. Replaced WebP attempt with PNG.
+4. Discovered PNG binary was also damaged.
+5. Replaced binary asset dependency with verified Base64 runtime texture loading.
+6. Added guaranteed F5 test spawn.
+7. Moved guaranteed test spawn beside harbor.
+8. Added dedicated Oarfish behavior.
+9. Added continuous S-shaped ribbon-body mesh animation.
+10. Added independent dorsal-fin traveling wave.
+11. Added head-ray sway.
+12. Added occasional head-up posture.
 
 Latest gameplay commit before this MD:
 
-`5abc1f3` — **feat: add articulated anglerfish animation**
+`ba05b3c9` — **Add oarfish ribbon-body and dorsal-fin animation**
 
 ---
 
 ## EXPECTED NEXT CHAT FLOW
 
-When the user starts a new chat tomorrow:
+When the user starts a new chat:
 
 1. Read this file.
 2. Verify repo `mirackayademir/TinyFisher`.
 3. Verify branch `eski`.
 4. Verify current branch head.
-5. Give a **short status report only**.
+5. Give a short status report.
 6. Continue from the user's next requested task.
-7. Do not redo Swordfish or Anglerfish animation unless asked.
+7. Do not redo Oarfish animation unless specifically requested.
+8. Keep Oarfish harbor test spawn in place until the user says testing is finished.
+9. If Oarfish animation work resumes, preserve the current continuous S-body + dorsal-fin wave as the baseline.
 
-No next feature has been selected yet.
+No new next feature has been selected yet.
 
 ---
 
@@ -258,7 +309,8 @@ No next feature has been selected yet.
 - Serious/direct responses.
 - User does not want unnecessary new work.
 - User expects ChatGPT to perform feasible repo edits directly.
+- **Do not send code for the user to paste unless explicitly requested.**
+- User only wants to open Godot and test the result.
 - Do not create a new branch without asking.
 - Do not switch to Work mode automatically.
-- Do not make the user manually edit project code.
 - After each completed task/change: concise report + commit SHA.
