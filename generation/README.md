@@ -1,8 +1,11 @@
 # TinyFisher — Generation
 
-Bu klasör, proje için ChatGPT tarafından üretilen veya düzenlenen görsellerin doğrudan GitHub içindeki çalışma alanıdır.
+Bu klasör projenin görsel asset çalışma alanıdır.
 
-- Yeni görseller önce `./generation/` altında tutulur.
+- Yeni üretilen veya düzenlenen görseller doğrudan `./generation/` içine yazılır.
 - Kullanıcıdan asset taşıma, zip hazırlama veya ayrı klasör yönetimi istenmez.
-- Oyunda kullanılacak görseller buradan ilgili sahne/loader sistemine bağlanır.
+- Kanonik assetler kategori klasörlerinde tutulur.
+- Eski/alternatif sürümler `archive/` altında tutulur.
+- Parçalı/base64 runtime kaynakları `runtime_encoded/` altında korunur.
+- Güncel envanter: [ASSET_LIST.md](./ASSET_LIST.md)
 - Aktif geliştirme branch'i: `eski`.

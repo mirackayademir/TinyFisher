@@ -139,7 +139,7 @@ const PROFILES: Dictionary = {
 		"value": 130,
 		"habitat": "Uzak açık deniz",
 		"depth_label": "15–20 m (TEST)",
-		"texture_path": "res://assets/kilic_baligi.svg",
+		"texture_path": "res://generation/fish/kilic_baligi.webp",
 		"behavior_id": "dash",
 		"target_count": 3,
 		"spawn_x": [4300.0, 7800.0],
