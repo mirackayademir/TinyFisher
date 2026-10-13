@@ -33,3 +33,17 @@ A later prototype explored a side-on pier-to-open-sea layout inspired by simple 
 ## Suggested next development slice
 
 First confirm which camera/layout experiment is the active prototype, then polish a **single complete catch → sell → upgrade → catch** loop before expanding content.
+
+## Repository checkout status (2026-10-13)
+
+**The remote `main` branch currently contains project notes/configuration but no `project.godot` or playable Godot scene.** The gameplay listed above is a historical prototype scope, not a claim that cloning this repository currently launches the game.
+
+To make the repository runnable again, first locate the **actual local Godot project** and verify its working main scene in the editor. Then, from that project checkout:
+
+1. Inspect `git status` and confirm the changed/source files are the intended ones.
+2. Commit `project.godot`, `*.tscn` scenes, `*.gd` scripts, source art/audio, required add-ons and their import settings when applicable.
+3. Keep regenerated `.godot/` and `.import/` cache directories out of the commit; see `.gitignore`.
+4. Push to `main` only after a local launch and a quick catch/sell smoke test.
+5. Re-clone or inspect the GitHub file tree to confirm the actual gameplay files reached the remote.
+
+Avoid creating empty placeholder scenes or replacing the local project solely to make the contribution chart change.
