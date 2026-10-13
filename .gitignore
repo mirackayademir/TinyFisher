@@ -1,0 +1,15 @@
+# Godot engine/editor caches (generated, not source)
+.godot/
+.import/
+.mono/
+
+# Local temporary and OS artifacts
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local export/build output; keep source assets and .import settings tracked
+/build/
+/dist/
